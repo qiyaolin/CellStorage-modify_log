@@ -1046,7 +1046,7 @@ def backup_database():
     if scheme.startswith('postgres'):
         try:
             result = subprocess.run(
-                ['pg_dump', '--dbname', uri],
+                ['pg_dump', '--format', 'custom', '--dbname', uri],
                 check=True,
                 capture_output=True,
             )
@@ -1058,7 +1058,7 @@ def backup_database():
         buf = BytesIO(result.stdout)
         buf.seek(0)
         log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
-        return send_file(buf, as_attachment=True, download_name='backup.sql', mimetype='application/sql')
+        return send_file(buf, as_attachment=True, download_name='backup.dump', mimetype='application/octet-stream')
 
     flash('Unsupported database type.', 'danger')
     return redirect(url_for('main.index'))
@@ -1086,9 +1086,11 @@ def restore_database():
                 tmp = tempfile.NamedTemporaryFile(delete=False)
                 try:
                     file.save(tmp.name)
-                    subprocess.run(['psql', uri, '-f', tmp.name], check=True)
+                    subprocess.run([
+                        'pg_restore', '--clean', '--if-exists', '--dbname', uri, tmp.name
+                    ], check=True)
                 except (OSError, subprocess.CalledProcessError) as exc:
-                    current_app.logger.error('psql restore failed: %s', exc)
+                    current_app.logger.error('pg_restore failed: %s', exc)
                     flash('PostgreSQL restore failed.', 'danger')
                     return redirect(url_for('main.index'))
                 finally:

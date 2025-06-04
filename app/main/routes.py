@@ -1037,39 +1037,13 @@ def clear_all():
 def backup_database():
     db.session.commit()
     uri = current_app.config['SQLALCHEMY_DATABASE_URI']
-    scheme = urlparse(uri).scheme
-
-    if scheme == 'sqlite':
+    if uri.startswith('sqlite:///'):
         path = uri.replace('sqlite:///', '')
         log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
         return send_file(path, as_attachment=True, download_name='backup.db')
-
-    if scheme.startswith('postgres'):
-        pg_dump = shutil.which('pg_dump') or shutil.which('pg_dump.exe')
-        if not pg_dump:
-            current_app.logger.error('pg_dump command not found')
-            flash('PostgreSQL backup failed.', 'danger')
-            return redirect(url_for('main.index'))
-
-        try:
-            result = subprocess.run(
-                [pg_dump, uri],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-        except (OSError, subprocess.CalledProcessError) as exc:
-            current_app.logger.error('pg_dump failed: %s', exc)
-            flash('PostgreSQL backup failed.', 'danger')
-            return redirect(url_for('main.index'))
-
-        buf = BytesIO(result.stdout)
-        buf.seek(0)
-        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
-        return send_file(buf, as_attachment=True, download_name='backup.sql', mimetype='application/sql')
-
-    flash('Unsupported database type.', 'danger')
-    return redirect(url_for('main.index'))
+    else:
+        flash('Backup is only supported for SQLite databases.', 'danger')
+        return redirect(url_for('main.index'))
 
 
 @bp.route('/admin/restore', methods=['GET', 'POST'])
@@ -1081,44 +1055,14 @@ def restore_database():
         file = form.backup_file.data
         if file:
             uri = current_app.config['SQLALCHEMY_DATABASE_URI']
-            scheme = urlparse(uri).scheme
-
-            if scheme == 'sqlite':
+            if uri.startswith('sqlite:///'):
                 path = uri.replace('sqlite:///', '')
                 db.session.remove()
                 file.save(path)
                 log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
                 flash('Database restored from backup.', 'success')
-
-            elif scheme.startswith('postgres'):
-                psql = shutil.which('psql') or shutil.which('psql.exe')
-                if not psql:
-                    current_app.logger.error('psql command not found')
-                    flash('PostgreSQL restore failed.', 'danger')
-                    return redirect(url_for('main.index'))
-
-                tmp = tempfile.NamedTemporaryFile(delete=False)
-                try:
-                    file.save(tmp.name)
-                    subprocess.run(
-                        [psql, uri, '-f', tmp.name],
-                        check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                    )
-                except (OSError, subprocess.CalledProcessError) as exc:
-                    current_app.logger.error('psql restore failed: %s', exc)
-                    flash('PostgreSQL restore failed.', 'danger')
-                    return redirect(url_for('main.index'))
-                finally:
-                    tmp.close()
-                    os.unlink(tmp.name)
-
-                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
-                flash('Database restored from backup.', 'success')
-
             else:
-                flash('Unsupported database type.', 'danger')
+                flash('Restore is only supported for SQLite databases.', 'danger')
             return redirect(url_for('main.index'))
     return render_template('main/restore_backup.html', form=form, title='Restore Backup')
 

@@ -20,4 +20,7 @@ class Config:
     # SQLAlchemy 配置项，可以关闭一些不必要的通知，提升性能
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    PG_DUMP_PATH = os.environ.get('PG_DUMP_PATH')
+    PSQL_PATH = os.environ.get('PSQL_PATH')
+
     # 可以在这里添加其他应用配置...

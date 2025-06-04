@@ -1032,9 +1032,14 @@ def clear_all():
 @admin_required
 def backup_database():
     db.session.commit()
-    path = current_app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
-    log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
-    return send_file(path, as_attachment=True, download_name='backup.db')
+    uri = current_app.config['SQLALCHEMY_DATABASE_URI']
+    if uri.startswith('sqlite:///'):
+        path = uri.replace('sqlite:///', '')
+        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
+        return send_file(path, as_attachment=True, download_name='backup.db')
+    else:
+        flash('Backup is only supported for SQLite databases.', 'danger')
+        return redirect(url_for('main.index'))
 
 
 @bp.route('/admin/restore', methods=['GET', 'POST'])
@@ -1045,11 +1050,15 @@ def restore_database():
     if form.validate_on_submit():
         file = form.backup_file.data
         if file:
-            path = current_app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
-            db.session.remove()
-            file.save(path)
-            log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
-            flash('Database restored from backup.', 'success')
+            uri = current_app.config['SQLALCHEMY_DATABASE_URI']
+            if uri.startswith('sqlite:///'):
+                path = uri.replace('sqlite:///', '')
+                db.session.remove()
+                file.save(path)
+                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
+                flash('Database restored from backup.', 'success')
+            else:
+                flash('Restore is only supported for SQLite databases.', 'danger')
             return redirect(url_for('main.index'))
     return render_template('main/restore_backup.html', form=form, title='Restore Backup')
 

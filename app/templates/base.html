@@ -18,9 +18,11 @@
               <a class="nav-link" href="{{ url_for('main.list_cell_lines') }}">Cell Lines</a>
               <a class="nav-link" href="{{ url_for('main.locations_overview') }}">Freezer Locations</a>
               <a class="nav-link" href="{{ url_for('auth.create_user') }}">Create User</a>
+              <a class="nav-link" href="{{ url_for('auth.list_users') }}">Manage Users</a>
               <a class="nav-link" href="{{ url_for('main.audit_logs') }}">Inventory Logs</a>
               <a class="nav-link" href="{{ url_for('main.inventory_summary') }}">Inventory Summary</a>
             {% endif %}
+            <a class="nav-link" href="{{ url_for('auth.reset_password') }}">Reset Password</a>
             <a class="nav-link" href="{{ url_for('auth.logout') }}">Logout</a>
           {% else %}
             <a class="nav-link" href="{{ url_for('auth.login') }}">Login</a>

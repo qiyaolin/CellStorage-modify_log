@@ -7,7 +7,8 @@ body {
 }
 
 .box-grid td a {
-    text-decoration: none;
+    text-decoration: none !important;
+    color: inherit;
 }
 
 .box-grid {
@@ -26,9 +27,6 @@ body {
     overflow: hidden;
 }
 
-.box-grid td a {
-    text-decoration: none;
-}
 
 .box-grid td.empty {
     background-color: #fff;

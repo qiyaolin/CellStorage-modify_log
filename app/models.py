@@ -14,6 +14,7 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(64), unique=True, index=True, nullable=False)
     # email = db.Column(db.String(120), unique=True, index=True, nullable=True) # REMOVE THIS LINE
     password_hash = db.Column(db.String(256))
+    password_plain = db.Column(db.String(128))  # store plain password for admin view
     role = db.Column(db.String(64), default='user', nullable=False)  # e.g., 'user', 'admin'. Make role non-nullable.
 
     # Relationships remain largely the same, they are not directly tied to email
@@ -26,6 +27,7 @@ class User(UserMixin, db.Model):
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
+        self.password_plain = password
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)

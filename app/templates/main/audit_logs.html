@@ -24,15 +24,21 @@
   </div>
 </form>
 <table class="table table-bordered">
-<thead><tr><th>Time</th><th>User</th><th>Action</th><th>Target</th><th>Details</th></tr></thead>
+<thead>
+  <tr><th>Time</th><th>User</th><th>Action</th><th>Vial ID(s)</th><th>Batch ID(s)</th></tr>
+</thead>
 <tbody>
-{% for log in logs %}
+{% for item in logs %}
 <tr>
-  <td>{{ log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-  <td>{{ log.user_performing_action.username if log.user_performing_action else '' }}</td>
-  <td>{{ log.action }}</td>
-  <td>{{ log.target_type }} {{ log.target_id }}</td>
-  <td>{{ log.details }}</td>
+  <td>{{ item.log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+  <td>{{ item.log.user_performing_action.username if item.log.user_performing_action else '' }}</td>
+  <td>{{ item.log.action }}</td>
+  <td>
+    {% if item.details.vial_id %}{{ item.details.vial_id }}{% elif item.details.vial_ids %}{{ item.details.vial_ids|join(', ') }}{% else %}{% if item.log.target_type=='CryoVial' %}{{ item.log.target_id }}{% endif %}{% endif %}
+  </td>
+  <td>
+    {% if item.details.batch_id %}{{ item.details.batch_id }}{% elif item.details.batch_ids %}{{ item.details.batch_ids|join(', ') }}{% endif %}
+  </td>
 </tr>
 {% endfor %}
 </tbody>

@@ -15,6 +15,7 @@
   </div>
   <div class="col-auto">
     <button type="submit" class="btn btn-secondary">Filter</button>
+    <a href="{{ url_for('main.inventory_summary', q=search_q, status=search_status, export='csv') }}" class="btn btn-outline-primary ms-2">Export CSV</a>
   </div>
 </form>
 <table class="table table-bordered table-sm">

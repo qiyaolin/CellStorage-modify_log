@@ -5,31 +5,25 @@
     <p><a href="{{ url_for('main.add_cell_line') }}" class="button">Add New Cell Line</a></p>
 
     {% if cell_lines %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Species</th>
-                    <th>Source</th>
-                    <th>Date Established</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for cl in cell_lines %}
-                    <tr>
-                        <td>{{ cl.name }}</td>
-                        <td>{{ cl.species if cl.species else 'N/A' }}</td>
-                        <td>{{ cl.source if cl.source else 'N/A' }}</td>
-                        <td>{{ cl.date_established.strftime('%Y-%m-%d') if cl.date_established else 'N/A' }}</td>
-                        <td>
-                            <a href="{{ url_for('main.edit_cell_line', cell_line_id=cl.id) }}">Edit</a>
-                            {# Add delete link/button later if needed #}
-                        </td>
-                    </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <ul>
+        {% for cl in cell_lines %}
+            <li>
+                <strong>{{ cl.name }}</strong>
+                <ul>
+                    <li>Species: {{ cl.species if cl.species else 'N/A' }}</li>
+                    <li>Source: {{ cl.source if cl.source else 'N/A' }}</li>
+                    <li>Original Passage: {{ cl.original_passage if cl.original_passage else 'N/A' }}</li>
+                    <li>Culture Medium: {{ cl.culture_medium if cl.culture_medium else 'N/A' }}</li>
+                    <li>Antibiotic Resistance: {{ cl.antibiotic_resistance if cl.antibiotic_resistance else 'N/A' }}</li>
+                    <li>Growth Properties: {{ cl.growth_properties if cl.growth_properties else 'N/A' }}</li>
+                    <li>Mycoplasma Status: {{ cl.mycoplasma_status if cl.mycoplasma_status else 'N/A' }}</li>
+                    <li>Date Established: {{ cl.date_established.strftime('%Y-%m-%d') if cl.date_established else 'N/A' }}</li>
+                    <li>Notes: {{ cl.notes if cl.notes else 'N/A' }}</li>
+                    <li><a href="{{ url_for('main.edit_cell_line', cell_line_id=cl.id) }}">Edit</a></li>
+                </ul>
+            </li>
+        {% endfor %}
+        </ul>
     {% else %}
         <p>No cell lines found. <a href="{{ url_for('main.add_cell_line') }}">Add the first one!</a></p>
     {% endif %}

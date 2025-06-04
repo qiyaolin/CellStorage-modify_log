@@ -1,8 +1,19 @@
 # In app/main/routes.py
-from flask import render_template, redirect, url_for, flash, request, session, Response
+from flask import (
+    render_template,
+    redirect,
+    url_for,
+    flash,
+    request,
+    session,
+    Response,
+    current_app,
+    send_file,
+)
 from flask_login import login_required, current_user
 from io import StringIO
 import csv
+import os
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 import json
@@ -18,6 +29,8 @@ from app.forms import (
     CryoVialEditForm,
     VialUsageForm,
     ManualVialForm,
+    ConfirmForm,
+    RestoreForm,
 )
 from app.models import (
     CellLine,
@@ -30,7 +43,7 @@ from app.models import (
     AuditLog,
 )
 
-from app.utils import log_audit
+from app.utils import log_audit, clear_database_except_admin
 
 
 @bp.route('/') # Defines the root URL for the main blueprint
@@ -997,4 +1010,46 @@ def delete_cryovial(vial_id):
     log_audit(current_user.id, 'DELETE_CRYOVIAL', target_type='CryoVial', target_id=vial_id)
     flash('Vial deleted.', 'success')
     return redirect(url_for('main.cryovial_inventory'))
+
+
+@bp.route('/admin/clear_all', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def clear_all():
+    form = ConfirmForm()
+    if form.validate_on_submit():
+        if form.confirm.data.strip() == 'confirm_hayer':
+            clear_database_except_admin()
+            log_audit(current_user.id, 'CLEAR_ALL', target_type='System')
+            flash('All records except admin accounts have been removed.', 'success')
+            return redirect(url_for('main.index'))
+        flash('Incorrect confirmation phrase.', 'danger')
+    return render_template('main/clear_all.html', form=form, title='Clear Database')
+
+
+@bp.route('/admin/backup')
+@login_required
+@admin_required
+def backup_database():
+    db.session.commit()
+    path = current_app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
+    log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
+    return send_file(path, as_attachment=True, download_name='backup.db')
+
+
+@bp.route('/admin/restore', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def restore_database():
+    form = RestoreForm()
+    if form.validate_on_submit():
+        file = form.backup_file.data
+        if file:
+            path = current_app.config['SQLALCHEMY_DATABASE_URI'].replace('sqlite:///', '')
+            db.session.remove()
+            file.save(path)
+            log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
+            flash('Database restored from backup.', 'success')
+            return redirect(url_for('main.index'))
+    return render_template('main/restore_backup.html', form=form, title='Restore Backup')
 

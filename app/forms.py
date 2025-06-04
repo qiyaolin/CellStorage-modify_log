@@ -10,6 +10,7 @@ from wtforms import (
     DateField,
     TextAreaField,
     SelectMultipleField,
+    FileField,
     widgets,
 )
 from wtforms.validators import (
@@ -213,3 +214,15 @@ class CryoVialEditForm(FlaskForm):
     status = SelectField('Status', choices=[('Available','Available'),('Used','Used'),('Depleted','Depleted'),('Discarded','Discarded')], validators=[DataRequired()])
     notes = TextAreaField('Notes', validators=[Optional()])
     submit = SubmitField('Save Changes')
+
+
+class ConfirmForm(FlaskForm):
+    """Simple form asking user to type a confirmation phrase."""
+    confirm = StringField('Type "confirm_hayer" to continue', validators=[DataRequired()])
+    submit = SubmitField('Confirm')
+
+
+class RestoreForm(FlaskForm):
+    """Upload form for restoring a database backup."""
+    backup_file = FileField('Backup File', validators=[DataRequired()])
+    submit = SubmitField('Restore')

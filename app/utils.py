@@ -29,3 +29,13 @@ def log_audit(user_id, action, target_type=None, target_id=None, details=None, *
     )
     db.session.add(log)
     db.session.commit()
+
+
+def clear_database_except_admin():
+    """Delete all records except users with the admin role."""
+    from app.models import User, CellLine, Tower, Drawer, Box, CryoVial, VialBatch, AuditLog
+
+    for model in (CellLine, Tower, Drawer, Box, CryoVial, VialBatch, AuditLog):
+        db.session.query(model).delete()
+    db.session.query(User).filter(User.role != 'admin').delete()
+    db.session.commit()

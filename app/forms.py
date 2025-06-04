@@ -68,6 +68,12 @@ class UserCreationForm(FlaskForm): # For admin to create users
         if user is not None:
             raise ValidationError('This username is already taken. Please choose a different one.')
 
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
+    password2 = PasswordField(
+        'Repeat Password', validators=[DataRequired(), EqualTo('password', message='Passwords must match.')])
+    submit = SubmitField('Change Password')
+
 class CellLineForm(FlaskForm):
     name = StringField('Cell Line Name', validators=[DataRequired(), Length(max=128)])
     source = StringField('Source (e.g., ATCC, Gift)', validators=[Optional(), Length(max=128)])

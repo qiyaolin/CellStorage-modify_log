@@ -3,7 +3,7 @@
 <h1>Pick Up Selected Vials</h1>
 {% if batches %}
 <form method="post">
-<table class="table table-bordered">
+<table class="table table-bordered table-striped table-hover">
 <thead><tr><th>Batch ID</th><th>Batch Name</th><th>Cell Line</th><th>Date Frozen</th><th>Quantity</th></tr></thead>
 <tbody>
 {% for b in batches.values() %}

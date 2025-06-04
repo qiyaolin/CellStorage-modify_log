@@ -73,12 +73,22 @@ def audit_logs():
             AuditLog.details.ilike(like) |
             AuditLog.target_type.ilike(like)
         )
-    logs = query.order_by(AuditLog.timestamp.desc()).all()
+    logs_raw = query.order_by(AuditLog.timestamp.desc()).all()
+    parsed_logs = []
+    for log in logs_raw:
+        details = {}
+        if log.details:
+            try:
+                details = json.loads(log.details)
+            except ValueError:
+                details = {'raw': log.details}
+        parsed_logs.append({'log': log, 'details': details})
+
     all_users = User.query.order_by(User.username).all()
 
     return render_template(
         'main/audit_logs.html',
-        logs=logs,
+        logs=parsed_logs,
         all_users=all_users,
         search_user=search_user,
         keyword=keyword,
@@ -108,6 +118,42 @@ def inventory_summary():
 
     vials = query.order_by(VialBatch.id, CryoVial.unique_vial_id_tag).all()
     statuses = ['Available', 'Used', 'Depleted', 'Discarded']
+
+    if request.args.get('export') == 'csv':
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            'Vial ID',
+            'Batch ID',
+            'Batch Name',
+            'Vial Tag',
+            'Cell Line',
+            'Location',
+            'Date Frozen',
+            'Status',
+        ])
+        for v in vials:
+            location = (
+                f"{v.box_location.drawer_info.tower_info.name}/"
+                f"{v.box_location.drawer_info.name}/"
+                f"{v.box_location.name} R{v.row_in_box}C{v.col_in_box}"
+            )
+            writer.writerow([
+                v.id,
+                v.batch.id,
+                v.batch.name,
+                v.unique_vial_id_tag,
+                v.cell_line_info.name,
+                location,
+                v.date_frozen,
+                v.status,
+            ])
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment;filename=inventory_summary.csv'},
+        )
+
     return render_template(
         'main/inventory_summary.html',
         title='Inventory Summary',

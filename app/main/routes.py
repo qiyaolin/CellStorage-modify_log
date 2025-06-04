@@ -5,7 +5,7 @@ from io import StringIO
 import csv
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
-
+import json
 from app.main import bp
 from app import db
 from app.decorators import admin_required
@@ -613,30 +613,32 @@ def add_cryovial():
             created_vials_info.append(f"Vial {unique_tag} at Box ID {p['box_id']}, R{p['row']}C{p['col']}")
 
         try:
-            db.session.flush()
+            db.session.flush() # Ensure vial IDs are available if batch.vials.all() needs them before commit
             current_details_for_create = {
                 'general_info': f'added {len(placements)} vial(s)',
-                'vial_ids': [v.id for v in batch.vials.all()],  # Assuming batch.vials is a dynamic relationship
-                'batch_id': batch.id  # Storing the single batch_id
+                # It's good practice for batch.vials.all() to reflect the currently added vials.
+                # If batch.vials is populated by flush, this is fine. Otherwise, collect vial IDs differently.
+                'vial_ids': [v.id for v in batch.vials.all() if v.id is not None], # Ensure IDs are populated
+                'batch_id': batch.id
             }
+            # MODIFICATION: Convert dictionary to JSON string for details
+            # Also ensure the call is details=... and NOT **...
             log_audit(
                 current_user.id,
                 'CREATE_CRYOVIALS',
                 target_type='VialBatch',
                 target_id=batch.id,
-                details=current_details_for_create
+                details=json.dumps(current_details_for_create) #
             )
             db.session.commit()
-            # The subsequent log_audit call can remain as is, or you might consolidate logging
-            # if the information is now fully captured in the first call.
-            # For consistency, let's assume the second log_audit is still desired for a simpler message post-commit.
+            # The subsequent log_audit call is for a simpler post-commit message,
+            # its details are already a string.
             log_audit(
                 current_user.id,
-                'CREATE_CRYOVIALS',  # Or a more specific action like 'COMMITTED_CRYOVIALS_CREATION'
+                'CREATE_CRYOVIALS_COMMITTED', # Changed action slightly for clarity if needed
                 target_type='VialBatch',
                 target_id=batch.id,
-                details=f'Successfully committed batch {batch.id} with {len(placements)} vial(s).'
-                # Example of a more specific message
+                details=f'Successfully committed batch {batch.id} with {len(placements)} vial(s).' #
             )
             flash(
                 f"Batch #{batch.id} '{batch.name}' added with base ID {base_tag} and {len(placements)} vial(s): "
@@ -646,6 +648,7 @@ def add_cryovial():
             return redirect(url_for('main.cryovial_inventory'))
         except Exception as e:
             db.session.rollback()
+            # The error message reported by the user indicates the exception 'e' contains the specific Python error.
             flash(f'Error saving vial(s): {e}. Please try again.', 'danger')
             return redirect(url_for('main.add_cryovial'))
 
@@ -675,7 +678,7 @@ def add_cryovial():
                                                                          status='Available').count()
             num_empty_slots = (box_candidate.rows * box_candidate.columns) - occupied_by_available_vials_count
             if num_empty_slots >= quantity:
-                specific_slots = find_available_slots_in_box(box_candidate, quantity)
+                specific_slots = find_available_slots_in_box(box_candidate, quantity) #
                 if specific_slots:
                     found_box = box_candidate
                     for slot in specific_slots:
@@ -696,19 +699,18 @@ def add_cryovial():
                 'name': found_box.name,
                 'rows': found_box.rows,
                 'columns': found_box.columns,
-                # Ensure 'tag' is included for occupied slots
                 'occupied': [{'row': v.row_in_box, 'col': v.col_in_box, 'tag': v.batch_id} for v in CryoVial.query.filter_by(box_id=found_box.id, status='Available').all()]
             }
             cell_line_name_for_confirm = CellLine.query.get(common_data_for_session['cell_line_id']).name
 
-            print("-" * 20)
-            print(f"DEBUG for confirm_multi_vial_placement.html:")
-            print(f"DEBUG: box_details_for_map.id = {box_details_for_map.get('id')}")  # 确保这里是整数
-            print(f"DEBUG: Placements (list of dicts):")
-            for i, p_slot in enumerate(allocated_positions):  # allocated_positions is passed as 'placements'
+            print("-" * 20) #
+            print(f"DEBUG for confirm_multi_vial_placement.html:") #
+            print(f"DEBUG: box_details_for_map.id = {box_details_for_map.get('id')}") #
+            print(f"DEBUG: Placements (list of dicts):") #
+            for i, p_slot in enumerate(allocated_positions): #
                 print(
-                    f"  Placement {i + 1}: box_id={p_slot.get('box_id')}(type:{type(p_slot.get('box_id'))}), row={p_slot.get('row')}, col={p_slot.get('col')}")
-            print("-" * 20)
+                    f"  Placement {i + 1}: box_id={p_slot.get('box_id')}(type:{type(p_slot.get('box_id'))}), row={p_slot.get('row')}, col={p_slot.get('col')}") #
+            print("-" * 20) #
 
             return render_template('main/confirm_multi_vial_placement.html',
                                    title='Confirm Vial Placement',

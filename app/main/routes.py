@@ -1086,24 +1086,9 @@ def restore_database():
                 tmp = tempfile.NamedTemporaryFile(delete=False)
                 try:
                     file.save(tmp.name)
-
-                    # Determine dump format to choose pg_restore or psql
-                    with open(tmp.name, 'rb') as fh:
-                        header = fh.read(5)
-
-                    if header == b'PGDMP':
-                        cmd = [
-                            'pg_restore',
-                            '--clean',
-                            '--if-exists',
-                            '--dbname',
-                            uri,
-                            tmp.name,
-                        ]
-                    else:
-                        cmd = ['psql', uri, '-f', tmp.name]
-
-                    subprocess.run(cmd, check=True)
+                    subprocess.run([
+                        'pg_restore', '--clean', '--if-exists', '--dbname', uri, tmp.name
+                    ], check=True)
                 except (OSError, subprocess.CalledProcessError) as exc:
                     current_app.logger.error('pg_restore failed: %s', exc)
                     flash('PostgreSQL restore failed.', 'danger')

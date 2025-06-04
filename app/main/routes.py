@@ -1037,8 +1037,16 @@ def clear_all():
 def backup_database():
     db.session.commit()
     uri = current_app.config['SQLALCHEMY_DATABASE_URI']
-    if uri.startswith('sqlite:///'):
-        path = uri.replace('sqlite:///', '')
+        pg_dump = current_app.config.get('PG_DUMP_PATH')
+        if pg_dump and not os.path.isfile(pg_dump):
+            pg_dump = shutil.which(pg_dump)
+        if not pg_dump:
+            pg_dump = shutil.which('pg_dump') or shutil.which('pg_dump.exe')
+                psql = current_app.config.get('PSQL_PATH')
+                if psql and not os.path.isfile(psql):
+                    psql = shutil.which(psql)
+                if not psql:
+                    psql = shutil.which('psql') or shutil.which('psql.exe')
         log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
         return send_file(path, as_attachment=True, download_name='backup.db')
     else:

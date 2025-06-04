@@ -573,7 +573,13 @@ def pickup_selected_vials():
                 )
                 pb['cells'][(vial.row_in_box, vial.col_in_box)] = vial
         db.session.commit()
-        log_audit(current_user.id, 'PICKUP_VIALS', target_type='CryoVial', details=str(used_ids))
+        batch_ids = list({v.batch_id for v in picked_vials})
+        log_audit(
+            current_user.id,
+            'PICKUP_VIALS',
+            target_type='CryoVial',
+            details={'vial_ids': used_ids, 'batch_ids': batch_ids},
+        )
         session.pop('pickup_ids', None)
         flash('Pick up recorded and vials marked as Used.', 'success')
         return render_template(

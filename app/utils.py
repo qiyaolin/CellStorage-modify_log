@@ -33,9 +33,27 @@ def log_audit(user_id, action, target_type=None, target_id=None, details=None, *
 
 def clear_database_except_admin():
     """Delete all records except users with the admin role."""
-    from app.models import User, CellLine, Tower, Drawer, Box, CryoVial, VialBatch, AuditLog
+    from app.models import (
+        User,
+        CellLine,
+        Tower,
+        Drawer,
+        Box,
+        CryoVial,
+        VialBatch,
+        AuditLog,
+    )
 
-    for model in (CellLine, Tower, Drawer, Box, CryoVial, VialBatch, AuditLog):
+    # Delete dependent tables first to satisfy foreign key constraints
+    for model in (
+        CryoVial,
+        VialBatch,
+        Box,
+        Drawer,
+        Tower,
+        CellLine,
+        AuditLog,
+    ):
         db.session.query(model).delete()
     db.session.query(User).filter(User.role != 'admin').delete()
     db.session.commit()

@@ -1044,11 +1044,19 @@ def backup_database():
         return send_file(path, as_attachment=True, download_name='backup.db')
 
     if scheme.startswith('postgres'):
+        parsed = urlparse(uri)
+        env = os.environ.copy()
+        uri_no_pass = uri
+        if parsed.password:
+            env['PGPASSWORD'] = parsed.password
+            uri_no_pass = uri.replace(f":{parsed.password}@", '@')
+
         try:
             result = subprocess.run(
-                ['pg_dump', '--format', 'custom', '--dbname', uri],
+                ['pg_dump', '--format', 'custom', '--dbname', uri_no_pass],
                 check=True,
                 capture_output=True,
+                env=env,
             )
         except (OSError, subprocess.CalledProcessError) as exc:
             current_app.logger.error('pg_dump failed: %s', exc)
@@ -1084,12 +1092,19 @@ def restore_database():
 
             elif scheme.startswith('postgres'):
                 tmp = tempfile.NamedTemporaryFile(delete=False)
+                tmp.close()
                 try:
                     file.save(tmp.name)
-                    subprocess.run([
-                        'pg_restore', '--clean', '--if-exists', '--dbname', uri, tmp.name
-                    ], check=True)
-                except (OSError, subprocess.CalledProcessError) as exc:
+                    parsed = urlparse(uri)
+                    env = os.environ.copy()
+                    uri_no_pass = uri
+                    if parsed.password:
+                        env['PGPASSWORD'] = parsed.password
+                        uri_no_pass = uri.replace(f":{parsed.password}@", '@')
+
+                            uri_no_pass,
+                        cmd = ['psql', uri_no_pass, '-f', tmp.name]
+                    subprocess.run(cmd, check=True, env=env)
                     current_app.logger.error('pg_restore failed: %s', exc)
                     flash('PostgreSQL restore failed.', 'danger')
                     return redirect(url_for('main.index'))

@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>{{ title }}</h1>
+    <form method="POST" action="{{ form_action }}" novalidate>
+        {{ form.hidden_tag() }}
+
+        <fieldset>
+            <legend>Vial Identification & Content</legend>
+            <p>
+                {{ form.batch_name.label }}<br>
+                {{ form.batch_name(size=40) }}<br>
+                {% for error in form.batch_name.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+            <p>
+                {{ form.quantity_to_add.label }}<br>
+                {{ form.quantity_to_add(size=5) }}<br>
+                {% for error in form.quantity_to_add.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+            <p>
+                {{ form.cell_line_id.label }}<br>
+                {{ form.cell_line_id() }}
+                <small>(If cell line not listed, an admin may need to <a href="{{ url_for('main.add_cell_line') }}" target="_blank">add it first</a>)</small><br>
+                {% for error in form.cell_line_id.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+            <p>
+                {{ form.passage_number.label }}<br>
+                {{ form.passage_number(size=20) }}<br>
+                {% for error in form.passage_number.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+            <p>
+                {{ form.date_frozen.label }} (YYYY-MM-DD)<br>
+                {{ form.date_frozen() }}<br>
+                {% for error in form.date_frozen.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+            <p>
+                {{ form.volume_ml.label }}<br>
+                {{ form.volume_ml(size=10) }}<br>
+                {% for error in form.volume_ml.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+            <p>
+                {{ form.concentration.label }}<br>
+                {{ form.concentration(size=30) }}<br>
+                {% for error in form.concentration.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+            <p>
+                {{ form.fluorescence_tag.label }}<br>
+                {{ form.fluorescence_tag(size=20) }}<br>
+                {% for error in form.fluorescence_tag.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+            <p>
+                {{ form.resistance.label }}<br>
+                {% for sub in form.resistance %}
+                    <label>{{ sub() }} {{ sub.label.text }}</label><br>
+                {% endfor %}
+                {% for error in form.resistance.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+            <p>
+                {{ form.parental_cell_line.label }}<br>
+                {{ form.parental_cell_line(size=30) }}<br>
+                {% for error in form.parental_cell_line.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+        </fieldset>
+
+        {# REMOVE Manual Location Fields fieldset and its JavaScript #}
+        {#
+        <fieldset id="manual_location_fields" style="display: none;">
+            ...
+        </fieldset>
+        #}
+
+        <fieldset>
+            <legend>Notes</legend>
+            <p>
+                {{ form.notes.label }}<br>
+                {{ form.notes(rows=4, cols=48) }}<br>
+                {% for error in form.notes.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+            </p>
+        </fieldset>
+
+        <p>{{ form.submit() }}</p> {# Button text was 'Next: Plan Placement / Save Vial' #}
+                              {# Can be 'Next: Plan Placement' from form definition #}
+    </form>
+    <p><a href="{{ url_for('main.cryovial_inventory') }}">Back to Inventory List</a></p>
+
+    {# REMOVE the JavaScript block for toggling manual_location_fields #}
+    {#
+    <script>
+        ...
+    </script>
+    #}
+{% endblock %}

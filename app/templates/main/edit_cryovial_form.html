@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Edit CryoVial</h1>
+<form method="post" action="{{ form_action }}">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">
+    {{ form.unique_vial_id_tag.label }} {{ form.unique_vial_id_tag(size=20) }}
+  </div>
+  <div class="mb-3">
+    {{ form.cell_line_id.label }} {{ form.cell_line_id() }}
+  </div>
+  <div class="mb-3">
+    {{ form.box_id.label }} {{ form.box_id() }}
+  </div>
+  <div class="mb-3">
+    {{ form.row_in_box.label }} {{ form.row_in_box(size=5) }}
+    {{ form.col_in_box.label }} {{ form.col_in_box(size=5) }}
+  </div>
+  <div class="mb-3">
+    {{ form.passage_number.label }} {{ form.passage_number(size=20) }}
+  </div>
+  <div class="mb-3">
+    {{ form.date_frozen.label }} {{ form.date_frozen() }}
+  </div>
+  <div class="mb-3">
+    {{ form.number_of_vials_at_creation.label }} {{ form.number_of_vials_at_creation(size=5) }}
+  </div>
+  <div class="mb-3">
+    {{ form.volume_ml.label }} {{ form.volume_ml(size=10) }}
+  </div>
+  <div class="mb-3">
+    {{ form.concentration.label }} {{ form.concentration(size=20) }}
+  </div>
+  <div class="mb-3">
+    {{ form.fluorescence_tag.label }} {{ form.fluorescence_tag(size=20) }}
+  </div>
+  <div class="mb-3">
+    {{ form.resistance.label }}<br>
+    {% for sub in form.resistance %}<label>{{ sub() }} {{ sub.label.text }}</label><br>{% endfor %}
+  </div>
+  <div class="mb-3">
+    {{ form.parental_cell_line.label }} {{ form.parental_cell_line(size=20) }}
+  </div>
+  <div class="mb-3">
+    {{ form.status.label }} {{ form.status() }}
+  </div>
+  <div class="mb-3">
+    {{ form.notes.label }} {{ form.notes(rows=3, cols=40) }}
+  </div>
+  <p>{{ form.submit(class_='btn btn-primary') }}</p>
+</form>
+<p><a href="{{ url_for('main.inventory_summary') }}">Back</a></p>
+{% endblock %}

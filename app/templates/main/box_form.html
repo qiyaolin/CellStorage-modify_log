@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>{{ title }}</h1>
+    <form method="POST" action="{{ form_action }}" novalidate>
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.drawer_id.label }}<br>
+            {{ form.drawer_id() }}<br>
+            {% for error in form.drawer_id.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+        </p>
+        <p>
+            {{ form.name.label }}<br>
+            {{ form.name(size=50) }}<br>
+            {% for error in form.name.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+        </p>
+        <p>
+            {{ form.rows.label }}<br>
+            {{ form.rows(size=5) }}<br>
+            {% for error in form.rows.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+        </p>
+        <p>
+            {{ form.columns.label }}<br>
+            {{ form.columns(size=5) }}<br>
+            {% for error in form.columns.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+        </p>
+        <p>
+            {{ form.description.label }}<br>
+            {{ form.description(rows=4, cols=48) }}<br>
+            {% for error in form.description.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+        </p>
+        <p>{{ form.submit() }}</p>
+    </form>
+    <p><a href="{{ url_for('main.locations_overview') }}">Back to Locations Overview</a></p>
+{% endblock %}

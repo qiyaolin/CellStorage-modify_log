@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+    <h1>Welcome to the Cell Storage App Dashboard, {{ current_user.username }}!</h1>
+    <p>This is your main dashboard.</p>
+    <ul>
+        {% if current_user.is_admin %}
+        <li><a href="{{ url_for('main.list_cell_lines') }}">Manage Cell Lines</a></li>
+        <li><a href="{{ url_for('main.locations_overview') }}">Manage Freezer Locations</a></li>
+        {% endif %}
+        <li><a href="{{ url_for('main.cryovial_inventory') }}">View CryoVial Inventory</a></li>
+    </ul>
+{% endblock %}

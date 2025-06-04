@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Update Status for Vial: {{ vial.unique_vial_id_tag }}</h1>
+    <p><strong>Cell Line:</strong> {{ vial.cell_line_info.name }}</p>
+    <p><strong>Current Status:</strong> {{ vial.status }}</p>
+    <p><strong>Location:</strong> Box {{ vial.box_location.name }}, Row {{ vial.row_in_box }}, Col {{ vial.col_in_box }}</p>
+
+    <form method="POST" action="{{ form_action }}" novalidate>
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.new_status.label }}<br>
+            {{ form.new_status() }}<br>
+            {% for error in form.new_status.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+        </p>
+        <p>
+            {{ form.notes.label }}<br>
+            {{ form.notes(rows=3, cols=48) }}<br>
+            {% for error in form.notes.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+        </p>
+        <p>{{ form.submit() }}</p>
+    </form>
+    <p><a href="{{ url_for('main.cryovial_inventory') }}">Back to Inventory List</a></p>
+{% endblock %}

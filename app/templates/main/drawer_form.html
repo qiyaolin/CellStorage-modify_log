@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>{{ title }}</h1>
+    <form method="POST" action="{{ form_action }}" novalidate>
+        {{ form.hidden_tag() }}
+        <p>
+            {{ form.tower_id.label }}<br>
+            {{ form.tower_id() }}<br>
+            {% for error in form.tower_id.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+        </p>
+        <p>
+            {{ form.name.label }}<br>
+            {{ form.name(size=50) }}<br>
+            {% for error in form.name.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
+        </p>
+        <p>{{ form.submit() }}</p>
+    </form>
+    <p><a href="{{ url_for('main.locations_overview') }}">Back to Locations Overview</a></p>
+{% endblock %}

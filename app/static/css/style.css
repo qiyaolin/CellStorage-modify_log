@@ -1,0 +1,53 @@
+body {
+    padding-top: 20px;
+}
+.alert-container {
+    max-width: 800px;
+    margin: 0 auto 20px auto;
+}
+
+.box-grid {
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+.box-grid td {
+    border: 2px solid #ccc;
+    width: 40px;
+    height: 40px;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 20px;
+    overflow: hidden;
+}
+
+.box-grid td a {
+
+    text-decoration: none;
+
+}
+
+.box-grid td.empty {
+    background-color: #fff;
+}
+.box-grid td.status-available {
+    background-color: #d0e8f2;
+}
+.box-grid td.status-used {
+    background-color: #fce694;
+}
+.box-grid td.status-depleted {
+    background-color: #ffb3b3;
+}
+.box-grid td.status-discarded {
+    background-color: #e0e0e0;
+}
+
+/* Highlight colors for selected vials by batch */
+.batch-color-0 { background-color: #ff9999 !important; }
+.batch-color-1 { background-color: #99ff99 !important; }
+.batch-color-2 { background-color: #9999ff !important; }
+.batch-color-3 { background-color: #ffcc99 !important; }
+.batch-color-4 { background-color: #cc99ff !important; }
+.batch-color-5 { background-color: #66cccc !important; }
+.batch-color-6 { background-color: #cccc66 !important; }

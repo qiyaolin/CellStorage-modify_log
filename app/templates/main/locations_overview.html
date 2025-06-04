@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>Freezer Locations Overview</h1>
+    <p>
+        <a href="{{ url_for('main.add_tower') }}" class="button">Add New Tower</a> |
+        <a href="{{ url_for('main.add_drawer') }}" class="button">Add New Drawer</a> |
+        <a href="{{ url_for('main.add_box') }}" class="button">Add New Box</a>
+    </p>
+
+    <h2>Towers</h2>
+    {% if towers %}
+        <ul>
+            {% for tower in towers %}
+                <li>
+                    <strong>{{ tower.name }}</strong> ({{ tower.freezer_name if tower.freezer_name else 'N/A' }})
+                    - <a href="{{ url_for('main.edit_tower', tower_id=tower.id) }}">Edit Tower</a>
+                    <p>{{ tower.description if tower.description }}</p>
+                    {% if tower.drawers.all() %}
+                        <ul>
+                            {% for drawer in tower.drawers.order_by('name') %}
+                                <li>
+                                    <em>{{ drawer.name }}</em>
+                                    - <a href="{{ url_for('main.edit_drawer', drawer_id=drawer.id) }}">Edit Drawer</a>
+                                    {% if drawer.boxes.all() %}
+                                        <ul>
+                                            {% for box in drawer.boxes.order_by('name') %}
+                                                <li>
+                                                    {{ box.name }} ({{ box.rows }}x{{ box.columns }})
+                                                    - <a href="{{ url_for('main.edit_box', box_id=box.id) }}">Edit Box</a>
+                                                    {% if box.description %}<small> - {{ box.description }}</small>{% endif %}
+                                                </li>
+                                            {% else %}
+                                                <li>No boxes in this drawer.</li>
+                                            {% endfor %}
+                                        </ul>
+                                    {% else %}
+                                        <p><small>No boxes yet in this drawer. <a href="{{ url_for('main.add_box', drawer_id=drawer.id) }}">Add one?</a></small></p>
+                                    {% endif %}
+                                </li>
+                            {% else %}
+                                 <li>No drawers in this tower.</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p><small>No drawers yet in this tower. <a href="{{ url_for('main.add_drawer', tower_id=tower.id) }}">Add one?</a></small></p>
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No towers defined yet. <a href="{{ url_for('main.add_tower') }}">Start by adding a tower.</a></p>
+    {% endif %}
+{% endblock %}

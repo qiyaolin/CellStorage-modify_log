@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Inventory Summary</h1>
+<form method="get" class="row g-2 mb-3">
+  <div class="col-md-4">
+    <input type="text" name="q" value="{{ search_q }}" placeholder="Search by tag, batch or cell line" class="form-control">
+  </div>
+  <div class="col-md-3">
+    <select name="status" class="form-select">
+      <option value="">Any Status</option>
+      {% for s in statuses %}
+        <option value="{{ s }}" {% if search_status == s %}selected{% endif %}>{{ s }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-secondary">Filter</button>
+  </div>
+</form>
+<table class="table table-bordered table-sm">
+  <thead>
+    <tr>
+      <th>ID</th><th>Batch</th><th>Vial Tag</th><th>Cell Line</th><th>Location</th><th>Date Frozen</th><th>Status</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for v in vials %}
+    <tr>
+      <td>{{ v.id }}</td>
+      <td>{{ v.batch.id }} - {{ v.batch.name }}</td>
+      <td>{{ v.unique_vial_id_tag }}</td>
+      <td>{{ v.cell_line_info.name }}</td>
+      <td>{{ v.box_location.drawer_info.tower_info.name }}/{{ v.box_location.drawer_info.name }}/{{ v.box_location.name }} R{{ v.row_in_box }}C{{ v.col_in_box }}</td>
+      <td>{{ v.date_frozen }}</td>
+      <td>{{ v.status }}</td>
+      <td><a href="{{ url_for('main.edit_cryovial', vial_id=v.id) }}" class="btn btn-sm btn-primary">Edit</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

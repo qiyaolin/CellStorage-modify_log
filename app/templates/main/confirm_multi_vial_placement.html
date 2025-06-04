@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>{{ title }}</h1> {# 例如："Confirm Vial Placement" #}
+    <p>You are about to add <strong>{{ quantity_to_add }}</strong> vial(s) for batch name: <strong>{{ common_data.batch_name }}</strong>. A base ID will be auto-generated.</p>
+    <p>Cell Line: <strong>{{ cell_line_name_for_confirm }}</strong></p>
+    <p>Passage: {{ common_data.passage_number }}, Date Frozen: {{ common_data.date_frozen_str }}</p>
+
+    <hr>
+    <h2>Proposed Placements:</h2>
+    {% if placements %}
+        <p>The system has planned the following placement(s) in Box: <strong>{{ box_details_for_map.name }}</strong></p>
+        <ul>
+            {% for placement in placements %}
+                <li>Vial {{ loop.index }}: Row {{ placement.row }}, Column {{ placement.col }}</li>
+            {% endfor %}
+        </ul>
+
+        <h3>Visual Plan for Box: {{ box_details_for_map.name }} ({{ box_details_for_map.rows }}x{{ box_details_for_map.columns }})</h3>
+        <style>
+            .box-grid {
+                border-collapse: collapse;
+                margin-top: 10px;
+                table-layout: fixed; /* Helps with fixed cell sizes */
+            }
+            .box-grid td {
+                border: 1px solid #ccc;
+                width: 65px;  /* Cell width, adjust as needed */
+                height: 45px; /* Cell height, adjust as needed */
+                text-align: center;
+                vertical-align: middle;
+                font-size: 19px;   /* Font size for tags */
+                overflow: hidden;         /* Hide overflow */
+                text-overflow: ellipsis;  /* Show ellipsis for overflow */
+                white-space: nowrap;      /* Prevent tag text from wrapping */
+                padding: 2px;             /* Cell padding */
+            }
+            .box-occupied {
+                background-color: #d0e8f2; /* Light blue for occupied cells */
+                color: #333;               /* Text color for tags in occupied cells */
+            }
+            .box-planned {
+                background-color: #ff7b7b !important; /* Red for newly planned positions */
+            }
+            .box-empty {
+                background-color: #ffffff; /* White for empty cells */
+            }
+        </style>
+        <table class="box-grid">
+            {% for r in range(1, box_details_for_map.rows + 1) %}
+            <tr>
+                {% for c in range(1, box_details_for_map.columns + 1) %}
+                    {# 使用 namespace 来保存循环内部的布尔状态 #}
+                    {% set ns = namespace(cell_is_planned=false, cell_is_occupied=false, occupied_batch_id='') %}
+
+                    {# 检测是否为“拟新增”位置 #}
+                    {% for planned_slot in placements %}
+                        {% if planned_slot.box_id == box_details_for_map.id
+                              and planned_slot.row == r
+                              and planned_slot.col == c %}
+                            {% set ns.cell_is_planned = true %}
+                        {% endif %}
+                    {% endfor %}
+
+                    {# 如果此格子不是拟新增，则判断是否已被占用 #}
+                    {% if not ns.cell_is_planned %}
+                        {% for occ_slot in box_details_for_map.occupied %}
+                            {% if occ_slot.row == r and occ_slot.col == c %}
+                                {% set ns.cell_is_occupied = true %}
+                                {% set ns.occupied_batch_id = occ_slot.tag %}
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+
+                    {# 将 namespace 中的值赋给局部变量 #}
+                    {% set cell_is_planned = ns.cell_is_planned %}
+                    {% set cell_is_occupied = ns.cell_is_occupied %}
+                    {% set occupied_batch_id = ns.occupied_batch_id %}
+
+                    {# 决定此单元格的 CSS 类 #}
+                    {% set cell_class = 'box-empty' %}
+                    {% if cell_is_planned %}
+                        {% set cell_class = 'box-planned' %}
+                    {% elif cell_is_occupied %}
+                        {% set cell_class = 'box-occupied' %}
+                    {% endif %}
+
+                    <td class="{{ cell_class }}">
+                        {% if cell_is_occupied %}
+                            {{ occupied_batch_id }}
+                        {% else %}
+                            &nbsp; {# 拟新增或空闲的格子不显示文本 #}
+                        {% endif %}
+                    </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </table>
+        <br>
+
+        <form method="POST" action="{{ url_for('main.add_cryovial') }}">
+            <input type="hidden" name="confirm_placement" value="yes">
+            <input type="submit" value="Confirm and Save These {{ quantity_to_add }} Vial(s)">
+        </form>
+        <p><a href="{{ url_for('main.add_cryovial') }}">Cancel and Modify Details</a></p>
+    {% else %}
+        <p>No placements proposed. There might have been an error or not enough space found.</p>
+    {% endif %}
+{% endblock %}

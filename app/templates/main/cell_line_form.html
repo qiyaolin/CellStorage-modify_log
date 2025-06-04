@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+
+{% block content %}
+    <h1>{{ title }}</h1>
+    <form method="POST" action="{{ form_action }}" novalidate>
+        {{ form.hidden_tag() }} {# CSRF token #}
+
+        <p>
+            {{ form.name.label }}<br>
+            {{ form.name(size=60) }}<br>
+            {% for error in form.name.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.source.label }}<br>
+            {{ form.source(size=60) }}<br>
+            {% for error in form.source.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.species.label }}<br>
+            {{ form.species(size=30) }}<br>
+            {% for error in form.species.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.original_passage.label }}<br>
+            {{ form.original_passage(size=30) }}<br>
+            {% for error in form.original_passage.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.culture_medium.label }}<br>
+            {{ form.culture_medium(size=60) }}<br>
+            {% for error in form.culture_medium.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.antibiotic_resistance.label }}<br>
+            {{ form.antibiotic_resistance(size=60) }}<br>
+            {% for error in form.antibiotic_resistance.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.growth_properties.label }}<br>
+            {{ form.growth_properties(rows=3, cols=58) }}<br>
+            {% for error in form.growth_properties.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.mycoplasma_status.label }}<br>
+            {{ form.mycoplasma_status(size=30) }}<br>
+            {% for error in form.mycoplasma_status.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.date_established.label }} (YYYY-MM-DD)<br>
+            {{ form.date_established() }}<br>
+            {% for error in form.date_established.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>
+            {{ form.notes.label }}<br>
+            {{ form.notes(rows=4, cols=58) }}<br>
+            {% for error in form.notes.errors %}
+            <span style="color: red;">[{{ error }}]</span><br>
+            {% endfor %}
+        </p>
+        <p>{{ form.submit() }}</p>
+    </form>
+    <p><a href="{{ url_for('main.list_cell_lines') }}">Back to Cell Line List</a></p>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>CryoVial Inventory</h1>
+<p><a href="{{ url_for('main.add_cryovial') }}" class="btn btn-primary">Add New CryoVial</a></p>
+
+<form method="get" action="{{ url_for('main.cryovial_inventory') }}" class="row g-2 mb-4">
+  <div class="col-md-4">
+    <input type="text" name="q" value="{{ search_q }}" placeholder="Search by tag, batch or cell line" class="form-control">
+  </div>
+  <div class="col-md-3">
+    <select name="creator" class="form-select">
+      <option value="">Any creator</option>
+      {% for u in all_creators %}
+        <option value="{{ u.username }}" {% if search_creator == u.username %}selected{% endif %}>{{ u.username }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <input type="text" name="fluorescence" value="{{ search_fluorescence }}" placeholder="Fluorescence Tag" class="form-control">
+  </div>
+  <div class="col-md-3">
+    <select name="resistance" class="form-select">
+      <option value="">Any Resistance</option>
+      {% for r in ['Puro', 'Blast', 'Neo/G418', 'Zeo'] %}
+        <option value="{{ r }}" {% if search_resistance == r %}selected{% endif %}>{{ r }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-secondary">Search CryoVial</button>
+  </div>
+</form>
+
+{% if search_results is not none %}
+  <h2>Search Results</h2>
+  {% if search_results %}
+    <form method="post" class="mb-3">
+      <input type="hidden" name="q" value="{{ search_q }}">
+      <input type="hidden" name="creator" value="{{ search_creator }}">
+      <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
+      <input type="hidden" name="resistance" value="{{ search_resistance }}">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Select</th>
+            <th>Batch ID</th>
+            <th>Batch Name</th>
+            <th>Cell Line</th>
+            <th>Passage #</th>
+            <th>Date Frozen</th>
+            <th>Volume (uL)</th>
+            <th>Concentration</th>
+            <th>Fluorescence Tag</th>
+            <th>Resistance</th>
+            <th>Parental Line</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for res in search_results %}
+          <tr>
+            <td><input type="checkbox" name="selected_batches" value="{{ res.batch.id }}"></td>
+            <td>{{ res.batch.id }}</td>
+            <td>{{ res.batch.name }}</td>
+            <td>{{ res.cell_line }}</td>
+            <td>{{ res.passage_number }}</td>
+            <td>{{ res.date_frozen }}</td>
+            <td>{{ res.volume_ml }}</td>
+            <td>{{ res.concentration }}</td>
+            <td>{{ res.fluorescence_tag }}</td>
+            <td>{{ res.resistance }}</td>
+            <td>{{ res.parental_cell_line }}</td>
+            <td>{{ res.notes }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-primary">Add to Pick Up List</button>
+    </form>
+    {% if selected_batches %}
+    <h3>Selected for Pick Up</h3>
+    <form method="post" class="mb-3">
+      <input type="hidden" name="q" value="{{ search_q }}">
+      <input type="hidden" name="creator" value="{{ search_creator }}">
+      <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
+      <input type="hidden" name="resistance" value="{{ search_resistance }}">
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Unselect</th><th>Batch ID</th><th>Batch Name</th><th>Date Frozen</th><th>Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for sel in selected_batches %}
+          <tr>
+            <td><input type="checkbox" name="remove_batches" value="{{ sel.batch.id }}"></td>
+            <td>{{ sel.batch.id }}</td>
+            <td>{{ sel.batch.name }}</td>
+            <td>{{ sel.date_frozen }}</td>
+            <td>{{ sel.count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <button type="submit" class="btn btn-warning">Remove Selected</button>
+      <a href="{{ url_for('main.pickup_selected_vials') }}" class="btn btn-success ms-2">Pick Up Selected ({{ selected_batches|length if selected_batches else 0 }})</a>
+    </form>
+    {% endif %}
+  {% else %}
+    <p>No matching vials found.</p>
+  {% endif %}
+{% endif %}
+
+{% if inventory %}
+  {% for tower_name, drawers in inventory.items() %}
+    <h2 class="mt-4">Tower: {{ tower_name }}</h2>
+    {% for drawer_name, boxes in drawers.items() %}
+      <h3 class="mt-3">Drawer: {{ drawer_name }}</h3>
+      <div class="d-flex flex-wrap mb-4">
+        {% for box in boxes %}
+          <div class="m-2 border p-2">
+            <h5 class="text-center">Box: {{ box.name }}</h5>
+            <table class="box-grid mb-2">
+              {% for r in range(1, box.rows + 1) %}
+              <tr>
+                {% for c in range(1, box.columns + 1) %}
+                  {% set key = r ~ '-' ~ c %}
+                  {% set vial = box.vials.get(key) %}
+                  {% if vial %}
+                    {% if current_user.is_admin %}
+                      <td class="status-{{ vial.status.lower() }}"><a href="{{ url_for('main.delete_cryovial', vial_id=vial.id) }}" title="Delete vial" onclick="return confirm('Delete this vial?');">{{ vial.tag }}</a></td>
+                    {% else %}
+                      <td class="status-{{ vial.status.lower() }}">{{ vial.tag }}</td>
+                    {% endif %}
+                  {% else %}
+                    {% if current_user.is_admin %}
+                      <td class="empty"><a href="{{ url_for('main.add_vial_at_position', box_id=box.id, row=r, col=c) }}" title="Add vial">+</a></td>
+                    {% else %}
+                      <td class="empty">&nbsp;</td>
+                    {% endif %}
+                  {% endif %}
+                {% endfor %}
+              </tr>
+              {% endfor %}
+            </table>
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  {% endfor %}
+{% else %}
+  <p>No boxes defined yet. <a href="{{ url_for('main.add_box') }}">Add one?</a></p>
+{% endif %}
+{% endblock %}

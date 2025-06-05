@@ -179,3 +179,13 @@ class AuditLog(db.Model):
 
     def __repr__(self):
         return f'<AuditLog {self.action} by User ID {self.user_id} at {self.timestamp}>'
+
+
+class AppConfig(db.Model):
+    """Simple key/value store for application-wide settings."""
+    __tablename__ = 'app_config'
+    key = db.Column(db.String(64), primary_key=True)
+    value = db.Column(db.String(255))
+
+    def __repr__(self):
+        return f"<AppConfig {self.key}={self.value}>"

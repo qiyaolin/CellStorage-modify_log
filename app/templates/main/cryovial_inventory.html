@@ -3,6 +3,15 @@
 {% block content %}
 <h1>CryoVial Inventory</h1>
 <p><a href="{{ url_for('main.add_cryovial') }}" class="btn btn-primary">Add New CryoVial</a></p>
+{% if current_user.is_admin %}
+<div class="mb-3">
+  <form method="post" action="{{ url_for('main.update_batch_counter') }}" class="d-flex align-items-center">
+    <label class="me-2">Next Batch ID:</label>
+    <input type="number" name="batch_counter" value="{{ batch_counter }}" class="form-control form-control-sm me-2" style="width:120px;">
+    <button type="submit" class="btn btn-sm btn-outline-primary">Set</button>
+  </form>
+</div>
+{% endif %}
 
 <form method="get" action="{{ url_for('main.cryovial_inventory') }}" class="row g-2 mb-4">
   <div class="col-md-4">

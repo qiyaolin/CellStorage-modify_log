@@ -226,3 +226,24 @@ class RestoreForm(FlaskForm):
     """Upload form for restoring a database backup."""
     backup_file = FileField('Backup File', validators=[DataRequired()])
     submit = SubmitField('Restore')
+
+
+class BatchEditVialsForm(FlaskForm):
+    """Form for admins to update multiple cryovials at once."""
+    vial_tags = TextAreaField(
+        'Vial Tags (comma or newline separated)', validators=[DataRequired()]
+    )
+    new_status = SelectField(
+        'New Status',
+        choices=[
+            ('', 'No Change'),
+            ('Available', 'Available'),
+            ('Used', 'Used'),
+            ('Depleted', 'Depleted'),
+            ('Discarded', 'Discarded'),
+        ],
+        validators=[Optional()],
+    )
+    notes = TextAreaField('Append Notes', validators=[Optional()])
+    submit = SubmitField('Apply Changes')
+

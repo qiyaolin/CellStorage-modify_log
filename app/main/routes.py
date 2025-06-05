@@ -34,6 +34,7 @@ from app.forms import (
     ManualVialForm,
     ConfirmForm,
     RestoreForm,
+    BatchEditVialsForm,
 )
 from app.models import (
     CellLine,
@@ -1148,4 +1149,47 @@ def restore_database():
                 flash('Unsupported database type.', 'danger')
             return redirect(url_for('main.index'))
     return render_template('main/restore_backup.html', form=form, title='Restore Backup')
+
+
+@bp.route('/admin/batch_edit_vials', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def batch_edit_vials():
+    form = BatchEditVialsForm()
+    if form.validate_on_submit():
+        tags_input = form.vial_tags.data
+        tags = [t.strip() for t in tags_input.replace('\n', ',').split(',') if t.strip()]
+        if not tags:
+            flash('No valid vial tags provided.', 'danger')
+            return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
+
+        vials = CryoVial.query.filter(CryoVial.unique_vial_id_tag.in_(tags)).all()
+        found_tags = {v.unique_vial_id_tag for v in vials}
+        missing = [t for t in tags if t not in found_tags]
+
+        for v in vials:
+            if form.new_status.data:
+                v.status = form.new_status.data
+            if form.notes.data:
+                v.notes = (v.notes + '\n' if v.notes else '') + form.notes.data
+            v.last_updated = datetime.utcnow()
+        db.session.commit()
+        log_audit(
+            current_user.id,
+            'BATCH_EDIT_VIALS',
+            target_type='CryoVial',
+            details={
+                'vial_tags': tags,
+                'updated_status': form.new_status.data or None,
+                'notes_appended': bool(form.notes.data),
+                'missing_tags': missing,
+            },
+        )
+
+        flash(f'Updated {len(vials)} vial(s).', 'success')
+        if missing:
+            flash(f'Missing tags: {", ".join(missing)}', 'warning')
+        return redirect(url_for('main.batch_edit_vials'))
+
+    return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
 

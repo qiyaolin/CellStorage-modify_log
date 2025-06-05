@@ -17,19 +17,24 @@
   <button type="submit" name="delete_batch" class="btn btn-danger" onclick="return confirm('Delete entire batch?');">Delete Batch</button>
 </form>
 <h2 class="mt-4">Vials</h2>
-<table class="table table-bordered table-sm">
-  <thead><tr><th>ID</th><th>Tag</th><th>Location</th><th>Status</th><th></th></tr></thead>
-  <tbody>
-  {% for v in vials %}
-  <tr>
-    <td>{{ v.id }}</td>
-    <td>{{ v.unique_vial_id_tag }}</td>
-    <td>{{ v.box_location.drawer_info.tower_info.name }}/{{ v.box_location.drawer_info.name }}/{{ v.box_location.name }} R{{ v.row_in_box }}C{{ v.col_in_box }}</td>
-    <td>{{ v.status }}</td>
-    <td><a class="btn btn-sm btn-secondary" href="{{ url_for('main.edit_cryovial', vial_id=v.id) }}">Edit</a></td>
-  </tr>
-  {% endfor %}
-  </tbody>
-</table>
+{% for box in boxes.values() %}
+  <div class="mb-4">
+    <h5>{{ box.box.drawer_info.tower_info.name }} / {{ box.box.drawer_info.name }} / {{ box.box.name }}</h5>
+    <table class="box-grid">
+      {% for r in range(1, box.rows + 1) %}
+      <tr>
+        {% for c in range(1, box.columns + 1) %}
+          {% set vial = box.cells.get((r,c)) %}
+          {% if vial %}
+            <td class="status-{{ vial.status.lower() }}"><a href="{{ url_for('main.edit_cryovial', vial_id=vial.id) }}" title="Edit vial">{{ vial.unique_vial_id_tag }}</a></td>
+          {% else %}
+            <td class="empty">&nbsp;</td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+{% endfor %}
 <p><a href="{{ url_for('main.manage_batch_lookup') }}">Back</a></p>
 {% endblock %}

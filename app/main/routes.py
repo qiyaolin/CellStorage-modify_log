@@ -1260,6 +1260,19 @@ def manage_batch_lookup():
 def manage_batch(batch_id):
     batch = VialBatch.query.get_or_404(batch_id)
     vials = batch.vials.order_by(CryoVial.id).all()
+    boxes = {}
+    for v in vials:
+        box = v.box_location
+        b = boxes.setdefault(
+            box.id,
+            {
+                'box': box,
+                'rows': box.rows,
+                'columns': box.columns,
+                'cells': {},
+            },
+        )
+        b['cells'][(v.row_in_box, v.col_in_box)] = v
 
     form = EditBatchForm()
     form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
@@ -1306,4 +1319,4 @@ def manage_batch(batch_id):
         flash(f'Batch {batch_id} deleted.', 'success')
         return redirect(url_for('main.manage_batch_lookup'))
 
-    return render_template('main/manage_batch.html', form=form, batch=batch, vials=vials, title='Manage Batch')
+    return render_template('main/manage_batch.html', form=form, batch=batch, boxes=boxes, title='Manage Batch')

@@ -36,6 +36,7 @@ from app.forms import (
     RestoreForm,
     BatchEditVialsForm,
     EditBatchForm,
+    BatchLookupForm,
 )
 from app.models import (
     CellLine,
@@ -1243,3 +1244,79 @@ def edit_batch(batch_id):
 
     return render_template('main/edit_batch_form.html', form=form, batch=batch, title='Edit Batch')
 
+@bp.route('/admin/manage_batch', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_batch_lookup():
+    form = BatchLookupForm()
+    if form.validate_on_submit():
+        return redirect(url_for('main.manage_batch', batch_id=form.batch_id.data))
+    return render_template('main/manage_batch_lookup.html', form=form, title='Manage Batch')
+
+
+@bp.route('/admin/manage_batch/<int:batch_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_batch(batch_id):
+    batch = VialBatch.query.get_or_404(batch_id)
+    vials = batch.vials.order_by(CryoVial.id).all()
+    boxes = {}
+    for v in vials:
+        box = v.box_location
+        b = boxes.setdefault(
+            box.id,
+            {
+                'box': box,
+                'rows': box.rows,
+                'columns': box.columns,
+                'cells': {},
+            },
+        )
+        b['cells'][(v.row_in_box, v.col_in_box)] = v
+
+    form = EditBatchForm()
+    form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
+
+    if request.method == 'GET':
+        form.batch_name.data = batch.name
+        if vials:
+            sample = vials[0]
+            form.cell_line_id.data = sample.cell_line_id
+            form.passage_number.data = sample.passage_number
+            form.date_frozen.data = sample.date_frozen
+            form.volume_ml.data = sample.volume_ml
+            form.concentration.data = sample.concentration
+            form.fluorescence_tag.data = sample.fluorescence_tag
+            form.resistance.data = sample.resistance.split(',') if sample.resistance else []
+            form.parental_cell_line.data = sample.parental_cell_line
+            form.notes.data = sample.notes
+
+    if form.validate_on_submit() and 'submit' in request.form:
+        batch.name = form.batch_name.data
+        for v in vials:
+            v.cell_line_id = form.cell_line_id.data
+            v.passage_number = form.passage_number.data
+            v.date_frozen = form.date_frozen.data
+            v.volume_ml = form.volume_ml.data
+            v.concentration = form.concentration.data
+            v.fluorescence_tag = form.fluorescence_tag.data
+            v.resistance = ','.join(form.resistance.data) if form.resistance.data else None
+            v.parental_cell_line = form.parental_cell_line.data
+            v.notes = form.notes.data
+            v.last_updated = datetime.utcnow()
+        db.session.commit()
+        log_audit(current_user.id, 'EDIT_BATCH_INFO', target_type='VialBatch', target_id=batch.id, details={'vial_count': len(vials)})
+        flash('Batch updated successfully.', 'success')
+        return redirect(url_for('main.manage_batch', batch_id=batch.id))
+
+    if request.method == 'POST' and 'delete_batch' in request.form:
+        count = len(vials)
+        for v in vials:
+            db.session.delete(v)
+        db.session.delete(batch)
+        db.session.commit()
+        log_audit(current_user.id, 'DELETE_BATCH', target_type='VialBatch', target_id=batch_id, details={'vial_count': count})
+        flash(f'Batch {batch_id} deleted.', 'success')
+        return redirect(url_for('main.manage_batch_lookup'))
+
+    return render_template('main/manage_batch.html', form=form, batch=batch, boxes=boxes, title='Manage Batch')

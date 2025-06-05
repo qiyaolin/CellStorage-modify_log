@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Manage Batch {{ batch.id }}</h1>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">{{ form.batch_name.label }} {{ form.batch_name(class="form-control") }}</div>
+  <div class="mb-3">{{ form.cell_line_id.label }} {{ form.cell_line_id(class="form-select") }}</div>
+  <div class="mb-3">{{ form.passage_number.label }} {{ form.passage_number(class="form-control") }}</div>
+  <div class="mb-3">{{ form.date_frozen.label }} {{ form.date_frozen(class="form-control") }}</div>
+  <div class="mb-3">{{ form.volume_ml.label }} {{ form.volume_ml(class="form-control") }}</div>
+  <div class="mb-3">{{ form.concentration.label }} {{ form.concentration(class="form-control") }}</div>
+  <div class="mb-3">{{ form.fluorescence_tag.label }} {{ form.fluorescence_tag(class="form-control") }}</div>
+  <div class="mb-3">{{ form.resistance.label }}<br>{% for sub in form.resistance %}<label>{{ sub() }} {{ sub.label.text }}</label><br>{% endfor %}</div>
+  <div class="mb-3">{{ form.parental_cell_line.label }} {{ form.parental_cell_line(class="form-control") }}</div>
+  <div class="mb-3">{{ form.notes.label }} {{ form.notes(class="form-control", rows=3) }}</div>
+  <button type="submit" name="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+  <button type="submit" name="delete_batch" class="btn btn-danger" onclick="return confirm('Delete entire batch?');">Delete Batch</button>
+</form>
+<h2 class="mt-4">Vials</h2>
+{% for box in boxes.values() %}
+  <div class="mb-4">
+    <h5>{{ box.box.drawer_info.tower_info.name }} / {{ box.box.drawer_info.name }} / {{ box.box.name }}</h5>
+    <table class="box-grid">
+      {% for r in range(1, box.rows + 1) %}
+      <tr>
+        {% for c in range(1, box.columns + 1) %}
+          {% set vial = box.cells.get((r,c)) %}
+          {% if vial %}
+            <td class="status-{{ vial.status.lower() }}"><a href="{{ url_for('main.edit_cryovial', vial_id=vial.id) }}" title="Edit vial">{{ vial.unique_vial_id_tag }}</a></td>
+          {% else %}
+            <td class="empty">&nbsp;</td>
+          {% endif %}
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+{% endfor %}
+<p><a href="{{ url_for('main.manage_batch_lookup') }}">Back</a></p>
+{% endblock %}

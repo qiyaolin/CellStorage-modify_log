@@ -266,3 +266,7 @@ class EditBatchForm(FlaskForm):
     notes = TextAreaField('Notes', validators=[Optional()])
     submit = SubmitField('Save Changes')
 
+
+class BatchLookupForm(FlaskForm):
+    batch_id = IntegerField("Batch ID", validators=[DataRequired()])
+    submit = SubmitField("Load Batch")

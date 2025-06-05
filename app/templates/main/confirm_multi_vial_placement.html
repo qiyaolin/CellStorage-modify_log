@@ -9,14 +9,21 @@
     <hr>
     <h2>Proposed Placements:</h2>
     {% if placements %}
-        <p>The system has planned the following placement(s) in Box: <strong>{{ box_details_for_map.name }}</strong></p>
+        <p>The system has planned the following placement(s):</p>
         <ul>
             {% for placement in placements %}
-                <li>Vial {{ loop.index }}: Row {{ placement.row }}, Column {{ placement.col }}</li>
+                <li>
+                    Vial {{ loop.index }}: {{ placement.tower_name }}/{{ placement.drawer_name }}/Box {{ placement.box_name }} -
+                    Row {{ placement.row }}, Column {{ placement.col }}
+                </li>
             {% endfor %}
         </ul>
 
-        <h3>Visual Plan for Box: {{ box_details_for_map.name }} ({{ box_details_for_map.rows }}x{{ box_details_for_map.columns }})</h3>
+        {% for box_details_for_map in boxes_details_for_map %}
+        <h3>
+            Visual Plan for {{ box_details_for_map.tower_name }}/{{ box_details_for_map.drawer_name }}/Box:
+            {{ box_details_for_map.name }} ({{ box_details_for_map.rows }}x{{ box_details_for_map.columns }})
+        </h3>
         <style>
             .box-grid {
                 border-collapse: collapse;
@@ -97,6 +104,7 @@
             {% endfor %}
         </table>
         <br>
+        {% endfor %}
 
         <form method="POST" action="{{ url_for('main.add_cryovial') }}">
             <input type="hidden" name="confirm_placement" value="yes">

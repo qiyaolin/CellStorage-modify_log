@@ -609,18 +609,19 @@ def pickup_selected_vials():
 
 
 def find_available_slots_in_box(box, num_slots_needed):
-    """Helper function to find specific empty slots in a given box."""
-    # Only consider 'Available' vials as occupying slots
-    occupied_slots = {(v.row_in_box, v.col_in_box)
-                      for v in CryoVial.query.filter_by(box_id=box.id, status='Available').all()}
+    """Return up to ``num_slots_needed`` empty slots in ``box``."""
+    occupied_slots = {
+        (v.row_in_box, v.col_in_box)
+        for v in CryoVial.query.filter_by(box_id=box.id, status='Available').all()
+    }
     available_positions = []
     for r in range(1, box.rows + 1):
         for c in range(1, box.columns + 1):
             if (r, c) not in occupied_slots:
                 available_positions.append({'row': r, 'col': c})
-            if len(available_positions) == num_slots_needed:
-                return available_positions
-    return None
+            if len(available_positions) >= num_slots_needed:
+                return available_positions[:num_slots_needed]
+    return available_positions
 
 
 @bp.route('/cryovial/add', methods=['GET', 'POST'])
@@ -737,58 +738,61 @@ def add_cryovial():
         }
 
         # Auto-allocation logic for ANY quantity (1 or more)
-        found_box = None
         allocated_positions = []
+        selected_boxes = []
 
         all_boxes = Box.query.join(Drawer).join(Tower).order_by(Tower.name, Drawer.name, Box.id).all()
         for box_candidate in all_boxes:
-            occupied_by_available_vials_count = CryoVial.query.filter_by(box_id=box_candidate.id,
-                                                                         status='Available').count()
-            num_empty_slots = (box_candidate.rows * box_candidate.columns) - occupied_by_available_vials_count
-            if num_empty_slots >= quantity:
-                specific_slots = find_available_slots_in_box(box_candidate, quantity) #
-                if specific_slots:
-                    found_box = box_candidate
-                    for slot in specific_slots:
-                         allocated_positions.append({
-                             'box_id': found_box.id,
-                             'box_name': found_box.name, # For display on confirmation
-                             'row': slot['row'],
-                             'col': slot['col']
-                         })
-                    break
+            remaining = quantity - len(allocated_positions)
+            if remaining <= 0:
+                break
+            slots = find_available_slots_in_box(box_candidate, remaining)
+            if slots:
+                selected_boxes.append(box_candidate)
+                for slot in slots:
+                    allocated_positions.append({
+                        'box_id': box_candidate.id,
+                        'box_name': box_candidate.name,
+                        'tower_name': box_candidate.drawer_info.tower_info.name,
+                        'drawer_name': box_candidate.drawer_info.name,
+                        'row': slot['row'],
+                        'col': slot['col']
+                    })
 
-        if found_box and allocated_positions:
+        if len(allocated_positions) == quantity:
             session['proposed_placements'] = allocated_positions
             session['vial_common_data'] = common_data_for_session
 
-            box_details_for_map = {
-                'id': found_box.id,
-                'name': found_box.name,
-                'rows': found_box.rows,
-                'columns': found_box.columns,
-                'occupied': [{'row': v.row_in_box, 'col': v.col_in_box, 'tag': v.batch_id} for v in CryoVial.query.filter_by(box_id=found_box.id, status='Available').all()]
-            }
+            boxes_details_for_map = []
+            for b in selected_boxes:
+                boxes_details_for_map.append({
+                    'id': b.id,
+                    'name': b.name,
+                    'tower_name': b.drawer_info.tower_info.name,
+                    'drawer_name': b.drawer_info.name,
+                    'rows': b.rows,
+                    'columns': b.columns,
+                    'occupied': [
+                        {'row': v.row_in_box, 'col': v.col_in_box, 'tag': v.batch_id}
+                        for v in CryoVial.query.filter_by(box_id=b.id, status='Available').all()
+                    ]
+                })
             cell_line_name_for_confirm = CellLine.query.get(common_data_for_session['cell_line_id']).name
 
-            print("-" * 20) #
-            print(f"DEBUG for confirm_multi_vial_placement.html:") #
-            print(f"DEBUG: box_details_for_map.id = {box_details_for_map.get('id')}") #
-            print(f"DEBUG: Placements (list of dicts):") #
-            for i, p_slot in enumerate(allocated_positions): #
-                print(
-                    f"  Placement {i + 1}: box_id={p_slot.get('box_id')}(type:{type(p_slot.get('box_id'))}), row={p_slot.get('row')}, col={p_slot.get('col')}") #
-            print("-" * 20) #
-
-            return render_template('main/confirm_multi_vial_placement.html',
-                                   title='Confirm Vial Placement',
-                                   placements=allocated_positions,
-                                   common_data=common_data_for_session,
-                                   cell_line_name_for_confirm=cell_line_name_for_confirm,
-                                   box_details_for_map=box_details_for_map,
-                                   quantity_to_add=quantity)
+            return render_template(
+                'main/confirm_multi_vial_placement.html',
+                title='Confirm Vial Placement',
+                placements=allocated_positions,
+                common_data=common_data_for_session,
+                cell_line_name_for_confirm=cell_line_name_for_confirm,
+                boxes_details_for_map=boxes_details_for_map,
+                quantity_to_add=quantity
+            )
         else:
-            flash(f'Could not find a single box with {quantity} available slot(s). Please try a smaller quantity or check freezer space.', 'danger')
+            flash(
+                f'Could not find enough available slots for {quantity} vial(s).',
+                'danger'
+            )
 
     if request.method == 'GET' or not form.is_submitted():
         session.pop('proposed_placements', None)

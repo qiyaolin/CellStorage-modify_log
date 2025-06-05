@@ -28,7 +28,14 @@
     {% for v in vials %}
     <tr>
       <td>{{ v.id }}</td>
-      <td>{{ v.batch.id }} - {{ v.batch.name }}</td>
+      <td>
+        {% if current_user.is_admin %}
+          <a href="{{ url_for('main.edit_batch', batch_id=v.batch.id) }}">{{ v.batch.id }}</a>
+        {% else %}
+          {{ v.batch.id }}
+        {% endif %}
+         - {{ v.batch.name }}
+      </td>
       <td>{{ v.unique_vial_id_tag }}</td>
       <td>{{ v.cell_line_info.name }}</td>
       <td>{{ v.box_location.drawer_info.tower_info.name }}/{{ v.box_location.drawer_info.name }}/{{ v.box_location.name }} R{{ v.row_in_box }}C{{ v.col_in_box }}</td>

@@ -25,7 +25,7 @@
 </form>
 <table class="table table-bordered">
 <thead>
-  <tr><th>Time</th><th>User</th><th>Action</th><th>Vial ID(s)</th><th>Batch ID(s)</th></tr>
+  <tr><th>Time</th><th>User</th><th>Action</th><th>Batch Name(Vial ID)</th><th>Batch ID(s)</th></tr>
 </thead>
 <tbody>
 {% for item in logs %}
@@ -33,9 +33,7 @@
   <td>{{ item.log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
   <td>{{ item.log.user_performing_action.username if item.log.user_performing_action else '' }}</td>
   <td>{{ item.log.action }}</td>
-  <td>
-    {% if item.details.vial_id %}{{ item.details.vial_id }}{% elif item.details.vial_ids %}{{ item.details.vial_ids|join(', ') }}{% else %}{% if item.log.target_type=='CryoVial' %}{{ item.log.target_id }}{% endif %}{% endif %}
-  </td>
+  <td>{{ item.display_vials|join(', ') }}</td>
   <td>
     {% if item.details.batch_id %}{{ item.details.batch_id }}{% elif item.details.batch_ids %}{{ item.details.batch_ids|join(', ') }}{% endif %}
   </td>

@@ -99,7 +99,28 @@ def audit_logs():
                 details = json.loads(log.details)
             except ValueError:
                 details = {'raw': log.details}
-        parsed_logs.append({'log': log, 'details': details})
+
+        vial_ids = []
+        if isinstance(details, dict):
+            if isinstance(details.get('vial_ids'), list):
+                vial_ids = details['vial_ids']
+            elif details.get('vial_id') is not None:
+                vial_ids = [details['vial_id']]
+        if not vial_ids and log.target_type == 'CryoVial' and log.target_id:
+            vial_ids = [log.target_id]
+
+        display_vials = []
+        if vial_ids:
+            vials = CryoVial.query.filter(CryoVial.id.in_(vial_ids)).join(VialBatch).all()
+            id_map = {v.id: v for v in vials}
+            for vid in vial_ids:
+                v = id_map.get(vid)
+                if v:
+                    display_vials.append(f"{v.batch.name}({v.unique_vial_id_tag})")
+                else:
+                    display_vials.append(str(vid))
+
+        parsed_logs.append({'log': log, 'details': details, 'display_vials': display_vials})
 
     all_users = User.query.order_by(User.username).all()
 
@@ -498,11 +519,14 @@ def cryovial_inventory():
                     'resistance': v.resistance,
                     'parental_cell_line': v.parental_cell_line,
                     'notes': v.notes,
+                    'available_quantity': 0,
                 }
-            else:
-                if v.date_frozen < info['date_frozen']:
-                    info['date_frozen'] = v.date_frozen
-        search_results = list(grouped.values())
+                info = grouped[v.batch_id]
+            if v.status == 'Available':
+                info['available_quantity'] += 1
+            if v.date_frozen < info['date_frozen']:
+                info['date_frozen'] = v.date_frozen
+        search_results = [g for g in grouped.values() if g['available_quantity'] > 0]
 
     selected_batches = None
     if selected_ids:
@@ -705,15 +729,6 @@ def add_cryovial():
                 details=json.dumps(current_details_for_create) #
             )
             db.session.commit()
-            # The subsequent log_audit call is for a simpler post-commit message,
-            # its details are already a string.
-            log_audit(
-                current_user.id,
-                'CREATE_CRYOVIALS_COMMITTED', # Changed action slightly for clarity if needed
-                target_type='VialBatch',
-                target_id=batch.id,
-                details=f'Successfully committed batch {batch.id} with {len(placements)} vial(s).' #
-            )
             flash(
                 f"Batch #{batch.id} '{batch.name}' added with base ID {base_tag} and {len(placements)} vial(s): "
                 + "; ".join(created_vials_info),

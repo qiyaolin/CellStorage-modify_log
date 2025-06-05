@@ -35,6 +35,7 @@ from app.forms import (
     ConfirmForm,
     RestoreForm,
     BatchEditVialsForm,
+    EditBatchForm,
 )
 from app.models import (
     CellLine,
@@ -1192,4 +1193,53 @@ def batch_edit_vials():
         return redirect(url_for('main.batch_edit_vials'))
 
     return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
+
+
+@bp.route('/batch/<int:batch_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_batch(batch_id):
+    """Edit batch name and common vial attributes for all vials in the batch."""
+    batch = VialBatch.query.get_or_404(batch_id)
+    vials = batch.vials.all()
+    form = EditBatchForm(obj=batch)
+    form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
+
+    if request.method == 'GET' and vials:
+        sample = vials[0]
+        form.cell_line_id.data = sample.cell_line_id
+        form.passage_number.data = sample.passage_number
+        form.date_frozen.data = sample.date_frozen
+        form.volume_ml.data = sample.volume_ml
+        form.concentration.data = sample.concentration
+        form.fluorescence_tag.data = sample.fluorescence_tag
+        form.resistance.data = sample.resistance.split(',') if sample.resistance else []
+        form.parental_cell_line.data = sample.parental_cell_line
+        form.notes.data = sample.notes
+
+    if form.validate_on_submit():
+        batch.name = form.batch_name.data
+        for v in vials:
+            v.cell_line_id = form.cell_line_id.data
+            v.passage_number = form.passage_number.data
+            v.date_frozen = form.date_frozen.data
+            v.volume_ml = form.volume_ml.data
+            v.concentration = form.concentration.data
+            v.fluorescence_tag = form.fluorescence_tag.data
+            v.resistance = ','.join(form.resistance.data) if form.resistance.data else None
+            v.parental_cell_line = form.parental_cell_line.data
+            v.notes = form.notes.data
+            v.last_updated = datetime.utcnow()
+        db.session.commit()
+        log_audit(
+            current_user.id,
+            'EDIT_BATCH_INFO',
+            target_type='VialBatch',
+            target_id=batch.id,
+            details={'vial_count': len(vials)},
+        )
+        flash('Batch updated successfully.', 'success')
+        return redirect(url_for('main.inventory_summary'))
+
+    return render_template('main/edit_batch_form.html', form=form, batch=batch, title='Edit Batch')
 

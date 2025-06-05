@@ -247,3 +247,22 @@ class BatchEditVialsForm(FlaskForm):
     notes = TextAreaField('Append Notes', validators=[Optional()])
     submit = SubmitField('Apply Changes')
 
+
+class EditBatchForm(FlaskForm):
+    """Edit properties shared by all vials in a batch."""
+    batch_name = StringField('Batch Name', validators=[DataRequired(), Length(max=128)])
+    cell_line_id = SelectField('Cell Line', coerce=int, validators=[DataRequired()])
+    passage_number = StringField('Passage Number', validators=[DataRequired(), Length(max=64)])
+    date_frozen = DateField('Date Frozen (YYYY-MM-DD)', format='%Y-%m-%d', validators=[DataRequired()])
+    volume_ml = FloatField('Volume per Vial (uL)', validators=[Optional()])
+    concentration = StringField('Cell Concentration (e.g., 1x10^6 cells/mL)', validators=[Optional(), Length(max=128)])
+    fluorescence_tag = StringField('Fluorescence Tag', validators=[Optional(), Length(max=128)])
+    resistance = MultiCheckboxField(
+        'Resistance',
+        choices=[('Puro', 'Puro'), ('Blast', 'Blast'), ('Neo/G418', 'Neo/G418'), ('Zeo', 'Zeo')],
+        validators=[Optional()],
+    )
+    parental_cell_line = StringField('Parental cell line', validators=[Optional(), Length(max=128)])
+    notes = TextAreaField('Notes', validators=[Optional()])
+    submit = SubmitField('Save Changes')
+

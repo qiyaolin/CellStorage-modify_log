@@ -6,7 +6,6 @@ from flask_login import LoginManager
 from sqlalchemy import text
 from config import Config
 from datetime import datetime  # 确保导入 datetime
-from app.utils import get_batch_counter
 
 db = SQLAlchemy()
 login_manager = LoginManager()
@@ -22,6 +21,7 @@ def create_app(config_class=Config):
     login_manager.init_app(app)
 
     with app.app_context():
+        from app.utils import get_batch_counter
         db.create_all()
         try:
             db.session.execute(text(

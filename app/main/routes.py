@@ -47,6 +47,7 @@ from app.models import (
 )
 
 from app.utils import log_audit, clear_database_except_admin
+from app.utils import get_next_batch_id, get_batch_counter, set_batch_counter
 
 
 @bp.route('/') # Defines the root URL for the main blueprint
@@ -532,7 +533,8 @@ def cryovial_inventory():
         search_resistance=search_resistance,
         selected_batches=selected_batches,
         selected_ids=selected_ids,
-        all_creators=all_creators
+        all_creators=all_creators,
+        batch_counter=get_batch_counter()
     )
 
 
@@ -640,9 +642,12 @@ def add_cryovial():
             flash('Placement confirmation data lost. Please try again.', 'danger')
             return redirect(url_for('main.add_cryovial'))
 
-        batch = VialBatch(name=vial_common_data.get('batch_name'), created_by_user_id=current_user.id)
+        batch = VialBatch(
+            id=get_next_batch_id(),
+            name=vial_common_data.get('batch_name'),
+            created_by_user_id=current_user.id,
+        )
         db.session.add(batch)
-        db.session.flush()  # assign ID without committing
         base_tag = f"B{batch.id}"
 
         created_vials_info = []
@@ -971,7 +976,11 @@ def add_vial_at_position(box_id, row, col):
                 flash('Batch ID not found.', 'danger')
                 return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('main.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
         else:
-            batch = VialBatch(name=form.batch_name.data, created_by_user_id=current_user.id)
+            batch = VialBatch(
+                id=get_next_batch_id(),
+                name=form.batch_name.data,
+                created_by_user_id=current_user.id,
+            )
             db.session.add(batch)
             db.session.commit()
 
@@ -1032,6 +1041,22 @@ def clear_all():
             return redirect(url_for('main.index'))
         flash('Incorrect confirmation phrase.', 'danger')
     return render_template('main/clear_all.html', form=form, title='Clear Database')
+
+
+@bp.route('/admin/batch_counter', methods=['POST'])
+@login_required
+@admin_required
+def update_batch_counter():
+    value = request.form.get('batch_counter')
+    try:
+        new_val = int(value)
+        if new_val < 1:
+            raise ValueError
+        set_batch_counter(new_val)
+        flash('Batch counter updated.', 'success')
+    except (TypeError, ValueError):
+        flash('Invalid batch counter value.', 'danger')
+    return redirect(url_for('main.cryovial_inventory'))
 
 
 @bp.route('/admin/backup')

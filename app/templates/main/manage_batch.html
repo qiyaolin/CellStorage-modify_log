@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Manage Batch {{ batch.id }}</h1>
+<form method="post">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">{{ form.batch_name.label }} {{ form.batch_name(class="form-control") }}</div>
+  <div class="mb-3">{{ form.cell_line_id.label }} {{ form.cell_line_id(class="form-select") }}</div>
+  <div class="mb-3">{{ form.passage_number.label }} {{ form.passage_number(class="form-control") }}</div>
+  <div class="mb-3">{{ form.date_frozen.label }} {{ form.date_frozen(class="form-control") }}</div>
+  <div class="mb-3">{{ form.volume_ml.label }} {{ form.volume_ml(class="form-control") }}</div>
+  <div class="mb-3">{{ form.concentration.label }} {{ form.concentration(class="form-control") }}</div>
+  <div class="mb-3">{{ form.fluorescence_tag.label }} {{ form.fluorescence_tag(class="form-control") }}</div>
+  <div class="mb-3">{{ form.resistance.label }}<br>{% for sub in form.resistance %}<label>{{ sub() }} {{ sub.label.text }}</label><br>{% endfor %}</div>
+  <div class="mb-3">{{ form.parental_cell_line.label }} {{ form.parental_cell_line(class="form-control") }}</div>
+  <div class="mb-3">{{ form.notes.label }} {{ form.notes(class="form-control", rows=3) }}</div>
+  <button type="submit" name="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+  <button type="submit" name="delete_batch" class="btn btn-danger" onclick="return confirm('Delete entire batch?');">Delete Batch</button>
+</form>
+<h2 class="mt-4">Vials</h2>
+<table class="table table-bordered table-sm">
+  <thead><tr><th>ID</th><th>Tag</th><th>Location</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for v in vials %}
+  <tr>
+    <td>{{ v.id }}</td>
+    <td>{{ v.unique_vial_id_tag }}</td>
+    <td>{{ v.box_location.drawer_info.tower_info.name }}/{{ v.box_location.drawer_info.name }}/{{ v.box_location.name }} R{{ v.row_in_box }}C{{ v.col_in_box }}</td>
+    <td>{{ v.status }}</td>
+    <td><a class="btn btn-sm btn-secondary" href="{{ url_for('main.edit_cryovial', vial_id=v.id) }}">Edit</a></td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p><a href="{{ url_for('main.manage_batch_lookup') }}">Back</a></p>
+{% endblock %}

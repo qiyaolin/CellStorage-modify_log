@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 from app import db                     # Import db from the app package (app/__init__.py)
 from app.auth import bp                # Import bp from the current auth package (app/auth/__init__.py)
-from app.forms import LoginForm, UserCreationForm
+from app.forms import LoginForm, UserCreationForm, ResetPasswordForm
 from app.models import User
 from app.decorators import admin_required # Import our custom decorator
 
@@ -48,3 +48,23 @@ def create_user():
         flash(f'User {user.username} created successfully with role {user.role}!', 'success')
         return redirect(url_for('auth.login')) # Or to a user list page if you create one
     return render_template('auth/create_user.html', title='Create New User', form=form)
+
+
+@bp.route('/users')
+@login_required
+@admin_required
+def list_users():
+    users = User.query.order_by(User.username).all()
+    return render_template('auth/list_users.html', title='Users', users=users)
+
+
+@bp.route('/reset_password', methods=['GET', 'POST'])
+@login_required
+def reset_password():
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        current_user.set_password(form.password.data)
+        db.session.commit()
+        flash('Password updated.', 'success')
+        return redirect(url_for('main.index'))
+    return render_template('auth/reset_password.html', title='Reset Password', form=form)

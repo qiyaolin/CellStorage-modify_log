@@ -1,11 +1,27 @@
 # In app/main/routes.py
-from flask import render_template, redirect, url_for, flash, request, session, Response
+from flask import (
+    render_template,
+    redirect,
+    url_for,
+    flash,
+    request,
+    session,
+    Response,
+    current_app,
+    send_file,
+)
 from flask_login import login_required, current_user
-from io import StringIO
+from io import StringIO, BytesIO
 import csv
+import os
+import subprocess
+import tempfile
+from urllib.parse import urlparse
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 import json
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from app.main import bp
 from app import db
 from app.decorators import admin_required
@@ -18,6 +34,11 @@ from app.forms import (
     CryoVialEditForm,
     VialUsageForm,
     ManualVialForm,
+    ConfirmForm,
+    RestoreForm,
+    BatchEditVialsForm,
+    EditBatchForm,
+    BatchLookupForm,
 )
 from app.models import (
     CellLine,
@@ -30,7 +51,8 @@ from app.models import (
     AuditLog,
 )
 
-from app.utils import log_audit
+from app.utils import log_audit, clear_database_except_admin
+from app.utils import get_next_batch_id, get_batch_counter, set_batch_counter
 
 
 @bp.route('/') # Defines the root URL for the main blueprint
@@ -73,12 +95,43 @@ def audit_logs():
             AuditLog.details.ilike(like) |
             AuditLog.target_type.ilike(like)
         )
-    logs = query.order_by(AuditLog.timestamp.desc()).all()
+    logs_raw = query.order_by(AuditLog.timestamp.desc()).all()
+    parsed_logs = []
+    for log in logs_raw:
+        details = {}
+        if log.details:
+            try:
+                details = json.loads(log.details)
+            except ValueError:
+                details = {'raw': log.details}
+
+        vial_ids = []
+        if isinstance(details, dict):
+            if isinstance(details.get('vial_ids'), list):
+                vial_ids = details['vial_ids']
+            elif details.get('vial_id') is not None:
+                vial_ids = [details['vial_id']]
+        if not vial_ids and log.target_type == 'CryoVial' and log.target_id:
+            vial_ids = [log.target_id]
+
+        display_vials = []
+        if vial_ids:
+            vials = CryoVial.query.filter(CryoVial.id.in_(vial_ids)).join(VialBatch).all()
+            id_map = {v.id: v for v in vials}
+            for vid in vial_ids:
+                v = id_map.get(vid)
+                if v:
+                    display_vials.append(f"{v.batch.name}({v.unique_vial_id_tag})")
+                else:
+                    display_vials.append(str(vid))
+
+        parsed_logs.append({'log': log, 'details': details, 'display_vials': display_vials})
+
     all_users = User.query.order_by(User.username).all()
 
     return render_template(
         'main/audit_logs.html',
-        logs=logs,
+        logs=parsed_logs,
         all_users=all_users,
         search_user=search_user,
         keyword=keyword,
@@ -108,6 +161,42 @@ def inventory_summary():
 
     vials = query.order_by(VialBatch.id, CryoVial.unique_vial_id_tag).all()
     statuses = ['Available', 'Used', 'Depleted', 'Discarded']
+
+    if request.args.get('export') == 'csv':
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            'Vial ID',
+            'Batch ID',
+            'Batch Name',
+            'Vial Tag',
+            'Cell Line',
+            'Location',
+            'Date Frozen',
+            'Status',
+        ])
+        for v in vials:
+            location = (
+                f"{v.box_location.drawer_info.tower_info.name}/"
+                f"{v.box_location.drawer_info.name}/"
+                f"{v.box_location.name} R{v.row_in_box}C{v.col_in_box}"
+            )
+            writer.writerow([
+                v.id,
+                v.batch.id,
+                v.batch.name,
+                v.unique_vial_id_tag,
+                v.cell_line_info.name,
+                location,
+                v.date_frozen,
+                v.status,
+            ])
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': 'attachment;filename=inventory_summary.csv'},
+        )
+
     return render_template(
         'main/inventory_summary.html',
         title='Inventory Summary',
@@ -435,11 +524,14 @@ def cryovial_inventory():
                     'resistance': v.resistance,
                     'parental_cell_line': v.parental_cell_line,
                     'notes': v.notes,
+                    'available_quantity': 0,
                 }
-            else:
-                if v.date_frozen < info['date_frozen']:
-                    info['date_frozen'] = v.date_frozen
-        search_results = list(grouped.values())
+                info = grouped[v.batch_id]
+            if v.status == 'Available':
+                info['available_quantity'] += 1
+            if v.date_frozen < info['date_frozen']:
+                info['date_frozen'] = v.date_frozen
+        search_results = [g for g in grouped.values() if g['available_quantity'] > 0]
 
     selected_batches = None
     if selected_ids:
@@ -470,7 +562,8 @@ def cryovial_inventory():
         search_resistance=search_resistance,
         selected_batches=selected_batches,
         selected_ids=selected_ids,
-        all_creators=all_creators
+        all_creators=all_creators,
+        batch_counter=get_batch_counter()
     )
 
 
@@ -527,7 +620,13 @@ def pickup_selected_vials():
                 )
                 pb['cells'][(vial.row_in_box, vial.col_in_box)] = vial
         db.session.commit()
-        log_audit(current_user.id, 'PICKUP_VIALS', target_type='CryoVial', details=str(used_ids))
+        batch_ids = list({v.batch_id for v in picked_vials})
+        log_audit(
+            current_user.id,
+            'PICKUP_VIALS',
+            target_type='CryoVial',
+            details={'vial_ids': used_ids, 'batch_ids': batch_ids},
+        )
         session.pop('pickup_ids', None)
         flash('Pick up recorded and vials marked as Used.', 'success')
         return render_template(
@@ -541,18 +640,19 @@ def pickup_selected_vials():
 
 
 def find_available_slots_in_box(box, num_slots_needed):
-    """Helper function to find specific empty slots in a given box."""
-    # Only consider 'Available' vials as occupying slots
-    occupied_slots = {(v.row_in_box, v.col_in_box)
-                      for v in CryoVial.query.filter_by(box_id=box.id, status='Available').all()}
+    """Return up to ``num_slots_needed`` empty slots in ``box``."""
+    occupied_slots = {
+        (v.row_in_box, v.col_in_box)
+        for v in CryoVial.query.filter_by(box_id=box.id, status='Available').all()
+    }
     available_positions = []
     for r in range(1, box.rows + 1):
         for c in range(1, box.columns + 1):
             if (r, c) not in occupied_slots:
                 available_positions.append({'row': r, 'col': c})
-            if len(available_positions) == num_slots_needed:
-                return available_positions
-    return None
+            if len(available_positions) >= num_slots_needed:
+                return available_positions[:num_slots_needed]
+    return available_positions
 
 
 @bp.route('/cryovial/add', methods=['GET', 'POST'])
@@ -571,9 +671,12 @@ def add_cryovial():
             flash('Placement confirmation data lost. Please try again.', 'danger')
             return redirect(url_for('main.add_cryovial'))
 
-        batch = VialBatch(name=vial_common_data.get('batch_name'), created_by_user_id=current_user.id)
+        batch = VialBatch(
+            id=get_next_batch_id(),
+            name=vial_common_data.get('batch_name'),
+            created_by_user_id=current_user.id,
+        )
         db.session.add(batch)
-        db.session.flush()  # assign ID without committing
         base_tag = f"B{batch.id}"
 
         created_vials_info = []
@@ -631,15 +734,6 @@ def add_cryovial():
                 details=json.dumps(current_details_for_create) #
             )
             db.session.commit()
-            # The subsequent log_audit call is for a simpler post-commit message,
-            # its details are already a string.
-            log_audit(
-                current_user.id,
-                'CREATE_CRYOVIALS_COMMITTED', # Changed action slightly for clarity if needed
-                target_type='VialBatch',
-                target_id=batch.id,
-                details=f'Successfully committed batch {batch.id} with {len(placements)} vial(s).' #
-            )
             flash(
                 f"Batch #{batch.id} '{batch.name}' added with base ID {base_tag} and {len(placements)} vial(s): "
                 + "; ".join(created_vials_info),
@@ -669,58 +763,61 @@ def add_cryovial():
         }
 
         # Auto-allocation logic for ANY quantity (1 or more)
-        found_box = None
         allocated_positions = []
+        selected_boxes = []
 
         all_boxes = Box.query.join(Drawer).join(Tower).order_by(Tower.name, Drawer.name, Box.id).all()
         for box_candidate in all_boxes:
-            occupied_by_available_vials_count = CryoVial.query.filter_by(box_id=box_candidate.id,
-                                                                         status='Available').count()
-            num_empty_slots = (box_candidate.rows * box_candidate.columns) - occupied_by_available_vials_count
-            if num_empty_slots >= quantity:
-                specific_slots = find_available_slots_in_box(box_candidate, quantity) #
-                if specific_slots:
-                    found_box = box_candidate
-                    for slot in specific_slots:
-                         allocated_positions.append({
-                             'box_id': found_box.id,
-                             'box_name': found_box.name, # For display on confirmation
-                             'row': slot['row'],
-                             'col': slot['col']
-                         })
-                    break
+            remaining = quantity - len(allocated_positions)
+            if remaining <= 0:
+                break
+            slots = find_available_slots_in_box(box_candidate, remaining)
+            if slots:
+                selected_boxes.append(box_candidate)
+                for slot in slots:
+                    allocated_positions.append({
+                        'box_id': box_candidate.id,
+                        'box_name': box_candidate.name,
+                        'tower_name': box_candidate.drawer_info.tower_info.name,
+                        'drawer_name': box_candidate.drawer_info.name,
+                        'row': slot['row'],
+                        'col': slot['col']
+                    })
 
-        if found_box and allocated_positions:
+        if len(allocated_positions) == quantity:
             session['proposed_placements'] = allocated_positions
             session['vial_common_data'] = common_data_for_session
 
-            box_details_for_map = {
-                'id': found_box.id,
-                'name': found_box.name,
-                'rows': found_box.rows,
-                'columns': found_box.columns,
-                'occupied': [{'row': v.row_in_box, 'col': v.col_in_box, 'tag': v.batch_id} for v in CryoVial.query.filter_by(box_id=found_box.id, status='Available').all()]
-            }
+            boxes_details_for_map = []
+            for b in selected_boxes:
+                boxes_details_for_map.append({
+                    'id': b.id,
+                    'name': b.name,
+                    'tower_name': b.drawer_info.tower_info.name,
+                    'drawer_name': b.drawer_info.name,
+                    'rows': b.rows,
+                    'columns': b.columns,
+                    'occupied': [
+                        {'row': v.row_in_box, 'col': v.col_in_box, 'tag': v.batch_id}
+                        for v in CryoVial.query.filter_by(box_id=b.id, status='Available').all()
+                    ]
+                })
             cell_line_name_for_confirm = CellLine.query.get(common_data_for_session['cell_line_id']).name
 
-            print("-" * 20) #
-            print(f"DEBUG for confirm_multi_vial_placement.html:") #
-            print(f"DEBUG: box_details_for_map.id = {box_details_for_map.get('id')}") #
-            print(f"DEBUG: Placements (list of dicts):") #
-            for i, p_slot in enumerate(allocated_positions): #
-                print(
-                    f"  Placement {i + 1}: box_id={p_slot.get('box_id')}(type:{type(p_slot.get('box_id'))}), row={p_slot.get('row')}, col={p_slot.get('col')}") #
-            print("-" * 20) #
-
-            return render_template('main/confirm_multi_vial_placement.html',
-                                   title='Confirm Vial Placement',
-                                   placements=allocated_positions,
-                                   common_data=common_data_for_session,
-                                   cell_line_name_for_confirm=cell_line_name_for_confirm,
-                                   box_details_for_map=box_details_for_map,
-                                   quantity_to_add=quantity)
+            return render_template(
+                'main/confirm_multi_vial_placement.html',
+                title='Confirm Vial Placement',
+                placements=allocated_positions,
+                common_data=common_data_for_session,
+                cell_line_name_for_confirm=cell_line_name_for_confirm,
+                boxes_details_for_map=boxes_details_for_map,
+                quantity_to_add=quantity
+            )
         else:
-            flash(f'Could not find a single box with {quantity} available slot(s). Please try a smaller quantity or check freezer space.', 'danger')
+            flash(
+                f'Could not find enough available slots for {quantity} vial(s).',
+                'danger'
+            )
 
     if request.method == 'GET' or not form.is_submitted():
         session.pop('proposed_placements', None)
@@ -899,7 +996,11 @@ def add_vial_at_position(box_id, row, col):
                 flash('Batch ID not found.', 'danger')
                 return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('main.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
         else:
-            batch = VialBatch(name=form.batch_name.data, created_by_user_id=current_user.id)
+            batch = VialBatch(
+                id=get_next_batch_id(),
+                name=form.batch_name.data,
+                created_by_user_id=current_user.id,
+            )
             db.session.add(batch)
             db.session.commit()
 
@@ -946,3 +1047,324 @@ def delete_cryovial(vial_id):
     flash('Vial deleted.', 'success')
     return redirect(url_for('main.cryovial_inventory'))
 
+
+@bp.route('/admin/clear_all', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def clear_all():
+    form = ConfirmForm()
+    if form.validate_on_submit():
+        if form.confirm.data.strip() == 'confirm_hayer':
+            clear_database_except_admin()
+            log_audit(current_user.id, 'CLEAR_ALL', target_type='System')
+            flash('All records except admin accounts have been removed.', 'success')
+            return redirect(url_for('main.index'))
+        flash('Incorrect confirmation phrase.', 'danger')
+    return render_template('main/clear_all.html', form=form, title='Clear Database')
+
+
+@bp.route('/admin/batch_counter', methods=['POST'])
+@login_required
+@admin_required
+def update_batch_counter():
+    value = request.form.get('batch_counter')
+    try:
+        new_val = int(value)
+        if new_val < 1:
+            raise ValueError
+        set_batch_counter(new_val)
+        flash('Batch counter updated.', 'success')
+    except (TypeError, ValueError):
+        flash('Invalid batch counter value.', 'danger')
+    return redirect(url_for('main.cryovial_inventory'))
+
+
+@bp.route('/admin/backup')
+@login_required
+@admin_required
+def backup_database():
+    db.session.commit()
+    uri = current_app.config['SQLALCHEMY_DATABASE_URI']
+    scheme = urlparse(uri).scheme
+    rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
+
+    if rds_identifier:
+        try:
+            client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
+            snapshot_id = f"{rds_identifier}-snapshot-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            client.create_db_snapshot(
+                DBInstanceIdentifier=rds_identifier,
+                DBSnapshotIdentifier=snapshot_id,
+            )
+            log_audit(
+                current_user.id,
+                'BACKUP_EXPORT',
+                target_type='System',
+                details=f'RDS snapshot {snapshot_id}',
+            )
+            flash('RDS snapshot initiated.', 'success')
+        except (BotoCoreError, ClientError) as exc:
+            current_app.logger.error('RDS snapshot failed: %s', exc)
+            flash('RDS backup failed.', 'danger')
+        return redirect(url_for('main.index'))
+
+    if scheme == 'sqlite':
+        path = uri.replace('sqlite:///', '')
+        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
+        return send_file(path, as_attachment=True, download_name='backup.db')
+
+    if scheme.startswith('postgres'):
+        try:
+            result = subprocess.run(
+                ['pg_dump', '--format', 'custom', '--dbname', uri],
+                check=True,
+                capture_output=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            current_app.logger.error('pg_dump failed: %s', exc)
+            flash('PostgreSQL backup failed.', 'danger')
+            return redirect(url_for('main.index'))
+
+        buf = BytesIO(result.stdout)
+        buf.seek(0)
+        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
+        return send_file(buf, as_attachment=True, download_name='backup.dump', mimetype='application/octet-stream')
+
+    flash('Unsupported database type.', 'danger')
+    return redirect(url_for('main.index'))
+
+
+@bp.route('/admin/restore', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def restore_database():
+    form = RestoreForm()
+    if form.validate_on_submit():
+        snapshot_id = (form.snapshot_id.data or '').strip()
+        file = form.backup_file.data
+
+        if snapshot_id:
+            rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
+            if not rds_identifier:
+                flash('RDS instance identifier not configured.', 'danger')
+                return redirect(url_for('main.restore_database'))
+            try:
+                client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
+                client.restore_db_instance_from_db_snapshot(
+                    DBInstanceIdentifier=rds_identifier,
+                    DBSnapshotIdentifier=snapshot_id,
+                )
+                log_audit(
+                    current_user.id,
+                    'BACKUP_IMPORT',
+                    target_type='System',
+                    details=f'RDS restore from {snapshot_id}',
+                )
+                flash('RDS restore initiated.', 'success')
+            except (BotoCoreError, ClientError) as exc:
+                current_app.logger.error('RDS restore failed: %s', exc)
+                flash('RDS restore failed.', 'danger')
+            return redirect(url_for('main.index'))
+
+        if file:
+            uri = current_app.config['SQLALCHEMY_DATABASE_URI']
+            scheme = urlparse(uri).scheme
+
+            if scheme == 'sqlite':
+                path = uri.replace('sqlite:///', '')
+                db.session.remove()
+                file.save(path)
+                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
+                flash('Database restored from backup.', 'success')
+
+            elif scheme.startswith('postgres'):
+                tmp = tempfile.NamedTemporaryFile(delete=False)
+                try:
+                    file.save(tmp.name)
+                    subprocess.run([
+                        'pg_restore', '--clean', '--if-exists', '--dbname', uri, tmp.name
+                    ], check=True)
+                except (OSError, subprocess.CalledProcessError) as exc:
+                    current_app.logger.error('pg_restore failed: %s', exc)
+                    flash('PostgreSQL restore failed.', 'danger')
+                    return redirect(url_for('main.index'))
+                finally:
+                    tmp.close()
+                    os.unlink(tmp.name)
+
+                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
+                flash('Database restored from backup.', 'success')
+
+            else:
+                flash('Unsupported database type.', 'danger')
+            return redirect(url_for('main.index'))
+    return render_template('main/restore_backup.html', form=form, title='Restore Backup')
+
+
+@bp.route('/admin/batch_edit_vials', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def batch_edit_vials():
+    form = BatchEditVialsForm()
+    if form.validate_on_submit():
+        tags_input = form.vial_tags.data
+        tags = [t.strip() for t in tags_input.replace('\n', ',').split(',') if t.strip()]
+        if not tags:
+            flash('No valid vial tags provided.', 'danger')
+            return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
+
+        vials = CryoVial.query.filter(CryoVial.unique_vial_id_tag.in_(tags)).all()
+        found_tags = {v.unique_vial_id_tag for v in vials}
+        missing = [t for t in tags if t not in found_tags]
+
+        for v in vials:
+            if form.new_status.data:
+                v.status = form.new_status.data
+            if form.notes.data:
+                v.notes = (v.notes + '\n' if v.notes else '') + form.notes.data
+            v.last_updated = datetime.utcnow()
+        db.session.commit()
+        log_audit(
+            current_user.id,
+            'BATCH_EDIT_VIALS',
+            target_type='CryoVial',
+            details={
+                'vial_tags': tags,
+                'updated_status': form.new_status.data or None,
+                'notes_appended': bool(form.notes.data),
+                'missing_tags': missing,
+            },
+        )
+
+        flash(f'Updated {len(vials)} vial(s).', 'success')
+        if missing:
+            flash(f'Missing tags: {", ".join(missing)}', 'warning')
+        return redirect(url_for('main.batch_edit_vials'))
+
+    return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
+
+
+@bp.route('/batch/<int:batch_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_batch(batch_id):
+    """Edit batch name and common vial attributes for all vials in the batch."""
+    batch = VialBatch.query.get_or_404(batch_id)
+    vials = batch.vials.all()
+    form = EditBatchForm(obj=batch)
+    form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
+
+    if request.method == 'GET' and vials:
+        sample = vials[0]
+        form.cell_line_id.data = sample.cell_line_id
+        form.passage_number.data = sample.passage_number
+        form.date_frozen.data = sample.date_frozen
+        form.volume_ml.data = sample.volume_ml
+        form.concentration.data = sample.concentration
+        form.fluorescence_tag.data = sample.fluorescence_tag
+        form.resistance.data = sample.resistance.split(',') if sample.resistance else []
+        form.parental_cell_line.data = sample.parental_cell_line
+        form.notes.data = sample.notes
+
+    if form.validate_on_submit():
+        batch.name = form.batch_name.data
+        for v in vials:
+            v.cell_line_id = form.cell_line_id.data
+            v.passage_number = form.passage_number.data
+            v.date_frozen = form.date_frozen.data
+            v.volume_ml = form.volume_ml.data
+            v.concentration = form.concentration.data
+            v.fluorescence_tag = form.fluorescence_tag.data
+            v.resistance = ','.join(form.resistance.data) if form.resistance.data else None
+            v.parental_cell_line = form.parental_cell_line.data
+            v.notes = form.notes.data
+            v.last_updated = datetime.utcnow()
+        db.session.commit()
+        log_audit(
+            current_user.id,
+            'EDIT_BATCH_INFO',
+            target_type='VialBatch',
+            target_id=batch.id,
+            details={'vial_count': len(vials)},
+        )
+        flash('Batch updated successfully.', 'success')
+        return redirect(url_for('main.inventory_summary'))
+
+    return render_template('main/edit_batch_form.html', form=form, batch=batch, title='Edit Batch')
+
+@bp.route('/admin/manage_batch', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_batch_lookup():
+    form = BatchLookupForm()
+    if form.validate_on_submit():
+        return redirect(url_for('main.manage_batch', batch_id=form.batch_id.data))
+    return render_template('main/manage_batch_lookup.html', form=form, title='Manage Batch')
+
+
+@bp.route('/admin/manage_batch/<int:batch_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def manage_batch(batch_id):
+    batch = VialBatch.query.get_or_404(batch_id)
+    vials = batch.vials.order_by(CryoVial.id).all()
+    boxes = {}
+    for v in vials:
+        box = v.box_location
+        b = boxes.setdefault(
+            box.id,
+            {
+                'box': box,
+                'rows': box.rows,
+                'columns': box.columns,
+                'cells': {},
+            },
+        )
+        b['cells'][(v.row_in_box, v.col_in_box)] = v
+
+    form = EditBatchForm()
+    form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
+
+    if request.method == 'GET':
+        form.batch_name.data = batch.name
+        if vials:
+            sample = vials[0]
+            form.cell_line_id.data = sample.cell_line_id
+            form.passage_number.data = sample.passage_number
+            form.date_frozen.data = sample.date_frozen
+            form.volume_ml.data = sample.volume_ml
+            form.concentration.data = sample.concentration
+            form.fluorescence_tag.data = sample.fluorescence_tag
+            form.resistance.data = sample.resistance.split(',') if sample.resistance else []
+            form.parental_cell_line.data = sample.parental_cell_line
+            form.notes.data = sample.notes
+
+    if form.validate_on_submit() and 'submit' in request.form:
+        batch.name = form.batch_name.data
+        for v in vials:
+            v.cell_line_id = form.cell_line_id.data
+            v.passage_number = form.passage_number.data
+            v.date_frozen = form.date_frozen.data
+            v.volume_ml = form.volume_ml.data
+            v.concentration = form.concentration.data
+            v.fluorescence_tag = form.fluorescence_tag.data
+            v.resistance = ','.join(form.resistance.data) if form.resistance.data else None
+            v.parental_cell_line = form.parental_cell_line.data
+            v.notes = form.notes.data
+            v.last_updated = datetime.utcnow()
+        db.session.commit()
+        log_audit(current_user.id, 'EDIT_BATCH_INFO', target_type='VialBatch', target_id=batch.id, details={'vial_count': len(vials)})
+        flash('Batch updated successfully.', 'success')
+        return redirect(url_for('main.manage_batch', batch_id=batch.id))
+
+    if request.method == 'POST' and 'delete_batch' in request.form:
+        count = len(vials)
+        for v in vials:
+            db.session.delete(v)
+        db.session.delete(batch)
+        db.session.commit()
+        log_audit(current_user.id, 'DELETE_BATCH', target_type='VialBatch', target_id=batch_id, details={'vial_count': count})
+        flash(f'Batch {batch_id} deleted.', 'success')
+        return redirect(url_for('main.manage_batch_lookup'))
+
+    return render_template('main/manage_batch.html', form=form, batch=batch, boxes=boxes, title='Manage Batch')

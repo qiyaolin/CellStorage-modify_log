@@ -10,6 +10,7 @@ from wtforms import (
     DateField,
     TextAreaField,
     SelectMultipleField,
+    FileField,
     widgets,
 )
 from wtforms.validators import (
@@ -67,6 +68,12 @@ class UserCreationForm(FlaskForm): # For admin to create users
         user = User.query.filter_by(username=username.data).first()
         if user is not None:
             raise ValidationError('This username is already taken. Please choose a different one.')
+
+class ResetPasswordForm(FlaskForm):
+    password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
+    password2 = PasswordField(
+        'Repeat Password', validators=[DataRequired(), EqualTo('password', message='Passwords must match.')])
+    submit = SubmitField('Change Password')
 
 class CellLineForm(FlaskForm):
     name = StringField('Cell Line Name', validators=[DataRequired(), Length(max=128)])
@@ -207,3 +214,64 @@ class CryoVialEditForm(FlaskForm):
     status = SelectField('Status', choices=[('Available','Available'),('Used','Used'),('Depleted','Depleted'),('Discarded','Discarded')], validators=[DataRequired()])
     notes = TextAreaField('Notes', validators=[Optional()])
     submit = SubmitField('Save Changes')
+
+
+class ConfirmForm(FlaskForm):
+    """Simple form asking user to type a confirmation phrase."""
+    confirm = StringField('Type "confirm_hayer" to continue', validators=[DataRequired()])
+    submit = SubmitField('Confirm')
+
+
+class RestoreForm(FlaskForm):
+    """Form for restoring the database from a file or AWS RDS snapshot."""
+    snapshot_id = StringField(
+        'RDS Snapshot Identifier', validators=[Optional()]  # optional AWS snapshot
+    )
+    backup_file = FileField(
+        'Backup File', validators=[Optional()]  # optional local file
+    )
+    submit = SubmitField('Restore')
+
+
+class BatchEditVialsForm(FlaskForm):
+    """Form for admins to update multiple cryovials at once."""
+    vial_tags = TextAreaField(
+        'Vial Tags (comma or newline separated)', validators=[DataRequired()]
+    )
+    new_status = SelectField(
+        'New Status',
+        choices=[
+            ('', 'No Change'),
+            ('Available', 'Available'),
+            ('Used', 'Used'),
+            ('Depleted', 'Depleted'),
+            ('Discarded', 'Discarded'),
+        ],
+        validators=[Optional()],
+    )
+    notes = TextAreaField('Append Notes', validators=[Optional()])
+    submit = SubmitField('Apply Changes')
+
+
+class EditBatchForm(FlaskForm):
+    """Edit properties shared by all vials in a batch."""
+    batch_name = StringField('Batch Name', validators=[DataRequired(), Length(max=128)])
+    cell_line_id = SelectField('Cell Line', coerce=int, validators=[DataRequired()])
+    passage_number = StringField('Passage Number', validators=[DataRequired(), Length(max=64)])
+    date_frozen = DateField('Date Frozen (YYYY-MM-DD)', format='%Y-%m-%d', validators=[DataRequired()])
+    volume_ml = FloatField('Volume per Vial (uL)', validators=[Optional()])
+    concentration = StringField('Cell Concentration (e.g., 1x10^6 cells/mL)', validators=[Optional(), Length(max=128)])
+    fluorescence_tag = StringField('Fluorescence Tag', validators=[Optional(), Length(max=128)])
+    resistance = MultiCheckboxField(
+        'Resistance',
+        choices=[('Puro', 'Puro'), ('Blast', 'Blast'), ('Neo/G418', 'Neo/G418'), ('Zeo', 'Zeo')],
+        validators=[Optional()],
+    )
+    parental_cell_line = StringField('Parental cell line', validators=[Optional(), Length(max=128)])
+    notes = TextAreaField('Notes', validators=[Optional()])
+    submit = SubmitField('Save Changes')
+
+
+class BatchLookupForm(FlaskForm):
+    batch_id = IntegerField("Batch ID", validators=[DataRequired()])
+    submit = SubmitField("Load Batch")

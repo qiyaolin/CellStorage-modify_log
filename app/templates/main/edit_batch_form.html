@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Edit Batch {{ batch.id }}</h1>
+<form method="post" action="{{ url_for('main.edit_batch', batch_id=batch.id) }}">
+  {{ form.hidden_tag() }}
+  <div class="mb-3">
+    {{ form.batch_name.label }} {{ form.batch_name(size=40) }}
+  </div>
+  <div class="mb-3">
+    {{ form.cell_line_id.label }} {{ form.cell_line_id() }}
+  </div>
+  <div class="mb-3">
+    {{ form.passage_number.label }} {{ form.passage_number(size=20) }}
+  </div>
+  <div class="mb-3">
+    {{ form.date_frozen.label }} {{ form.date_frozen() }}
+  </div>
+  <div class="mb-3">
+    {{ form.volume_ml.label }} {{ form.volume_ml(size=10) }}
+  </div>
+  <div class="mb-3">
+    {{ form.concentration.label }} {{ form.concentration(size=20) }}
+  </div>
+  <div class="mb-3">
+    {{ form.fluorescence_tag.label }} {{ form.fluorescence_tag(size=20) }}
+  </div>
+  <div class="mb-3">
+    {{ form.resistance.label }}<br>
+    {% for sub in form.resistance %}<label>{{ sub() }} {{ sub.label.text }}</label><br>{% endfor %}
+  </div>
+  <div class="mb-3">
+    {{ form.parental_cell_line.label }} {{ form.parental_cell_line(size=20) }}
+  </div>
+  <div class="mb-3">
+    {{ form.notes.label }} {{ form.notes(rows=3, cols=40) }}
+  </div>
+  <p>{{ form.submit(class_='btn btn-primary') }}</p>
+</form>
+<p><a href="{{ url_for('main.inventory_summary') }}">Back</a></p>
+{% endblock %}

@@ -20,6 +20,8 @@ from urllib.parse import urlparse
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime
 import json
+import boto3
+from botocore.exceptions import BotoCoreError, ClientError
 from app.main import bp
 from app import db
 from app.decorators import admin_required
@@ -1084,6 +1086,27 @@ def backup_database():
     db.session.commit()
     uri = current_app.config['SQLALCHEMY_DATABASE_URI']
     scheme = urlparse(uri).scheme
+    rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
+
+    if rds_identifier:
+        try:
+            client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
+            snapshot_id = f"{rds_identifier}-snapshot-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            client.create_db_snapshot(
+                DBInstanceIdentifier=rds_identifier,
+                DBSnapshotIdentifier=snapshot_id,
+            )
+            log_audit(
+                current_user.id,
+                'BACKUP_EXPORT',
+                target_type='System',
+                details=f'RDS snapshot {snapshot_id}',
+            )
+            flash('RDS snapshot initiated.', 'success')
+        except (BotoCoreError, ClientError) as exc:
+            current_app.logger.error('RDS snapshot failed: %s', exc)
+            flash('RDS backup failed.', 'danger')
+        return redirect(url_for('main.index'))
 
     if scheme == 'sqlite':
         path = uri.replace('sqlite:///', '')
@@ -1117,7 +1140,32 @@ def backup_database():
 def restore_database():
     form = RestoreForm()
     if form.validate_on_submit():
+        snapshot_id = (form.snapshot_id.data or '').strip()
         file = form.backup_file.data
+
+        if snapshot_id:
+            rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
+            if not rds_identifier:
+                flash('RDS instance identifier not configured.', 'danger')
+                return redirect(url_for('main.restore_database'))
+            try:
+                client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
+                client.restore_db_instance_from_db_snapshot(
+                    DBInstanceIdentifier=rds_identifier,
+                    DBSnapshotIdentifier=snapshot_id,
+                )
+                log_audit(
+                    current_user.id,
+                    'BACKUP_IMPORT',
+                    target_type='System',
+                    details=f'RDS restore from {snapshot_id}',
+                )
+                flash('RDS restore initiated.', 'success')
+            except (BotoCoreError, ClientError) as exc:
+                current_app.logger.error('RDS restore failed: %s', exc)
+                flash('RDS restore failed.', 'danger')
+            return redirect(url_for('main.index'))
+
         if file:
             uri = current_app.config['SQLALCHEMY_DATABASE_URI']
             scheme = urlparse(uri).scheme

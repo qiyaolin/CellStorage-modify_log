@@ -223,8 +223,13 @@ class ConfirmForm(FlaskForm):
 
 
 class RestoreForm(FlaskForm):
-    """Upload form for restoring a database backup."""
-    backup_file = FileField('Backup File', validators=[DataRequired()])
+    """Form for restoring the database from a file or AWS RDS snapshot."""
+    snapshot_id = StringField(
+        'RDS Snapshot Identifier', validators=[Optional()]  # optional AWS snapshot
+    )
+    backup_file = FileField(
+        'Backup File', validators=[Optional()]  # optional local file
+    )
     submit = SubmitField('Restore')
 
 

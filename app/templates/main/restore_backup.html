@@ -4,6 +4,14 @@
   <form method="POST" enctype="multipart/form-data">
     {{ form.hidden_tag() }}
     <div class="mb-3">
+      {{ form.snapshot_id.label }}<br>
+      {{ form.snapshot_id(size=40) }}
+      <div class="form-text">Leave blank to upload a file instead</div>
+      {% for error in form.snapshot_id.errors %}
+        <div class="text-danger">{{ error }}</div>
+      {% endfor %}
+    </div>
+    <div class="mb-3">
       {{ form.backup_file.label }}<br>
       {{ form.backup_file() }}
       {% for error in form.backup_file.errors %}

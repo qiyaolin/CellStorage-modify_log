@@ -20,4 +20,9 @@ class Config:
     # SQLAlchemy 配置项，可以关闭一些不必要的通知，提升性能
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # CSRF 保护配置
+    WTF_CSRF_ENABLED = True
+    WTF_CSRF_TIME_LIMIT = 3600  # CSRF token 有效期 1 小时
+    WTF_CSRF_HEADERS = ['X-CSRFToken', 'X-CSRF-Token']
+
     # 可以在这里添加其他应用配置...

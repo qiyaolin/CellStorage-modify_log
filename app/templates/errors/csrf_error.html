@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card border-warning">
+      <div class="card-header bg-warning text-dark">
+        <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> CSRF Token Error</h4>
+      </div>
+      <div class="card-body">
+        <h5 class="card-title">Security Verification Failed</h5>
+        <p class="card-text">
+          Your request failed security verification. This may be due to:
+        </p>
+        <ul>
+          <li>Page has expired, please refresh the page and try again</li>
+          <li>Session has timed out, please log in again</li>
+          <li>Browser has JavaScript disabled or there are caching issues</li>
+        </ul>
+        
+        {% if reason %}
+        <div class="alert alert-info mt-3">
+          <strong>Technical Details:</strong> {{ reason }}
+        </div>
+        {% endif %}
+        
+        <div class="mt-4">
+          <a href="javascript:history.back()" class="btn btn-secondary me-2">Go Back</a>
+          <a href="{{ url_for('main.index') }}" class="btn btn-primary me-2">Home</a>
+          <button onclick="location.reload()" class="btn btn-outline-primary">Refresh Page</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %} 

@@ -8,41 +8,14 @@
         <h2 class="card-title text-center mb-0">Import Vials from CSV</h2>
       </div>
       <div class="card-body">
-        <div class="alert alert-info" role="alert">
-          <h4 class="alert-heading">CSV Format Instructions</h4>
-          <p><strong>How to use this feature:</strong></p>
+        <div class="alert alert-info">
+          <h5>Steps to Import Data:</h5>
           <ol>
-            <li>Go to <a href="{{ url_for('main.inventory_summary') }}" class="alert-link">Inventory Summary</a> page.</li>
-            <li>Click the "Export CSV" button to download the current inventory.</li>
-            <li>Open the downloaded CSV file and make your desired changes to the data.</li>
-            <li>Upload the modified CSV file here to update the database.</li>
+            <li>Download the template CSV file.</li>
+            <li>Fill in your data following the template format.</li>
+            <li>Upload the completed CSV file using the form below.</li>
+            <li>After import, check the <a href="{{ url_for('main.inventory_summary') }}" class="alert-link">Inventory Summary</a> page to verify your data.</li>
           </ol>
-          <hr>
-          <p><strong>Supported operations:</strong></p>
-          <ul>
-            <li><strong>Update existing records</strong>: Modify Status, Date Frozen, or Location</li>
-            <li><strong>Add new records</strong>: Leave "Vial ID" empty for new vials</li>
-          </ul>
-          <p><strong>For new records, you must provide:</strong></p>
-          <ul>
-            <li><strong>Batch Name</strong>: Name of the batch (will be created if doesn't exist)</li>
-            <li><strong>Vial Tag</strong>: Unique identifier for the vial</li>
-            <li><strong>Cell Line</strong>: Must be an existing cell line in the database</li>
-            <li><strong>Location</strong>: Valid storage location (Tower/Drawer/Box R#C#)</li>
-            <li><strong>Date Frozen</strong>: YYYY-MM-DD format (optional, defaults to today)</li>
-            <li><strong>Status</strong>: Optional, defaults to "Available"</li>
-          </ul>
-          <p><strong>Additional fields you can update/add:</strong></p>
-          <ul>
-            <li><strong>Passage Number</strong>: Cell passage information</li>
-            <li><strong>Volume (ml)</strong>: Volume in milliliters (numbers only)</li>
-            <li><strong>Concentration</strong>: Cell concentration</li>
-            <li><strong>Fluorescence Tag</strong>: Fluorescent protein tags</li>
-            <li><strong>Resistance</strong>: Antibiotic resistance markers</li>
-            <li><strong>Parental Cell Line</strong>: Original cell line information</li>
-            <li><strong>Notes</strong>: Additional comments or information</li>
-          </ul>
-          <p class="mb-0"><strong>Important:</strong> Do not modify the header row. For existing records, do not change the Vial ID or Vial Tag columns.</p>
         </div>
         <form method="POST" enctype="multipart/form-data" novalidate>
           {{ form.hidden_tag() }}

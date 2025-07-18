@@ -1,14 +1,259 @@
+/* ==========================================================================
+   现代化设计系统
+   ========================================================================== */
+
+/* 全局字体和基础样式 */
 body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh;
     padding-top: 20px;
 }
+
+/* 现代化卡片设计 */
+.card {
+    border: 0;
+    border-radius: 16px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+/* 专业按钮设计 */
+.btn {
+    border-radius: 12px !important;
+    font-weight: 500;
+    padding: 0.5rem 1.25rem;
+    transition: all 0.2s ease;
+    border: 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+    transition: left 0.5s;
+}
+
+.btn:hover::before {
+    left: 100%;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+}
+
+.btn-success {
+    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+    box-shadow: 0 4px 15px rgba(72, 187, 120, 0.4);
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(72, 187, 120, 0.6);
+}
+
+/* 导航栏增强 */
+.navbar {
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: -0.025em;
+}
+
+.nav-link {
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border-radius: 8px;
+    margin: 0 2px;
+}
+
+.nav-link:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-1px);
+}
+
+/* 下拉菜单现代化 */
+.dropdown-menu {
+    border-radius: 12px;
+    border: 0;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.95);
+}
+
+.dropdown-item {
+    border-radius: 8px;
+    margin: 2px 8px;
+    padding: 8px 12px;
+    transition: all 0.2s ease;
+}
+
+.dropdown-item:hover {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    transform: translateX(4px);
+}
+
+/* 表格现代化 */
+.table {
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+}
+
+.table thead th {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: 0;
+    font-weight: 600;
+    letter-spacing: 0.025em;
+    padding: 1rem;
+}
+
+.table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.table tbody tr:hover {
+    background: rgba(102, 126, 234, 0.05);
+    transform: scale(1.01);
+}
+
+/* 表单控件现代化 */
+.form-control, .form-select {
+    border-radius: 12px !important;
+    border: 2px solid #e2e8f0;
+    padding: 0.75rem 1rem;
+    transition: all 0.2s ease;
+    background: rgba(255, 255, 255, 0.9);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    background: white;
+}
+
+.form-floating > label {
+    font-weight: 500;
+    color: #64748b;
+}
+
+/* 用户头像区域 */
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.badge-role {
+    font-size: 0.6rem;
+    padding: 2px 6px;
+    border-radius: 10px;
+    font-weight: 600;
+}
+
+/* 页脚现代化 */
+footer {
+    background: rgba(255, 255, 255, 0.95) !important;
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
+}
+
+/* 消息提示现代化 */
+.alert {
+    border-radius: 12px;
+    border: 0;
+    backdrop-filter: blur(10px);
+    font-weight: 500;
+}
+
+.alert-success {
+    background: linear-gradient(135deg, rgba(72, 187, 120, 0.9), rgba(56, 161, 105, 0.9));
+    color: white;
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, rgba(245, 101, 101, 0.9), rgba(229, 62, 62, 0.9));
+    color: white;
+}
+
+.alert-warning {
+    background: linear-gradient(135deg, rgba(237, 137, 54, 0.9), rgba(221, 107, 32, 0.9));
+    color: white;
+}
+
+.alert-info {
+    background: linear-gradient(135deg, rgba(66, 153, 225, 0.9), rgba(49, 130, 206, 0.9));
+    color: white;
+}
+
+/* 动画效果 */
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+}
+
+.fade-in-up {
+    animation: fadeInUp 0.6s ease-out;
+}
+
+/* 加载状态 */
+.loading {
+    animation: pulse 2s infinite;
+}
+
+/* ==========================================================================
+   原有样式保持不变
+   ========================================================================== */
+
 .alert-container {
     max-width: 800px;
     margin: 0 auto 20px auto;
-}
-
-/* Global button styling - rounded corners */
-.btn {
-    border-radius: 0.5rem !important;
 }
 
 /* Form controls rounded corners */
@@ -27,6 +272,7 @@ body {
     border: 1px solid #dee2e6;
 }
 
+/* Box cell styles */
 .box-cell {
     width: 35px;
     height: 35px;
@@ -49,11 +295,11 @@ body {
     height: 100%;
     line-height: 33px;
     text-decoration: none;
-    color: #212529;
+    color: inherit;
 }
 
 .box-cell a.vial-link {
-    color: #fff;
+    color: inherit;
 }
 
 .box-cell a.add-link {
@@ -69,6 +315,7 @@ body {
 /* Status-specific styles */
 .status-empty {
     background-color: #f8f9fa; /* Very light grey */
+    color: #6c757d;
 }
 
 .status-available {
@@ -81,10 +328,6 @@ body {
     color: #000;
 }
 
-.status-used a.vial-link {
-    color: #000;
-}
-
 .status-depleted,
 .status-discarded {
     background-color: #dc3545; /* Red */
@@ -93,10 +336,6 @@ body {
 
 .status-reserved {
     background-color: #0dcaf0; /* Cyan */
-    color: #000;
-}
-
-.status-reserved a.vial-link {
     color: #000;
 }
 
@@ -121,8 +360,8 @@ body {
 .batch-browse-3 { background-color: #ff7043 !important; color: white !important; } /* Orange */
 .batch-browse-4 { background-color: #ec407a !important; color: white !important; } /* Pink */
 .batch-browse-5 { background-color: #26a69a !important; color: white !important; } /* Teal */
-.batch-browse-6 { background-color: #9ccc65 !important; color: white !important; } /* Lime */
-.batch-browse-7 { background-color: #ffb74d !important; color: white !important; } /* Amber */
+.batch-browse-6 { background-color: #9ccc65 !important; color: black !important; } /* Lime */
+.batch-browse-7 { background-color: #ffb74d !important; color: black !important; } /* Amber */
 .batch-browse-8 { background-color: #29b6f6 !important; color: white !important; } /* Cyan */
 .batch-browse-9 { background-color: #f06292 !important; color: white !important; } /* Rose */
 .batch-browse-10 { background-color: #7e57c2 !important; color: white !important; } /* Indigo */

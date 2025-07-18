@@ -2,116 +2,279 @@
 
 {% block content %}
 <div class="container-fluid">
-    <!-- Welcome Banner -->
-    <div class="card text-white bg-primary mb-4 shadow">
-        <div class="card-body">
-            <h1 class="card-title">Welcome, {{ current_user.username }}!</h1>
-            <p class="card-text">
-                This is your central dashboard for managing the cell storage inventory. 
-                There are currently <strong>{{ vial_count }}</strong> cryovials in the system.
-            </p>
+    <!-- Hero Section with Modern Design -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card border-0 text-white position-relative overflow-hidden" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 200px;">
+                <div class="position-absolute" style="top: -50%; right: -20%; width: 400px; height: 400px; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); border-radius: 50%;"></div>
+                <div class="position-absolute" style="bottom: -30%; left: -10%; width: 300px; height: 300px; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%); border-radius: 50%;"></div>
+                <div class="card-body p-5 position-relative">
+                    <div class="row align-items-center">
+                        <div class="col-lg-8">
+                            <h1 class="display-5 fw-bold mb-3 fade-in-up">
+                                <i class="bi bi-snow2 me-3"></i>
+                                Welcome, {{ current_user.username }}!
+                            </h1>
+                            <p class="lead mb-4 opacity-90 fade-in-up" style="animation-delay: 0.2s;">
+                                Your central command center for managing cell storage inventory with precision and efficiency.
+                            </p>
+                            <div class="d-flex align-items-center fade-in-up" style="animation-delay: 0.4s;">
+                                <div class="bg-white bg-opacity-20 rounded-pill px-4 py-2 me-3">
+                                    <i class="bi bi-thermometer-snow me-2"></i>
+                                    <strong>{{ vial_count }}</strong> CryoVials Active
+                                </div>
+                                <div class="bg-white bg-opacity-20 rounded-pill px-4 py-2">
+                                    <i class="bi bi-person-badge me-2"></i>
+                                    <strong>{{ current_user.role.title() }}</strong> Access
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-4 text-center">
+                            <div class="position-relative">
+                                <i class="bi bi-snow2 display-1 opacity-25"></i>
+                                <div class="position-absolute top-50 start-50 translate-middle">
+                                    <div class="bg-white bg-opacity-20 rounded-circle p-4">
+                                        <i class="bi bi-thermometer-snow fs-1"></i>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
     {% if vial_count == 0 %}
-    <!-- 新系统引导 -->
-    <div class="alert alert-info" role="alert">
-        <h4 class="alert-heading">🎉 Welcome to your Cell Storage System!</h4>
-        <p>It looks like this is a fresh installation. Here's how to get started:</p>
-        <ol>
-            {% if current_user.is_admin %}
-            <li><strong>Set up Storage Locations:</strong> <a href="{{ url_for('main.locations_overview') }}" class="alert-link">Define your freezer towers, drawers, and boxes</a></li>
-            <li><strong>Create Cell Lines:</strong> <a href="{{ url_for('main.list_cell_lines') }}" class="alert-link">Add the cell lines you work with</a></li>
-            <li><strong>Add Your First Batch:</strong> <a href="{{ url_for('main.add_cryovial') }}" class="alert-link">Create your first batch of cryovials</a></li>
-            {% else %}
-            <li><strong>Explore the Inventory:</strong> <a href="{{ url_for('main.cryovial_inventory') }}" class="alert-link">Browse existing cryovials</a></li>
-            <li><strong>View Summary:</strong> <a href="{{ url_for('main.inventory_summary') }}" class="alert-link">See inventory statistics</a></li>
-            <li><strong>Need to add data?</strong> Contact your administrator to get started</li>
-            {% endif %}
-        </ol>
-        {% if current_user.is_admin %}
-        <hr>
-        <p class="mb-0">💡 <strong>Tip:</strong> Start by setting up at least one Tower → Drawer → Box before adding cryovials.</p>
-        {% endif %}
+    <!-- 新系统引导 - 现代化设计 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm fade-in-up">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-lg-2 text-center">
+                            <div class="bg-primary bg-opacity-10 rounded-circle p-3 d-inline-flex">
+                                <i class="bi bi-rocket-takeoff fs-1 text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="col-lg-10">
+                            <h4 class="text-primary fw-bold mb-3">🎉 Welcome to your Cell Storage System!</h4>
+                            <p class="text-muted mb-4">It looks like this is a fresh installation. Here's how to get started:</p>
+                            <div class="row g-3">
+                                {% if current_user.is_admin %}
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-start">
+                                        <div class="badge bg-primary rounded-circle me-3 mt-1" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">1</div>
+                                        <div>
+                                            <h6 class="fw-semibold mb-1">Set up Storage</h6>
+                                            <small class="text-muted">
+                                                <a href="{{ url_for('main.locations_overview') }}" class="text-decoration-none">Define freezer towers, drawers, and boxes</a>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-start">
+                                        <div class="badge bg-success rounded-circle me-3 mt-1" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">2</div>
+                                        <div>
+                                            <h6 class="fw-semibold mb-1">Add Cell Lines</h6>
+                                            <small class="text-muted">
+                                                <a href="{{ url_for('main.list_cell_lines') }}" class="text-decoration-none">Create your cell line database</a>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-start">
+                                        <div class="badge bg-info rounded-circle me-3 mt-1" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">3</div>
+                                        <div>
+                                            <h6 class="fw-semibold mb-1">First Batch</h6>
+                                            <small class="text-muted">
+                                                <a href="{{ url_for('main.add_cryovial') }}" class="text-decoration-none">Create your first cryovial batch</a>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-list-ul fs-4 text-primary me-3"></i>
+                                        <div>
+                                            <a href="{{ url_for('main.cryovial_inventory') }}" class="text-decoration-none fw-semibold">Explore the Inventory</a>
+                                            <small class="d-block text-muted">Browse existing cryovials</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-person-lines-fill fs-4 text-success me-3"></i>
+                                        <div>
+                                            <span class="fw-semibold">Need to add data?</span>
+                                            <small class="d-block text-muted">Contact your administrator to get started</small>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% if current_user.is_admin %}
+                            <div class="mt-4 p-3 bg-warning bg-opacity-10 rounded-3">
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-lightbulb text-warning me-2"></i>
+                                    <small class="text-warning fw-semibold">Pro Tip:</small>
+                                    <small class="text-muted ms-2">Start by setting up at least one Tower → Drawer → Box before adding cryovials.</small>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     {% elif vial_count < 10 %}
-    <!-- 少量数据时的提示 -->
-    <div class="alert alert-success" role="alert">
-        <h4 class="alert-heading">🚀 Great start!</h4>
-        <p>You have {{ vial_count }} cryovials in the system. Consider:</p>
-        <ul class="mb-0">
-            {% if current_user.is_admin %}
-            <li><a href="{{ url_for('main.add_cryovial') }}" class="alert-link">Adding more cryovials</a></li>
-            <li><a href="{{ url_for('main.import_csv') }}" class="alert-link">Importing data from a spreadsheet</a></li>
-            {% endif %}
-            <li><a href="{{ url_for('main.cryovial_inventory') }}" class="alert-link">Exploring the inventory features</a></li>
-        </ul>
+    <!-- 少量数据时的提示 - 现代化设计 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm fade-in-up" style="animation-delay: 0.2s;">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-success bg-opacity-10 rounded-circle p-3 me-4">
+                            <i class="bi bi-rocket fs-3 text-success"></i>
+                        </div>
+                        <div class="flex-fill">
+                            <h5 class="text-success fw-bold mb-2">🚀 Great start!</h5>
+                            <p class="text-muted mb-3">You have {{ vial_count }} cryovials in the system. Consider expanding your inventory:</p>
+                            <div class="d-flex flex-wrap gap-2">
+                                {% if current_user.is_admin %}
+                                <a href="{{ url_for('main.add_cryovial') }}" class="btn btn-sm btn-outline-success">
+                                    <i class="bi bi-plus-circle me-1"></i>Add More Vials
+                                </a>
+                                <a href="{{ url_for('main.import_csv') }}" class="btn btn-sm btn-outline-info">
+                                    <i class="bi bi-file-earmark-spreadsheet me-1"></i>Import from CSV
+                                </a>
+                                {% endif %}
+                                <a href="{{ url_for('main.cryovial_inventory') }}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye me-1"></i>Explore Features
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     {% endif %}
 
-    <!-- Quick Actions -->
-    <h2 class="mb-3">Quick Actions</h2>
-    <div class="row row-cols-1 row-cols-md-3 g-4">
+    <!-- Quick Actions Grid - 现代化设计 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2 class="h4 fw-bold text-dark mb-4 d-flex align-items-center">
+                <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-3">
+                    <i class="bi bi-lightning text-primary"></i>
+                </div>
+                Quick Actions
+            </h2>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-5">
         
         <!-- 库存浏览 - 所有用户可见 -->
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">📋 CryoVial Inventory</h5>
-                    <p class="card-text">Search, view, and manage the cryovial inventory with advanced filters.</p>
+        <div class="col-lg-4 col-md-6 fade-in-up">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4 d-flex flex-column">
+                    <div class="mb-3">
+                        <div class="bg-primary bg-opacity-10 rounded-circle p-3 d-inline-flex">
+                            <i class="bi bi-list-ul fs-4 text-primary"></i>
+                        </div>
+                    </div>
+                    <h5 class="card-title fw-bold mb-2">Browse Inventory</h5>
+                    <p class="card-text text-muted flex-fill">Search and explore all cryovials with advanced filtering options.</p>
                     <div class="mt-auto">
-                        <a href="{{ url_for('main.cryovial_inventory') }}" class="btn btn-primary">View Inventory</a>
+                        <a href="{{ url_for('main.cryovial_inventory') }}" class="btn btn-primary w-100">
+                            <i class="bi bi-arrow-right me-1"></i>View Inventory
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 库存摘要 - 所有用户可见 -->
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">📊 Inventory Summary</h5>
-                    <p class="card-text">View statistics and export data for analysis.</p>
+        <!-- 库存摘要 - 管理员可见 -->
+        {% if current_user.is_admin %}
+        <div class="col-lg-4 col-md-6 fade-in-up" style="animation-delay: 0.1s;">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4 d-flex flex-column">
+                    <div class="mb-3">
+                        <div class="bg-info bg-opacity-10 rounded-circle p-3 d-inline-flex">
+                            <i class="bi bi-graph-up fs-4 text-info"></i>
+                        </div>
+                    </div>
+                    <h5 class="card-title fw-bold mb-2">Analytics Dashboard</h5>
+                    <p class="card-text text-muted flex-fill">View comprehensive statistics and insights about your inventory.</p>
                     <div class="mt-auto">
-                        <a href="{{ url_for('main.inventory_summary') }}" class="btn btn-outline-primary">View Summary</a>
+                        <a href="{{ url_for('main.inventory_summary') }}" class="btn btn-outline-info w-100">
+                            <i class="bi bi-arrow-right me-1"></i>View Dashboard
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
+        {% endif %}
         
         {% if current_user.is_admin %}
-        <!-- 管理员功能 -->
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">🧪 Manage Cell Lines</h5>
-                    <p class="card-text">Add, edit, or view existing cell line information.</p>
+        <!-- 管理员功能卡片 -->
+        <div class="col-lg-4 col-md-6 fade-in-up" style="animation-delay: 0.2s;">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4 d-flex flex-column">
+                    <div class="mb-3">
+                        <div class="bg-success bg-opacity-10 rounded-circle p-3 d-inline-flex">
+                            <i class="bi bi-diagram-3 fs-4 text-success"></i>
+                        </div>
+                    </div>
+                    <h5 class="card-title fw-bold mb-2">Cell Line Manager</h5>
+                    <p class="card-text text-muted flex-fill">Add, edit, and organize your cell line database with detailed metadata.</p>
                     <div class="mt-auto">
-                        <a href="{{ url_for('main.list_cell_lines') }}" class="btn btn-outline-primary">Go to Cell Lines</a>
+                        <a href="{{ url_for('main.list_cell_lines') }}" class="btn btn-outline-success w-100">
+                            <i class="bi bi-arrow-right me-1"></i>Manage Cell Lines
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
         
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">🏢 Manage Freezer Locations</h5>
-                    <p class="card-text">Define and organize towers, drawers, and boxes.</p>
+        <div class="col-lg-4 col-md-6 fade-in-up" style="animation-delay: 0.3s;">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4 d-flex flex-column">
+                    <div class="mb-3">
+                        <div class="bg-warning bg-opacity-10 rounded-circle p-3 d-inline-flex">
+                            <i class="bi bi-building fs-4 text-warning"></i>
+                        </div>
+                    </div>
+                    <h5 class="card-title fw-bold mb-2">Storage Locations</h5>
+                    <p class="card-text text-muted flex-fill">Configure freezer towers, drawers, and boxes for optimal organization.</p>
                     <div class="mt-auto">
-                        <a href="{{ url_for('main.locations_overview') }}" class="btn btn-outline-primary">Go to Locations</a>
+                        <a href="{{ url_for('main.locations_overview') }}" class="btn btn-outline-warning w-100">
+                            <i class="bi bi-arrow-right me-1"></i>Manage Locations
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
 
-        <div class="col">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body d-flex flex-column">
-                    <h5 class="card-title">➕ Add CryoVials</h5>
-                    <p class="card-text">Create new batches and add cryovials to the inventory.</p>
+        <div class="col-lg-4 col-md-6 fade-in-up" style="animation-delay: 0.4s;">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4 d-flex flex-column">
+                    <div class="mb-3">
+                        <div class="bg-primary bg-opacity-10 rounded-circle p-3 d-inline-flex">
+                            <i class="bi bi-plus-circle fs-4 text-primary"></i>
+                        </div>
+                    </div>
+                    <h5 class="card-title fw-bold mb-2">Add CryoVials</h5>
+                    <p class="card-text text-muted flex-fill">Create new batches and add cryovials to expand your inventory.</p>
                     <div class="mt-auto">
-                        <a href="{{ url_for('main.add_cryovial') }}" class="btn btn-success">Add Vials</a>
+                        <a href="{{ url_for('main.add_cryovial') }}" class="btn btn-success w-100">
+                            <i class="bi bi-plus-lg me-1"></i>Add Vials
+                        </a>
                     </div>
                 </div>
             </div>
@@ -120,21 +283,57 @@
     </div>
 
     {% if current_user.is_admin and vial_count > 50 %}
-    <!-- 系统维护提醒 -->
-    <div class="mt-4">
-        <div class="card border-warning">
-            <div class="card-header bg-warning text-dark">
-                <h5 class="mb-0">🔧 System Maintenance</h5>
-            </div>
-            <div class="card-body">
-                <p class="mb-2">Your system has {{ vial_count }} cryovials. Consider these maintenance tasks:</p>
-                <div class="btn-group" role="group">
-                    <a href="{{ url_for('main.backup_database') }}" class="btn btn-sm btn-outline-warning">Backup Data</a>
-                    <a href="{{ url_for('main.audit_logs') }}" class="btn btn-sm btn-outline-warning">Review Logs</a>
+    <!-- 系统维护提醒 - 现代化设计 -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm fade-in-up" style="animation-delay: 0.5s;">
+                <div class="card-header bg-transparent border-0 pb-0">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-warning bg-opacity-10 rounded-circle p-2 me-3">
+                            <i class="bi bi-tools text-warning"></i>
+                        </div>
+                        <h5 class="mb-0 fw-bold text-warning">System Maintenance</h5>
+                    </div>
+                </div>
+                <div class="card-body pt-3">
+                    <p class="text-muted mb-3">Your system has <strong>{{ vial_count }}</strong> cryovials. Consider these maintenance tasks to keep your system running smoothly:</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ url_for('main.backup_database') }}" class="btn btn-sm btn-outline-success">
+                            <i class="bi bi-download me-1"></i>Backup Data
+                        </a>
+                        <a href="{{ url_for('main.audit_logs') }}" class="btn btn-sm btn-outline-info">
+                            <i class="bi bi-clock-history me-1"></i>Review Logs
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
     {% endif %}
 </div>
+
+{% block scripts %}
+<script>
+// 添加动画效果
+document.addEventListener('DOMContentLoaded', function() {
+    const cards = document.querySelectorAll('.fade-in-up');
+    cards.forEach(card => {
+        card.classList.add('fade-in-up');
+    });
+    
+    // 添加卡片hover效果
+    const actionCards = document.querySelectorAll('.card');
+    actionCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.transform = 'translateY(-5px)';
+            this.style.transition = 'all 0.3s ease';
+        });
+        
+        card.addEventListener('mouseleave', function() {
+            this.style.transform = 'translateY(0)';
+        });
+    });
+});
+</script>
+{% endblock %}
 {% endblock %}

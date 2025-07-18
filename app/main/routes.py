@@ -12,6 +12,7 @@ from flask import (
     jsonify,
 )
 from flask_login import login_required, current_user
+from datetime import datetime
 try:
     from markupsafe import Markup
 except ImportError:
@@ -714,10 +715,12 @@ def pickup_selected_vials():
         )
         session.pop('pickup_ids', None)
         
-        # New: Redirect back to inventory with a summary flash message
-        picked_vial_tags = [v.unique_vial_id_tag for v in picked_vials]
-        flash(f'Successfully picked up {len(picked_vials)} vial(s): {", ".join(picked_vial_tags)}. Their status is now "Used".', 'success')
-        return redirect(url_for('main.cryovial_inventory'))
+        # 显示拾取结果页面，包含位置信息
+        return render_template('main/pickup_confirmation.html', 
+                             title='Pick Up Confirmation',
+                             picked_boxes=picked_boxes, 
+                             picked_vials=picked_vials,
+                             current_datetime=datetime.now())
 
     return render_template('main/pickup_selected_vials.html', batches=batches)
 
@@ -760,11 +763,12 @@ def add_cryovial():
             return redirect(url_for('main.add_cryovial'))
 
         batch = VialBatch(
-            id=get_next_batch_id(),
+            id=get_next_batch_id(auto_commit=False),
             name=vial_common_data.get('batch_name'),
             created_by_user_id=current_user.id,
         )
         db.session.add(batch)
+        db.session.flush()  # 确保batch ID可用但不提交
         base_tag = f"B{batch.id}"
 
         created_vials_info = []
@@ -1521,6 +1525,7 @@ def manage_batch(batch_id):
 # --- Moved Inventory Summary Route ---
 @bp.route('/inventory/summary')
 @login_required
+@admin_required
 def inventory_summary():
     """Display all cryovials for all users, grouped by batch."""
     search_q = request.args.get('q', '').strip()

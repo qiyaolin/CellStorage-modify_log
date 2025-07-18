@@ -88,7 +88,7 @@ def set_batch_counter(value):
     db.session.commit()
 
 
-def get_next_batch_id():
+def get_next_batch_id(auto_commit=True):
     """Retrieve and increment the batch counter atomically."""
     setting = AppConfig.query.filter_by(key='batch_counter').with_for_update().first()
     if not setting:
@@ -97,5 +97,6 @@ def get_next_batch_id():
         db.session.add(setting)
     current = int(setting.value)
     setting.value = str(current + 1)
-    db.session.commit()
+    if auto_commit:
+        db.session.commit()
     return current

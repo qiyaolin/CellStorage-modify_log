@@ -5,14 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ title + " - Cell Storage App" if title else "Cell Storage App" }}</title>
-    <!-- Use a more modern Bootswatch theme -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootswatch@5.3.2/dist/cosmo/bootstrap.min.css">
+    
+    <!-- 使用更现代的Bootstrap版本和专业主题 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- 添加专业图标库 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <!-- 添加Google Fonts for professional typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   </head>
   <body class="bg-light">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+    <!-- 现代化的导航栏 -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-gradient shadow-sm sticky-top" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
       <div class="container-fluid">
-        <a class="navbar-brand" href="{{ url_for('main.index') }}">Cell Storage</a>
+        <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('main.index') }}">
+          <i class="bi bi-snow2 me-2 fs-4"></i>
+          <span>CellStorage</span>
+          <small class="badge bg-light text-dark ms-2">Lab</small>
+        </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
@@ -21,42 +31,76 @@
             {% if current_user.is_authenticated %}
               <!-- 基本功能 - 所有用户都可见 -->
               <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('main.cryovial_inventory') }}">Inventory</a>
+                <a class="nav-link d-flex align-items-center" href="{{ url_for('main.cryovial_inventory') }}">
+                  <i class="bi bi-list-ul me-1"></i>
+                  Inventory
+                </a>
               </li>
-              <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('main.inventory_summary') }}">Summary</a>
-              </li>
+              {% if current_user.is_admin %}
+                <li class="nav-item">
+                  <a class="nav-link d-flex align-items-center" href="{{ url_for('main.inventory_summary') }}">
+                    <i class="bi bi-graph-up me-1"></i>
+                    Dashboard
+                  </a>
+                </li>
+              {% endif %}
               
               {% if current_user.is_admin %}
                 <!-- 管理功能下拉菜单 - 仅管理员可见 -->
                 <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                  <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-gear me-1"></i>
                     Manage
                   </a>
-                  <ul class="dropdown-menu" aria-labelledby="inventoryDropdown">
-                    <li><a class="dropdown-item" href="{{ url_for('main.list_cell_lines') }}">Cell Lines</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('main.locations_overview') }}">Freezer Locations</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('main.add_cryovial') }}">Add CryoVials</a></li>
+                  <ul class="dropdown-menu shadow border-0" aria-labelledby="inventoryDropdown">
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.list_cell_lines') }}">
+                      <i class="bi bi-diagram-3 me-2 text-primary"></i>Cell Lines
+                    </a></li>
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.locations_overview') }}">
+                      <i class="bi bi-building me-2 text-success"></i>Freezer Locations
+                    </a></li>
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.add_cryovial') }}">
+                      <i class="bi bi-plus-circle me-2 text-info"></i>Add CryoVials
+                    </a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="{{ url_for('main.batch_edit_vials') }}">Batch Edit</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('main.manage_batch_lookup') }}">Manage Batch</a></li>
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.batch_edit_vials') }}">
+                      <i class="bi bi-pencil-square me-2 text-warning"></i>Batch Edit
+                    </a></li>
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.manage_batch_lookup') }}">
+                      <i class="bi bi-search me-2 text-secondary"></i>Manage Batch
+                    </a></li>
                   </ul>
                 </li>
                 <!-- Admin Tools Dropdown -->
                 <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    Admin Tools
+                  <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="bi bi-shield-check me-1"></i>
+                    Admin
                   </a>
-                  <ul class="dropdown-menu" aria-labelledby="adminDropdown">
-                    <li><a class="dropdown-item" href="{{ url_for('auth.create_user') }}">Create User</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('auth.list_users') }}">Manage Users</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('main.audit_logs') }}">Inventory Logs</a></li>
+                  <ul class="dropdown-menu shadow border-0" aria-labelledby="adminDropdown">
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.create_user') }}">
+                      <i class="bi bi-person-plus me-2 text-primary"></i>Create User
+                    </a></li>
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.list_users') }}">
+                      <i class="bi bi-people me-2 text-info"></i>Manage Users
+                    </a></li>
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.audit_logs') }}">
+                      <i class="bi bi-clock-history me-2 text-secondary"></i>Activity Logs
+                    </a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="{{ url_for('main.backup_database') }}">Backup</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('main.restore_database') }}">Restore</a></li>
-                    <li><a class="dropdown-item" href="{{ url_for('main.import_csv') }}">Import from CSV</a></li>
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.backup_database') }}">
+                      <i class="bi bi-download me-2 text-success"></i>Backup
+                    </a></li>
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.restore_database') }}">
+                      <i class="bi bi-upload me-2 text-warning"></i>Restore
+                    </a></li>
+                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.import_csv') }}">
+                      <i class="bi bi-file-earmark-spreadsheet me-2 text-info"></i>Import CSV
+                    </a></li>
                     <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item" href="{{ url_for('main.clear_all') }}">Clear All</a></li>
+                    <li><a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('main.clear_all') }}">
+                      <i class="bi bi-trash me-2"></i>Clear All
+                    </a></li>
                   </ul>
                 </li>
               {% endif %}
@@ -65,44 +109,83 @@
           <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
             {% if current_user.is_authenticated %}
               <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                  Hi, {{ current_user.username }} ({{ current_user.role }})
+                <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                  <div class="user-avatar me-2">
+                    <i class="bi bi-person-circle fs-5"></i>
+                  </div>
+                  <div class="d-flex flex-column">
+                    <span class="small">{{ current_user.username }}</span>
+                    <span class="badge badge-role bg-light text-dark">{{ current_user.role }}</span>
+                  </div>
                 </a>
-                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
-                  <li><a class="dropdown-item" href="{{ url_for('auth.reset_password') }}">Reset Password</a></li>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0" aria-labelledby="userDropdown">
+                  <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.reset_password') }}">
+                    <i class="bi bi-key me-2 text-warning"></i>Reset Password
+                  </a></li>
                   <li><hr class="dropdown-divider"></li>
-                  <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">Logout</a></li>
+                  <li><a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('auth.logout') }}">
+                    <i class="bi bi-box-arrow-right me-2"></i>Logout
+                  </a></li>
                 </ul>
               </li>
             {% else %}
               <li class="nav-item">
-                <a class="nav-link" href="{{ url_for('auth.login') }}">Login</a>
+                <a class="nav-link btn btn-outline-light rounded-pill px-3" href="{{ url_for('auth.login') }}">
+                  <i class="bi bi-box-arrow-in-right me-1"></i>Login
+                </a>
               </li>
             {% endif %}
           </ul>
         </div>
       </div>
     </nav>
-    <div class="container">
+
+    <div class="container-fluid px-4">
+      <!-- 改进的消息提示 -->
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          <div class="alert-container">
+          <div class="alert-container mt-3">
           {% for category, message in messages %}
-            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
-              {{ message|safe }}
+            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-sm border-0" role="alert">
+              <div class="d-flex align-items-center">
+                {% if category == 'success' %}
+                  <i class="bi bi-check-circle-fill me-2"></i>
+                {% elif category == 'warning' %}
+                  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                {% elif category == 'error' or category == 'danger' %}
+                  <i class="bi bi-x-circle-fill me-2"></i>
+                {% else %}
+                  <i class="bi bi-info-circle-fill me-2"></i>
+                {% endif %}
+                <span>{{ message|safe }}</span>
+              </div>
               <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
           {% endfor %}
           </div>
         {% endif %}
       {% endwith %}
+      
       {% block content %}{% endblock %}
-      <footer class="mt-4 py-3 border-top">
-        <p class="text-center text-muted">&copy; {{ current_year }} HayerLab</p>
+      
+      <!-- 现代化的页脚 -->
+      <footer class="mt-5 py-4 border-top bg-white rounded-top shadow-sm">
+        <div class="text-center">
+          <div class="d-flex justify-content-center align-items-center mb-2">
+            <i class="bi bi-snow2 text-muted me-2"></i>
+            <span class="text-muted">CellStorage Lab Management System</span>
+          </div>
+          <p class="text-muted small mb-0">
+            &copy; {{ current_year }} HayerLab | 
+            <a href="#" class="text-decoration-none text-muted">Help</a> | 
+            <a href="#" class="text-decoration-none text-muted">Contact</a>
+          </p>
+        </div>
       </footer>
     </div>
+    
     <!-- Bootstrap JS Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     {% block scripts %}{% endblock %}
   </body>
 </html>

@@ -1,35 +1,63 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>{{ title }}</h1>
-    <form method="POST" action="{{ form_action }}" novalidate>
-        {{ form.hidden_tag() }}
-        <p>
-            {{ form.drawer_id.label }}<br>
-            {{ form.drawer_id() }}<br>
-            {% for error in form.drawer_id.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>
-            {{ form.name.label }}<br>
-            {{ form.name(size=50) }}<br>
-            {% for error in form.name.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>
-            {{ form.rows.label }}<br>
-            {{ form.rows(size=5) }}<br>
-            {% for error in form.rows.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>
-            {{ form.columns.label }}<br>
-            {{ form.columns(size=5) }}<br>
-            {% for error in form.columns.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>
-            {{ form.description.label }}<br>
-            {{ form.description(rows=4, cols=48) }}<br>
-            {% for error in form.description.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>{{ form.submit() }}</p>
-    </form>
-    <p><a href="{{ url_for('main.locations_overview') }}">Back to Locations Overview</a></p>
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-center mb-4">{{ title }}</h2>
+        <form method="POST" action="{{ form_action }}" novalidate>
+          {{ form.hidden_tag() }}
+          
+          <div class="row g-3">
+            <div class="col-12">
+              <div class="form-floating">
+                {{ form.drawer_id(class="form-select" + (" is-invalid" if form.drawer_id.errors else "")) }}
+                {{ form.drawer_id.label(class="form-label") }}
+                {% if form.drawer_id.errors %}<div class="invalid-feedback">{{ form.drawer_id.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="form-floating">
+                {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="Box Name") }}
+                {{ form.name.label }}
+                {% if form.name.errors %}<div class="invalid-feedback">{{ form.name.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.rows(class="form-control" + (" is-invalid" if form.rows.errors else ""), placeholder="Rows") }}
+                {{ form.rows.label }}
+                {% if form.rows.errors %}<div class="invalid-feedback">{{ form.rows.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.columns(class="form-control" + (" is-invalid" if form.columns.errors else ""), placeholder="Columns") }}
+                {{ form.columns.label }}
+                {% if form.columns.errors %}<div class="invalid-feedback">{{ form.columns.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+
+            <div class="col-12">
+              <div class="form-floating">
+                {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), placeholder="Description", style="height: 100px") }}
+                {{ form.description.label }}
+                {% if form.description.errors %}<div class="invalid-feedback">{{ form.description.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+          
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+            <a href="{{ url_for('main.locations_overview') }}" class="btn btn-secondary me-md-2">Cancel</a>
+            {{ form.submit(class="btn btn-primary") }}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

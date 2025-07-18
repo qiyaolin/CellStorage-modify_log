@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 
 from app import db                     # Import db from the app package (app/__init__.py)
 from app.auth import bp                # Import bp from the current auth package (app/auth/__init__.py)
-from app.forms import LoginForm, UserCreationForm, ResetPasswordForm
+from app.forms import LoginForm, UserCreationForm, ResetPasswordForm, UserEditForm
 from app.models import User
 from app.decorators import admin_required # Import our custom decorator
 
@@ -45,8 +45,8 @@ def create_user():
         user.set_password(form.password.data)
         db.session.add(user)
         db.session.commit()
-        flash(f'User {user.username} created successfully with role {user.role}!', 'success')
-        return redirect(url_for('auth.login')) # Or to a user list page if you create one
+        flash(f'User "{user.username}" has been created successfully with role "{user.role}".', 'success')
+        return redirect(url_for('auth.list_users'))
     return render_template('auth/create_user.html', title='Create New User', form=form)
 
 
@@ -56,6 +56,24 @@ def create_user():
 def list_users():
     users = User.query.order_by(User.username).all()
     return render_template('auth/list_users.html', title='Users', users=users)
+
+
+@bp.route('/user/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def edit_user(user_id):
+    user = User.query.get_or_404(user_id)
+    form = UserEditForm(original_username=user.username)
+    if form.validate_on_submit():
+        user.username = form.username.data
+        user.role = form.role.data
+        db.session.commit()
+        flash(f'User "{user.username}" has been updated.', 'success')
+        return redirect(url_for('auth.list_users'))
+    elif request.method == 'GET':
+        form.username.data = user.username
+        form.role.data = user.role
+    return render_template('auth/edit_user.html', title='Edit User', form=form)
 
 
 @bp.route('/reset_password', methods=['GET', 'POST'])

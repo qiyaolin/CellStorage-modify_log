@@ -1,12 +1,140 @@
 {% extends "base.html" %}
+
 {% block content %}
-    <h1>Welcome to the Cell Storage App Dashboard, {{ current_user.username }}!</h1>
-    <p>This is your main dashboard.</p>
-    <ul>
+<div class="container-fluid">
+    <!-- Welcome Banner -->
+    <div class="card text-white bg-primary mb-4 shadow">
+        <div class="card-body">
+            <h1 class="card-title">Welcome, {{ current_user.username }}!</h1>
+            <p class="card-text">
+                This is your central dashboard for managing the cell storage inventory. 
+                There are currently <strong>{{ vial_count }}</strong> cryovials in the system.
+            </p>
+        </div>
+    </div>
+
+    {% if vial_count == 0 %}
+    <!-- 新系统引导 -->
+    <div class="alert alert-info" role="alert">
+        <h4 class="alert-heading">🎉 Welcome to your Cell Storage System!</h4>
+        <p>It looks like this is a fresh installation. Here's how to get started:</p>
+        <ol>
+            {% if current_user.is_admin %}
+            <li><strong>Set up Storage Locations:</strong> <a href="{{ url_for('main.locations_overview') }}" class="alert-link">Define your freezer towers, drawers, and boxes</a></li>
+            <li><strong>Create Cell Lines:</strong> <a href="{{ url_for('main.list_cell_lines') }}" class="alert-link">Add the cell lines you work with</a></li>
+            <li><strong>Add Your First Batch:</strong> <a href="{{ url_for('main.add_cryovial') }}" class="alert-link">Create your first batch of cryovials</a></li>
+            {% else %}
+            <li><strong>Explore the Inventory:</strong> <a href="{{ url_for('main.cryovial_inventory') }}" class="alert-link">Browse existing cryovials</a></li>
+            <li><strong>View Summary:</strong> <a href="{{ url_for('main.inventory_summary') }}" class="alert-link">See inventory statistics</a></li>
+            <li><strong>Need to add data?</strong> Contact your administrator to get started</li>
+            {% endif %}
+        </ol>
         {% if current_user.is_admin %}
-        <li><a href="{{ url_for('main.list_cell_lines') }}">Manage Cell Lines</a></li>
-        <li><a href="{{ url_for('main.locations_overview') }}">Manage Freezer Locations</a></li>
+        <hr>
+        <p class="mb-0">💡 <strong>Tip:</strong> Start by setting up at least one Tower → Drawer → Box before adding cryovials.</p>
         {% endif %}
-        <li><a href="{{ url_for('main.cryovial_inventory') }}">View CryoVial Inventory</a></li>
-    </ul>
+    </div>
+    {% elif vial_count < 10 %}
+    <!-- 少量数据时的提示 -->
+    <div class="alert alert-success" role="alert">
+        <h4 class="alert-heading">🚀 Great start!</h4>
+        <p>You have {{ vial_count }} cryovials in the system. Consider:</p>
+        <ul class="mb-0">
+            {% if current_user.is_admin %}
+            <li><a href="{{ url_for('main.add_cryovial') }}" class="alert-link">Adding more cryovials</a></li>
+            <li><a href="{{ url_for('main.import_csv') }}" class="alert-link">Importing data from a spreadsheet</a></li>
+            {% endif %}
+            <li><a href="{{ url_for('main.cryovial_inventory') }}" class="alert-link">Exploring the inventory features</a></li>
+        </ul>
+    </div>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <h2 class="mb-3">Quick Actions</h2>
+    <div class="row row-cols-1 row-cols-md-3 g-4">
+        
+        <!-- 库存浏览 - 所有用户可见 -->
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">📋 CryoVial Inventory</h5>
+                    <p class="card-text">Search, view, and manage the cryovial inventory with advanced filters.</p>
+                    <div class="mt-auto">
+                        <a href="{{ url_for('main.cryovial_inventory') }}" class="btn btn-primary">View Inventory</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 库存摘要 - 所有用户可见 -->
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">📊 Inventory Summary</h5>
+                    <p class="card-text">View statistics and export data for analysis.</p>
+                    <div class="mt-auto">
+                        <a href="{{ url_for('main.inventory_summary') }}" class="btn btn-outline-primary">View Summary</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        {% if current_user.is_admin %}
+        <!-- 管理员功能 -->
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">🧪 Manage Cell Lines</h5>
+                    <p class="card-text">Add, edit, or view existing cell line information.</p>
+                    <div class="mt-auto">
+                        <a href="{{ url_for('main.list_cell_lines') }}" class="btn btn-outline-primary">Go to Cell Lines</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">🏢 Manage Freezer Locations</h5>
+                    <p class="card-text">Define and organize towers, drawers, and boxes.</p>
+                    <div class="mt-auto">
+                        <a href="{{ url_for('main.locations_overview') }}" class="btn btn-outline-primary">Go to Locations</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body d-flex flex-column">
+                    <h5 class="card-title">➕ Add CryoVials</h5>
+                    <p class="card-text">Create new batches and add cryovials to the inventory.</p>
+                    <div class="mt-auto">
+                        <a href="{{ url_for('main.add_cryovial') }}" class="btn btn-success">Add Vials</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    {% if current_user.is_admin and vial_count > 50 %}
+    <!-- 系统维护提醒 -->
+    <div class="mt-4">
+        <div class="card border-warning">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">🔧 System Maintenance</h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">Your system has {{ vial_count }} cryovials. Consider these maintenance tasks:</p>
+                <div class="btn-group" role="group">
+                    <a href="{{ url_for('main.backup_database') }}" class="btn btn-sm btn-outline-warning">Backup Data</a>
+                    <a href="{{ url_for('main.audit_logs') }}" class="btn btn-sm btn-outline-warning">Review Logs</a>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
 {% endblock %}

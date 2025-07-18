@@ -6,49 +6,419 @@ body {
     margin: 0 auto 20px auto;
 }
 
+/* Global button styling - rounded corners */
+.btn {
+    border-radius: 0.5rem !important;
+}
+
+/* Form controls rounded corners */
+.form-control, .form-select {
+    border-radius: 0.5rem !important;
+}
+
 .box-grid td a {
     text-decoration: none !important;
     color: inherit;
 }
 
+/* Custom styles for the box grid visualization */
 .box-grid {
     border-collapse: collapse;
-    table-layout: fixed;
+    border: 1px solid #dee2e6;
 }
 
-.box-grid td {
-    text-decoration: none;
-    border: 2px solid #ccc;
-    width: 40px;
-    height: 40px;
+.box-cell {
+    width: 35px;
+    height: 35px;
+    border: 1px solid #dee2e6;
     text-align: center;
     vertical-align: middle;
-    font-size: 20px;
-    overflow: hidden;
+    font-size: 0.75rem;
+    font-weight: bold;
+    cursor: default;
+    transition: background-color 0.2s ease-in-out;
 }
 
+.box-cell:hover {
+    background-color: #e9ecef;
+}
 
-.box-grid td.empty {
-    background-color: #fff;
+.box-cell a {
+    display: block;
+    width: 100%;
+    height: 100%;
+    line-height: 33px;
+    text-decoration: none;
+    color: #212529;
 }
-.box-grid td.status-available {
-    background-color: #d0e8f2;
+
+.box-cell a.vial-link {
+    color: #fff;
 }
-.box-grid td.status-used {
-    background-color: #fce694;
+
+.box-cell a.add-link {
+    font-size: 1.2rem;
+    color: #6c757d;
 }
-.box-grid td.status-depleted {
-    background-color: #ffb3b3;
+
+.box-cell a.add-link:hover {
+    color: #212529;
+    background-color: #ced4da;
 }
-.box-grid td.status-discarded {
-    background-color: #e0e0e0;
+
+/* Status-specific styles */
+.status-empty {
+    background-color: #f8f9fa; /* Very light grey */
+}
+
+.status-available {
+    background-color: #198754; /* Green */
+    color: #fff;
+}
+
+.status-used {
+    background-color: #ffc107; /* Yellow */
+    color: #000;
+}
+
+.status-used a.vial-link {
+    color: #000;
+}
+
+.status-depleted,
+.status-discarded {
+    background-color: #dc3545; /* Red */
+    color: #fff;
+}
+
+.status-reserved {
+    background-color: #0dcaf0; /* Cyan */
+    color: #000;
+}
+
+.status-reserved a.vial-link {
+    color: #000;
 }
 
 /* Highlight colors for selected vials by batch */
-.batch-color-0 { background-color: #ff9999 !important; }
-.batch-color-1 { background-color: #99ff99 !important; }
-.batch-color-2 { background-color: #9999ff !important; }
-.batch-color-3 { background-color: #ffcc99 !important; }
-.batch-color-4 { background-color: #cc99ff !important; }
-.batch-color-5 { background-color: #66cccc !important; }
-.batch-color-6 { background-color: #cccc66 !important; }
+.batch-color-0 { background-color: #e3f2fd !important; color: #1976d2 !important; } /* Light Blue */
+.batch-color-1 { background-color: #f3e5f5 !important; color: #7b1fa2 !important; } /* Light Purple */
+.batch-color-2 { background-color: #e8f5e8 !important; color: #388e3c !important; } /* Light Green */
+.batch-color-3 { background-color: #fff3e0 !important; color: #f57c00 !important; } /* Light Orange */
+.batch-color-4 { background-color: #fce4ec !important; color: #c2185b !important; } /* Light Pink */
+.batch-color-5 { background-color: #e0f2f1 !important; color: #00796b !important; } /* Light Teal */
+.batch-color-6 { background-color: #f9fbe7 !important; color: #689f38 !important; } /* Light Lime */
+.batch-color-7 { background-color: #fff8e1 !important; color: #ffa000 !important; } /* Light Amber */
+.batch-color-8 { background-color: #e1f5fe !important; color: #0288d1 !important; } /* Light Cyan */
+.batch-color-9 { background-color: #f8bbd9 !important; color: #ad1457 !important; } /* Light Rose */
+.batch-color-10 { background-color: #e8eaf6 !important; color: #5e35b1 !important; } /* Light Indigo */
+.batch-color-11 { background-color: #efebe9 !important; color: #5d4037 !important; } /* Light Brown */
+
+/* Browse by location batch colors - more vibrant but still readable */
+.batch-browse-0 { background-color: #42a5f5 !important; color: white !important; } /* Blue */
+.batch-browse-1 { background-color: #ab47bc !important; color: white !important; } /* Purple */
+.batch-browse-2 { background-color: #66bb6a !important; color: white !important; } /* Green */
+.batch-browse-3 { background-color: #ff7043 !important; color: white !important; } /* Orange */
+.batch-browse-4 { background-color: #ec407a !important; color: white !important; } /* Pink */
+.batch-browse-5 { background-color: #26a69a !important; color: white !important; } /* Teal */
+.batch-browse-6 { background-color: #9ccc65 !important; color: white !important; } /* Lime */
+.batch-browse-7 { background-color: #ffb74d !important; color: white !important; } /* Amber */
+.batch-browse-8 { background-color: #29b6f6 !important; color: white !important; } /* Cyan */
+.batch-browse-9 { background-color: #f06292 !important; color: white !important; } /* Rose */
+.batch-browse-10 { background-color: #7e57c2 !important; color: white !important; } /* Indigo */
+.batch-browse-11 { background-color: #8d6e63 !important; color: white !important; } /* Brown */
+
+/* Batch Delete Mode Styles */
+.batch-delete-mode {
+    transition: all 0.2s ease;
+}
+
+.batch-delete-mode:hover {
+    transform: scale(1.02);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.selected-for-delete {
+    border: 3px solid #dc3545 !important;
+    box-shadow: 0 0 10px rgba(220, 53, 69, 0.5) !important;
+    transform: scale(0.95);
+}
+
+.batch-delete-checkbox {
+    width: 16px;
+    height: 16px;
+    background-color: white;
+    border: 2px solid #333;
+    border-radius: 3px;
+    cursor: pointer;
+}
+
+.batch-delete-checkbox:checked {
+    background-color: #dc3545;
+    border-color: #dc3545;
+}
+
+.batch-delete-checkbox:checked::after {
+    content: "✓";
+    color: white;
+    display: block;
+    text-align: center;
+    line-height: 12px;
+    font-size: 10px;
+    font-weight: bold;
+}
+
+.vial-cell:hover .batch-delete-checkbox {
+    transform: scale(1.1);
+    transition: transform 0.2s ease;
+}
+
+/* Search Results table height limitation */
+.search-results-table-container {
+    max-height: 500px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+}
+
+.search-results-table-container .table {
+    margin-bottom: 0;
+}
+
+/* Sticky table header */
+.search-results-table-container thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa;
+    z-index: 10;
+    border-bottom: 2px solid #dee2e6;
+}
+
+/* Improve table row hover in scrollable container */
+.search-results-table-container .table-hover tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.075);
+}
+
+/* Search results header with record count */
+.search-results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.search-results-count {
+    font-size: 0.875rem;
+    color: #6c757d;
+}
+
+/* 移动设备响应式改进 */
+@media (max-width: 768px) {
+    /* 移动设备上的导航改进 */
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+    
+    /* 卡片和容器的间距调整 */
+    .container {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+    
+    .card {
+        margin-bottom: 15px;
+    }
+    
+    /* 按钮组在移动设备上的改进 */
+    .btn-group {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .btn-group .btn {
+        margin-bottom: 5px;
+        border-radius: 0.375rem !important;
+    }
+    
+    /* 表格在移动设备上的改进 */
+    .table-responsive {
+        border: none;
+    }
+    
+    .table {
+        font-size: 0.875rem;
+    }
+    
+    .table th, .table td {
+        padding: 0.375rem 0.25rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 100px;
+    }
+    
+    /* 搜索表单在移动设备上的改进 */
+    .row.g-2 > .col-md {
+        margin-bottom: 10px;
+    }
+    
+    /* 位置网格在移动设备上的改进 */
+    .box-grid {
+        font-size: 10px;
+    }
+    
+    .box-grid td {
+        width: 30px;
+        height: 25px;
+        padding: 1px;
+    }
+    
+    /* 模态框在移动设备上的改进 */
+    .modal-dialog {
+        margin: 10px;
+        max-width: calc(100% - 20px);
+    }
+    
+    .modal-body .row {
+        margin: 0;
+    }
+    
+    .modal-body .col-sm-4,
+    .modal-body .col-sm-8 {
+        padding: 0.25rem;
+    }
+    
+    /* 快速操作卡片在移动设备上的堆叠 */
+    .row-cols-md-3 > .col {
+        margin-bottom: 15px;
+    }
+    
+    /* 表单控件在移动设备上的改进 */
+    .form-control, .form-select {
+        font-size: 16px; /* 防止iOS缩放 */
+    }
+    
+    /* 分页在移动设备上的改进 */
+    .pagination {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+    
+    .pagination .page-item {
+        margin: 2px;
+    }
+    
+    /* 长文本在移动设备上的处理 */
+    .text-truncate-mobile {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 150px;
+    }
+    
+    /* 隐藏在移动设备上不必要的列 */
+    .d-none-mobile {
+        display: none !important;
+    }
+    
+    /* 工具栏按钮在移动设备上的改进 */
+    .btn-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .btn-toolbar .btn {
+        margin-bottom: 5px;
+        width: 100%;
+    }
+}
+
+@media (max-width: 576px) {
+    /* 超小屏幕设备的额外优化 */
+    h1 {
+        font-size: 1.5rem;
+    }
+    
+    h2 {
+        font-size: 1.25rem;
+    }
+    
+    .card-title {
+        font-size: 1.1rem;
+    }
+    
+    /* 更紧凑的表格 */
+    .table-sm th,
+    .table-sm td {
+        padding: 0.25rem 0.125rem;
+        font-size: 0.75rem;
+    }
+    
+    /* 简化的分页 */
+    .pagination-sm .page-link {
+        padding: 0.25rem 0.375rem;
+        font-size: 0.75rem;
+    }
+    
+    /* 位置网格进一步压缩 */
+    .box-grid td {
+        width: 25px;
+        height: 20px;
+        font-size: 8px;
+    }
+}
+
+/* 触摸友好的交互元素 */
+@media (hover: none) and (pointer: coarse) {
+    /* 触摸设备上的链接和按钮改进 */
+    .btn {
+        min-height: 44px;
+        padding: 8px 12px;
+    }
+    
+    .btn-sm {
+        min-height: 36px;
+        padding: 6px 10px;
+    }
+    
+    /* 可点击区域增大 */
+    .box-cell {
+        min-height: 35px;
+        min-width: 35px;
+    }
+    
+    /* 导航链接触摸友好 */
+    .nav-link {
+        padding: 12px 16px;
+    }
+}
+
+/* 特定页面的移动优化 */
+
+/* 库存页面移动优化 */
+.inventory-mobile-layout {
+    display: flex;
+    flex-direction: column;
+}
+
+@media (max-width: 768px) {
+    .search-results-table-container {
+        max-height: 300px;
+    }
+    
+    /* 隐藏移动设备上的次要列 */
+    .inventory-table .d-none-mobile {
+        display: none !important;
+    }
+}
+
+/* 位置可视化的移动优化 */
+@media (max-width: 768px) {
+    .d-flex.flex-wrap {
+        flex-direction: column;
+    }
+    
+    .d-flex.flex-wrap > .m-2 {
+        margin: 5px 0 !important;
+        width: 100%;
+    }
+}

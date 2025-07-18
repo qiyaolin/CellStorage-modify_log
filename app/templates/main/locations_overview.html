@@ -1,54 +1,67 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>Freezer Locations Overview</h1>
-    <p>
-        <a href="{{ url_for('main.add_tower') }}" class="button">Add New Tower</a> |
-        <a href="{{ url_for('main.add_drawer') }}" class="button">Add New Drawer</a> |
-        <a href="{{ url_for('main.add_box') }}" class="button">Add New Box</a>
-    </p>
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Freezer Locations</h1>
+    <a href="{{ url_for('main.add_tower') }}" class="btn btn-primary">Add New Tower</a>
+  </div>
 
-    <h2>Towers</h2>
-    {% if towers %}
-        <ul>
-            {% for tower in towers %}
-                <li>
-                    <strong>{{ tower.name }}</strong> ({{ tower.freezer_name if tower.freezer_name else 'N/A' }})
-                    - <a href="{{ url_for('main.edit_tower', tower_id=tower.id) }}">Edit Tower</a>
-                    <p>{{ tower.description if tower.description }}</p>
-                    {% if tower.drawers.all() %}
-                        <ul>
-                            {% for drawer in tower.drawers.order_by('name') %}
-                                <li>
-                                    <em>{{ drawer.name }}</em>
-                                    - <a href="{{ url_for('main.edit_drawer', drawer_id=drawer.id) }}">Edit Drawer</a>
-                                    {% if drawer.boxes.all() %}
-                                        <ul>
-                                            {% for box in drawer.boxes.order_by('name') %}
-                                                <li>
-                                                    {{ box.name }} ({{ box.rows }}x{{ box.columns }})
-                                                    - <a href="{{ url_for('main.edit_box', box_id=box.id) }}">Edit Box</a>
-                                                    {% if box.description %}<small> - {{ box.description }}</small>{% endif %}
-                                                </li>
-                                            {% else %}
-                                                <li>No boxes in this drawer.</li>
-                                            {% endfor %}
-                                        </ul>
-                                    {% else %}
-                                        <p><small>No boxes yet in this drawer. <a href="{{ url_for('main.add_box', drawer_id=drawer.id) }}">Add one?</a></small></p>
-                                    {% endif %}
-                                </li>
-                            {% else %}
-                                 <li>No drawers in this tower.</li>
-                            {% endfor %}
+  {% if towers %}
+    <div class="accordion" id="towersAccordion">
+      {% for tower in towers %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="heading{{ tower.id }}">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ tower.id }}" aria-expanded="false" aria-controls="collapse{{ tower.id }}">
+              <strong>Tower: {{ tower.name }}</strong> ({{ tower.freezer_name }})
+            </button>
+          </h2>
+          <div id="collapse{{ tower.id }}" class="accordion-collapse collapse" aria-labelledby="heading{{ tower.id }}" data-bs-parent="#towersAccordion">
+            <div class="accordion-body">
+              <div class="d-flex justify-content-end mb-2">
+                <a href="{{ url_for('main.edit_tower', tower_id=tower.id) }}" class="btn btn-sm btn-outline-secondary me-2">Edit Tower</a>
+                <a href="{{ url_for('main.add_drawer', tower_id=tower.id) }}" class="btn btn-sm btn-primary">Add Drawer</a>
+              </div>
+              {% if tower.drawers.all() %}
+                <ul class="list-group">
+                  {% for drawer in tower.drawers.order_by('name') %}
+                    <li class="list-group-item">
+                      <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                          <strong>Drawer: {{ drawer.name }}</strong>
+                          <span class="badge bg-secondary rounded-pill ms-2">{{ drawer.boxes.count() }} Boxes</span>
+                        </div>
+                        <div>
+                          <a href="{{ url_for('main.edit_drawer', drawer_id=drawer.id) }}" class="btn btn-sm btn-outline-secondary me-2">Edit Drawer</a>
+                          <a href="{{ url_for('main.add_box', drawer_id=drawer.id) }}" class="btn btn-sm btn-primary">Add Box</a>
+                        </div>
+                      </div>
+                      {% if drawer.boxes.all() %}
+                        <ul class="list-unstyled mt-2 ms-4">
+                          {% for box in drawer.boxes.order_by('name') %}
+                            <li>
+                              {{ box.name }} ({{ box.rows }}x{{ box.columns }})
+                              <a href="{{ url_for('main.edit_box', box_id=box.id) }}" class="ms-2 text-muted"><small>Edit</small></a>
+                            </li>
+                          {% endfor %}
                         </ul>
-                    {% else %}
-                        <p><small>No drawers yet in this tower. <a href="{{ url_for('main.add_drawer', tower_id=tower.id) }}">Add one?</a></small></p>
-                    {% endif %}
-                </li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <p>No towers defined yet. <a href="{{ url_for('main.add_tower') }}">Start by adding a tower.</a></p>
-    {% endif %}
+                      {% else %}
+                        <p class="text-muted mt-2 ms-4">No boxes in this drawer.</p>
+                      {% endif %}
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <p class="text-muted">No drawers in this tower.</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="text-center">
+      <p>No freezer towers found.</p>
+      <a href="{{ url_for('main.add_tower') }}" class="btn btn-success">Create Your First Tower</a>
+    </div>
+  {% endif %}
 {% endblock %}

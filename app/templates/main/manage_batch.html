@@ -1,40 +1,139 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Manage Batch {{ batch.id }}</h1>
-<form method="post">
-  {{ form.hidden_tag() }}
-  <div class="mb-3">{{ form.batch_name.label }} {{ form.batch_name(class="form-control") }}</div>
-  <div class="mb-3">{{ form.cell_line_id.label }} {{ form.cell_line_id(class="form-select") }}</div>
-  <div class="mb-3">{{ form.passage_number.label }} {{ form.passage_number(class="form-control") }}</div>
-  <div class="mb-3">{{ form.date_frozen.label }} {{ form.date_frozen(class="form-control") }}</div>
-  <div class="mb-3">{{ form.volume_ml.label }} {{ form.volume_ml(class="form-control") }}</div>
-  <div class="mb-3">{{ form.concentration.label }} {{ form.concentration(class="form-control") }}</div>
-  <div class="mb-3">{{ form.fluorescence_tag.label }} {{ form.fluorescence_tag(class="form-control") }}</div>
-  <div class="mb-3">{{ form.resistance.label }}<br>{% for sub in form.resistance %}<label>{{ sub() }} {{ sub.label.text }}</label><br>{% endfor %}</div>
-  <div class="mb-3">{{ form.parental_cell_line.label }} {{ form.parental_cell_line(class="form-control") }}</div>
-  <div class="mb-3">{{ form.notes.label }} {{ form.notes(class="form-control", rows=3) }}</div>
-  <button type="submit" name="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
-  <button type="submit" name="delete_batch" class="btn btn-danger" onclick="return confirm('Delete entire batch?');">Delete Batch</button>
-</form>
-<h2 class="mt-4">Vials</h2>
-{% for box in boxes.values() %}
-  <div class="mb-4">
-    <h5>{{ box.box.drawer_info.tower_info.name }} / {{ box.box.drawer_info.name }} / {{ box.box.name }}</h5>
-    <table class="box-grid">
-      {% for r in range(1, box.rows + 1) %}
-      <tr>
-        {% for c in range(1, box.columns + 1) %}
-          {% set vial = box.cells.get((r,c)) %}
-          {% if vial %}
-            <td class="status-{{ vial.status.lower() }}"><a href="{{ url_for('main.edit_cryovial', vial_id=vial.id) }}" title="Edit vial">{{ vial.unique_vial_id_tag }}</a></td>
-          {% else %}
-            <td class="empty">&nbsp;</td>
-          {% endif %}
-        {% endfor %}
-      </tr>
-      {% endfor %}
-    </table>
-  </div>
-{% endfor %}
-<p><a href="{{ url_for('main.manage_batch_lookup') }}">Back</a></p>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Manage Batch: {{ batch.name }} <span class="text-muted fs-5">(ID: {{ batch.id }})</span></h1>
+    <a href="{{ url_for('main.manage_batch_lookup') }}" class="btn btn-secondary">Back to Lookup</a>
+</div>
+
+<div class="row">
+    <!-- Edit Form Column -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Edit Batch Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="post">
+                  {{ form.hidden_tag() }}
+                  <div class="row g-3">
+                    <div class="col-12">
+                      <div class="form-floating">
+                        {{ form.batch_name(class="form-control" + (" is-invalid" if form.batch_name.errors else ""), placeholder="Batch Name") }}
+                        {{ form.batch_name.label }}
+                        {% if form.batch_name.errors %}<div class="invalid-feedback">{{ form.batch_name.errors[0] }}</div>{% endif %}
+                      </div>
+                    </div>
+                    <div class="col-12">
+                      <div class="form-floating">
+                        {{ form.cell_line_id(class="form-select" + (" is-invalid" if form.cell_line_id.errors else "")) }}
+                        {{ form.cell_line_id.label }}
+                        {% if form.cell_line_id.errors %}<div class="invalid-feedback">{{ form.cell_line_id.errors[0] }}</div>{% endif %}
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="form-floating">
+                        {{ form.passage_number(class="form-control" + (" is-invalid" if form.passage_number.errors else ""), placeholder="Passage Number") }}
+                        {{ form.passage_number.label }}
+                        {% if form.passage_number.errors %}<div class="invalid-feedback">{{ form.passage_number.errors[0] }}</div>{% endif %}
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="form-floating">
+                        {{ form.date_frozen(class="form-control" + (" is-invalid" if form.date_frozen.errors else ""), placeholder="Date Frozen") }}
+                        {{ form.date_frozen.label }}
+                        {% if form.date_frozen.errors %}<div class="invalid-feedback">{{ form.date_frozen.errors[0] }}</div>{% endif %}
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="form-floating">
+                        {{ form.volume_ml(class="form-control" + (" is-invalid" if form.volume_ml.errors else ""), placeholder="Volume (uL)") }}
+                        {{ form.volume_ml.label }}
+                        {% if form.volume_ml.errors %}<div class="invalid-feedback">{{ form.volume_ml.errors[0] }}</div>{% endif %}
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="form-floating">
+                        {{ form.concentration(class="form-control" + (" is-invalid" if form.concentration.errors else ""), placeholder="Concentration") }}
+                        {{ form.concentration.label }}
+                        {% if form.concentration.errors %}<div class="invalid-feedback">{{ form.concentration.errors[0] }}</div>{% endif %}
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="form-floating">
+                        {{ form.fluorescence_tag(class="form-control" + (" is-invalid" if form.fluorescence_tag.errors else ""), placeholder="Fluorescence Tag") }}
+                        {{ form.fluorescence_tag.label }}
+                        {% if form.fluorescence_tag.errors %}<div class="invalid-feedback">{{ form.fluorescence_tag.errors[0] }}</div>{% endif %}
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <div class="form-floating">
+                        {{ form.parental_cell_line(class="form-control" + (" is-invalid" if form.parental_cell_line.errors else ""), placeholder="Parental Cell Line") }}
+                        {{ form.parental_cell_line.label }}
+                        {% if form.parental_cell_line.errors %}<div class="invalid-feedback">{{ form.parental_cell_line.errors[0] }}</div>{% endif %}
+                      </div>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label">{{ form.resistance.label }}</label>
+                      <div>
+                        {% for sub in form.resistance %}
+                        <div class="form-check form-check-inline">
+                          {{ sub(class="form-check-input" + (" is-invalid" if form.resistance.errors else "")) }}
+                          {{ sub.label(class="form-check-label") }}
+                        </div>
+                        {% endfor %}
+                      </div>
+                      {% if form.resistance.errors %}<div class="invalid-feedback d-block">{{ form.resistance.errors[0] }}</div>{% endif %}
+                    </div>
+                    <div class="col-12">
+                      <div class="form-floating">
+                        {{ form.notes(class="form-control", rows=3, placeholder="Notes", style="height: 100px;") }}
+                        {{ form.notes.label }}
+                      </div>
+                    </div>
+                  </div>
+                  <div class="d-flex justify-content-end mt-4">
+                    <button type="submit" name="delete_batch" class="btn btn-danger me-2" onclick="return confirm('Are you sure you want to delete this entire batch and all its vials? This action cannot be undone.');">Delete Batch</button>
+                    <button type="submit" name="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+                  </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- Vials Visualization Column -->
+    <div class="col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">Vials in this Batch</h5>
+            </div>
+            <div class="card-body">
+                {% for box in boxes.values() %}
+                  <div class="mb-4">
+                    <h6>{{ box.box.drawer_info.tower_info.name }} / {{ box.box.drawer_info.name }} / {{ box.box.name }}</h6>
+                    <div class="table-responsive">
+                        <table class="box-grid">
+                          {% for r in range(1, box.rows + 1) %}
+                          <tr>
+                            {% for c in range(1, box.columns + 1) %}
+                              {% set vial = box.cells.get((r,c)) %}
+                              <td class="box-cell status-{{ vial.status.lower() if vial else 'empty' }}" 
+                                  title="Vial: {{ vial.unique_vial_id_tag if vial else 'N/A' }}\nStatus: {{ vial.status if vial else 'Empty' }}">
+                                {% if vial %}
+                                  <a href="{{ url_for('main.edit_cryovial', vial_id=vial.id, next=request.url) }}" class="vial-link">{{ vial.unique_vial_id_tag }}</a>
+                                {% else %}
+                                  &nbsp;
+                                {% endif %}
+                              </td>
+                            {% endfor %}
+                          </tr>
+                          {% endfor %}
+                        </table>
+                    </div>
+                  </div>
+                {% else %}
+                  <p class="text-muted">No vials from this batch are currently placed in any box.</p>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}

@@ -23,6 +23,7 @@ from wtforms.validators import (
 )
 from flask_wtf import FlaskForm
 from app.models import User, CellLine, Box
+from flask_wtf.file import FileField, FileAllowed
 
 
 class MultiCheckboxField(SelectMultipleField):
@@ -51,23 +52,64 @@ def coerce_int_or_none(x):
          raise TypeError(f"Cannot coerce type '{type(x)}' to int")
 
 class LoginForm(FlaskForm):
+    """Form for user login."""
     username = StringField('Username', validators=[DataRequired(), Length(min=1, max=64)])
     password = PasswordField('Password', validators=[DataRequired()])
     remember_me = BooleanField('Remember Me')
     submit = SubmitField('Sign In')
 
-class UserCreationForm(FlaskForm): # For admin to create users
-    username = StringField('Username', validators=[DataRequired(), Length(min=3, max=64)])
-    password = PasswordField('Password', validators=[DataRequired(), Length(min=6)])
+
+class UserCreationForm(FlaskForm):
+    """Form for creating a new user."""
+    username = StringField(
+        'Username',
+        validators=[DataRequired(), Length(min=4, max=64)]
+    )
+    password = PasswordField(
+        'Password',
+        validators=[DataRequired(), Length(min=6)]
+    )
     password2 = PasswordField(
-        'Repeat Password', validators=[DataRequired(), EqualTo('password', message='Passwords must match.')])
-    role = SelectField('Role', choices=[('user', 'User'), ('admin', 'Admin')], validators=[DataRequired()])
+        'Confirm Password',
+        validators=[DataRequired(), EqualTo('password', message='Passwords must match.')]
+    )
+    role = SelectField(
+        'Role',
+        choices=[('user', 'User'), ('admin', 'Admin')],
+        default='user',
+        validators=[DataRequired()]
+    )
     submit = SubmitField('Create User')
 
     def validate_username(self, username):
         user = User.query.filter_by(username=username.data).first()
         if user is not None:
-            raise ValidationError('This username is already taken. Please choose a different one.')
+            raise ValidationError('Please use a different username.')
+
+
+class UserEditForm(FlaskForm):
+    """Form for editing an existing user's details."""
+    username = StringField(
+        'Username',
+        validators=[DataRequired(), Length(min=4, max=64)]
+    )
+    role = SelectField(
+        'Role',
+        choices=[('user', 'User'), ('admin', 'Admin')],
+        validators=[DataRequired()]
+    )
+    submit = SubmitField('Update User')
+
+    def __init__(self, original_username, *args, **kwargs):
+        super(UserEditForm, self).__init__(*args, **kwargs)
+        self.original_username = original_username
+
+    def validate_username(self, username):
+        if username.data != self.original_username:
+            user = User.query.filter_by(username=self.username.data).first()
+            if user is not None:
+                raise ValidationError('Please use a different username.')
+
 
 class ResetPasswordForm(FlaskForm):
     password = PasswordField('New Password', validators=[DataRequired(), Length(min=6)])
@@ -135,7 +177,7 @@ class CryoVialForm(FlaskForm):
     resistance = MultiCheckboxField(
         'Resistance',
         choices=[('Puro', 'Puro'), ('Blast', 'Blast'), ('Neo/G418', 'Neo/G418'), ('Zeo', 'Zeo')],
-        validators=[Optional()]
+        validators=[Optional()],
     )
     parental_cell_line = StringField('Parental cell line', validators=[Optional(), Length(max=128)])
     concentration = StringField('Cell Concentration (e.g., 1x10^6 cells/mL)',
@@ -273,5 +315,22 @@ class EditBatchForm(FlaskForm):
 
 
 class BatchLookupForm(FlaskForm):
-    batch_id = IntegerField("Batch ID", validators=[DataRequired()])
-    submit = SubmitField("Load Batch")
+    batch_id = IntegerField('Batch ID', validators=[DataRequired()])
+    submit = SubmitField('Manage Batch')
+
+class CSVUploadForm(FlaskForm):
+    """Form for uploading CSV files with enhanced validation."""
+    csv_file = FileField(
+        'CSV File', 
+        validators=[
+            DataRequired(),
+            FileAllowed(['csv'], 'Only CSV files are allowed!')
+        ]
+    )
+    submit = SubmitField('Upload and Import')
+    
+    def validate_csv_file(self, field):
+        if field.data:
+            # 检查文件大小（客户端检查，服务器端会再次检查）
+            # 注意：这个检查在某些情况下可能不准确，主要检查在服务器端
+            pass

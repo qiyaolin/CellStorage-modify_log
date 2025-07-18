@@ -1,44 +1,181 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Inventory Logs</h1>
-<form method="get" class="row g-2 mb-3">
-  <div class="col-md-3">
-    <select name="user" class="form-select">
-      <option value="">All Users</option>
-      {% for u in all_users %}
-        <option value="{{ u.username }}" {% if search_user==u.username %}selected{% endif %}>{{ u.username }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="col-md-2">
-    <input type="date" name="start" class="form-control" value="{{ start }}">
-  </div>
-  <div class="col-md-2">
-    <input type="date" name="end" class="form-control" value="{{ end }}">
-  </div>
-  <div class="col-md-3">
-    <input type="text" name="keyword" class="form-control" placeholder="Keyword" value="{{ keyword }}">
-  </div>
-  <div class="col-auto">
-    <button type="submit" class="btn btn-secondary">Search</button>
-  </div>
-</form>
-<table class="table table-bordered">
-<thead>
-  <tr><th>Time</th><th>User</th><th>Action</th><th>Batch Name(Vial ID)</th><th>Batch ID(s)</th></tr>
-</thead>
-<tbody>
-{% for item in logs %}
-<tr>
-  <td>{{ item.log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
-  <td>{{ item.log.user_performing_action.username if item.log.user_performing_action else '' }}</td>
-  <td>{{ item.log.action }}</td>
-  <td>{{ item.display_vials|join(', ') }}</td>
-  <td>
-    {% if item.details.batch_id %}{{ item.details.batch_id }}{% elif item.details.batch_ids %}{{ item.details.batch_ids|join(', ') }}{% endif %}
-  </td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>Inventory Logs</h1>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">
+            <button class="btn btn-link text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="true" aria-controls="filterCollapse">
+                Filter Logs
+            </button>
+        </h5>
+    </div>
+    <div class="collapse show" id="filterCollapse">
+        <div class="card-body bg-light">
+            <form method="get" class="row g-3 align-items-end">
+              <div class="col-md-3">
+                <label for="user_select" class="form-label">User</label>
+                <select name="user" id="user_select" class="form-select">
+                  <option value="">All Users</option>
+                  {% for u in all_users %}
+                    <option value="{{ u.username }}" {% if search_user==u.username %}selected{% endif %}>{{ u.username }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div class="col-md-3">
+                  <label for="start_date" class="form-label">Start Date</label>
+                  <input type="date" name="start" id="start_date" class="form-control" value="{{ start }}">
+              </div>
+              <div class="col-md-3">
+                  <label for="end_date" class="form-label">End Date</label>
+                  <input type="date" name="end" id="end_date" class="form-control" value="{{ end }}">
+              </div>
+              <div class="col-md-3">
+                  <label for="keyword_search" class="form-label">Keyword</label>
+                  <input type="text" name="keyword" id="keyword_search" class="form-control" placeholder="e.g., 'Create', 'Vial'" value="{{ keyword }}">
+              </div>
+              <div class="col-12 text-end">
+                <a href="{{ url_for('main.audit_logs') }}" class="btn btn-secondary">Reset</a>
+                <button type="submit" class="btn btn-primary">Search</button>
+              </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover table-sm">
+                <thead class="table-light">
+                  <tr>
+                    <th>Time</th>
+                    <th>User</th>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>Details</th>
+                  </tr>
+                </thead>
+                <tbody>
+                {% for item in logs %}
+                <tr>
+                  <td class="text-nowrap">{{ item.log.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                  <td>{{ item.log.user_performing_action.username if item.log.user_performing_action else 'N/A' }}</td>
+                  <td>{{ item.log.action }}</td>
+                  <td class="text-nowrap">
+                    {% if item.log.target_type %}
+                        <strong>{{ item.log.target_type }} #{{ item.log.target_id }}</strong>
+                    {% else %}
+                        N/A
+                    {% endif %}
+                  </td>
+                  <td>
+                    {% if item.display_vials %}
+                        <strong>Vials:</strong> {{ item.display_vials|join(', ') }}<br>
+                    {% endif %}
+                    {% if item.details.batch_id %}
+                        <strong>Batch ID:</strong> {{ item.details.batch_id }}<br>
+                    {% elif item.details.batch_ids %}
+                        <strong>Batch IDs:</strong> {{ item.details.batch_ids|join(', ') }}<br>
+                    {% endif %}
+                    {% if item.details.changes %}
+                        <strong>Changes:</strong><br>
+                        <ul class="mb-0">
+                            {% for field, change in item.details.changes.items() %}
+                            <li>
+                                <strong>{{ field|title|replace('_', ' ') }}:</strong> 
+                                <span class="text-muted">{{ change.old or 'None' }}</span> 
+                                → 
+                                <span class="text-success">{{ change.new or 'None' }}</span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    {% endif %}
+                    {% if item.details.cell_line_name %}
+                        <strong>Cell Line:</strong> {{ item.details.cell_line_name }}<br>
+                    {% endif %}
+                    {% if item.details.vial_count %}
+                        <strong>Vial Count:</strong> {{ item.details.vial_count }}<br>
+                    {% endif %}
+                    {% if item.details.general_info %}
+                        <strong>Info:</strong> {{ item.details.general_info }}<br>
+                    {% endif %}
+                    {% if item.details.old_status and item.details.new_status %}
+                        <strong>Status Change:</strong> 
+                        <span class="badge bg-secondary">{{ item.details.old_status }}</span> 
+                        → 
+                        <span class="badge bg-primary">{{ item.details.new_status }}</span><br>
+                    {% endif %}
+                    {% if item.details.raw %}
+                        <details>
+                            <summary class="text-muted small">Raw Details</summary>
+                            <pre class="small">{{ item.details.raw }}</pre>
+                        </details>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="text-center p-4">No logs found matching your criteria.</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- 分页导航 -->
+        {% if pagination.pages > 1 %}
+        <div class="d-flex justify-content-between align-items-center mt-3">
+            <div class="text-muted">
+                Showing {{ pagination.per_page * (pagination.page - 1) + 1 }} to 
+                {{ pagination.per_page * (pagination.page - 1) + pagination.items|length }} 
+                of {{ pagination.total }} entries
+            </div>
+            <nav aria-label="Log pages">
+                <ul class="pagination pagination-sm mb-0">
+                    {% if pagination.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('main.audit_logs', page=pagination.prev_num, user=search_user, keyword=keyword, start=start, end=end) }}">Previous</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Previous</span>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page_num in pagination.iter_pages() %}
+                        {% if page_num %}
+                            {% if page_num != pagination.page %}
+                            <li class="page-item">
+                                <a class="page-link" href="{{ url_for('main.audit_logs', page=page_num, user=search_user, keyword=keyword, start=start, end=end) }}">{{ page_num }}</a>
+                            </li>
+                            {% else %}
+                            <li class="page-item active">
+                                <span class="page-link">{{ page_num }}</span>
+                            </li>
+                            {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">…</span>
+                        </li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if pagination.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('main.audit_logs', page=pagination.next_num, user=search_user, keyword=keyword, start=start, end=end) }}">Next</a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">Next</span>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

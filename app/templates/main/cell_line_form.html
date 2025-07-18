@@ -1,81 +1,98 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>{{ title }}</h1>
-    <form method="POST" action="{{ form_action }}" novalidate>
-        {{ form.hidden_tag() }} {# CSRF token #}
+<div class="row justify-content-center">
+  <div class="col-md-10 col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-center mb-4">{{ title }}</h2>
+        <form method="POST" action="{{ form_action }}" novalidate>
+          {{ form.hidden_tag() }}
+          {% if request.args.get('next') %}
+            <input type="hidden" name="next" value="{{ request.args.get('next') }}">
+          {% endif %}
 
-        <p>
-            {{ form.name.label }}<br>
-            {{ form.name(size=60) }}<br>
-            {% for error in form.name.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.source.label }}<br>
-            {{ form.source(size=60) }}<br>
-            {% for error in form.source.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.species.label }}<br>
-            {{ form.species(size=30) }}<br>
-            {% for error in form.species.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.original_passage.label }}<br>
-            {{ form.original_passage(size=30) }}<br>
-            {% for error in form.original_passage.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.culture_medium.label }}<br>
-            {{ form.culture_medium(size=60) }}<br>
-            {% for error in form.culture_medium.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.antibiotic_resistance.label }}<br>
-            {{ form.antibiotic_resistance(size=60) }}<br>
-            {% for error in form.antibiotic_resistance.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.growth_properties.label }}<br>
-            {{ form.growth_properties(rows=3, cols=58) }}<br>
-            {% for error in form.growth_properties.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.mycoplasma_status.label }}<br>
-            {{ form.mycoplasma_status(size=30) }}<br>
-            {% for error in form.mycoplasma_status.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.date_established.label }} (YYYY-MM-DD)<br>
-            {{ form.date_established() }}<br>
-            {% for error in form.date_established.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>
-            {{ form.notes.label }}<br>
-            {{ form.notes(rows=4, cols=58) }}<br>
-            {% for error in form.notes.errors %}
-            <span style="color: red;">[{{ error }}]</span><br>
-            {% endfor %}
-        </p>
-        <p>{{ form.submit() }}</p>
-    </form>
-    <p><a href="{{ url_for('main.list_cell_lines') }}">Back to Cell Line List</a></p>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="Name") }}
+                {{ form.name.label }}
+                {% if form.name.errors %}<div class="invalid-feedback">{{ form.name.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.source(class="form-control" + (" is-invalid" if form.source.errors else ""), placeholder="Source") }}
+                {{ form.source.label }}
+                {% if form.source.errors %}<div class="invalid-feedback">{{ form.source.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.species(class="form-control" + (" is-invalid" if form.species.errors else ""), placeholder="Species") }}
+                {{ form.species.label }}
+                {% if form.species.errors %}<div class="invalid-feedback">{{ form.species.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.original_passage(class="form-control" + (" is-invalid" if form.original_passage.errors else ""), placeholder="Original Passage") }}
+                {{ form.original_passage.label }}
+                {% if form.original_passage.errors %}<div class="invalid-feedback">{{ form.original_passage.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.culture_medium(class="form-control" + (" is-invalid" if form.culture_medium.errors else ""), placeholder="Culture Medium") }}
+                {{ form.culture_medium.label }}
+                {% if form.culture_medium.errors %}<div class="invalid-feedback">{{ form.culture_medium.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.antibiotic_resistance(class="form-control" + (" is-invalid" if form.antibiotic_resistance.errors else ""), placeholder="Antibiotic Resistance") }}
+                {{ form.antibiotic_resistance.label }}
+                {% if form.antibiotic_resistance.errors %}<div class="invalid-feedback">{{ form.antibiotic_resistance.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.mycoplasma_status(class="form-select" + (" is-invalid" if form.mycoplasma_status.errors else ""), placeholder="Mycoplasma Status") }}
+                {{ form.mycoplasma_status.label }}
+                {% if form.mycoplasma_status.errors %}<div class="invalid-feedback">{{ form.mycoplasma_status.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.date_established(class="form-control" + (" is-invalid" if form.date_established.errors else ""), placeholder="Date Established") }}
+                {{ form.date_established.label }}
+                {% if form.date_established.errors %}<div class="invalid-feedback">{{ form.date_established.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="form-floating">
+                {{ form.growth_properties(class="form-control" + (" is-invalid" if form.growth_properties.errors else ""), placeholder="Growth Properties", style="height: 100px") }}
+                {{ form.growth_properties.label }}
+                {% if form.growth_properties.errors %}<div class="invalid-feedback">{{ form.growth_properties.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="form-floating">
+                {{ form.notes(class="form-control" + (" is-invalid" if form.notes.errors else ""), placeholder="Notes", style="height: 100px") }}
+                {{ form.notes.label }}
+                {% if form.notes.errors %}<div class="invalid-feedback">{{ form.notes.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+            {% set cancel_url = request.args.get('next') or request.headers.get('Referer') or url_for('main.list_cell_lines') %}
+            <a href="{{ cancel_url }}" class="btn btn-secondary me-md-2">Cancel</a>
+            {{ form.submit(class="btn btn-primary") }}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

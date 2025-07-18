@@ -1,25 +1,39 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>{{ title }}</h1>
-    <form method="POST" action="{{ form_action }}" novalidate>
-        {{ form.hidden_tag() }}
-        <p>
-            {{ form.name.label }}<br>
-            {{ form.name(size=50) }}<br>
-            {% for error in form.name.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>
-            {{ form.freezer_name.label }}<br>
-            {{ form.freezer_name(size=50) }}<br>
-            {% for error in form.freezer_name.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>
-            {{ form.description.label }}<br>
-            {{ form.description(rows=4, cols=48) }}<br>
-            {% for error in form.description.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>{{ form.submit() }}</p>
-    </form>
-    <p><a href="{{ url_for('main.locations_overview') }}">Back to Locations Overview</a></p>
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-center mb-4">{{ title }}</h2>
+        <form method="POST" action="{{ form_action }}" novalidate>
+          {{ form.hidden_tag() }}
+          
+          <div class="form-floating mb-3">
+            {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="Tower Name") }}
+            {{ form.name.label }}
+            {% if form.name.errors %}<div class="invalid-feedback">{{ form.name.errors[0] }}</div>{% endif %}
+          </div>
+
+          <div class="form-floating mb-3">
+            {{ form.freezer_name(class="form-control" + (" is-invalid" if form.freezer_name.errors else ""), placeholder="Freezer Name") }}
+            {{ form.freezer_name.label }}
+            {% if form.freezer_name.errors %}<div class="invalid-feedback">{{ form.freezer_name.errors[0] }}</div>{% endif %}
+          </div>
+          
+          <div class="form-floating mb-3">
+            {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), placeholder="Description", style="height: 100px") }}
+            {{ form.description.label }}
+            {% if form.description.errors %}<div class="invalid-feedback">{{ form.description.errors[0] }}</div>{% endif %}
+          </div>
+          
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+            <a href="{{ url_for('main.locations_overview') }}" class="btn btn-secondary me-md-2">Cancel</a>
+            {{ form.submit(class="btn btn-primary") }}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

@@ -1,30 +1,49 @@
 {% extends "base.html" %}
 
 {% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Cell Lines</h1>
-    <p><a href="{{ url_for('main.add_cell_line') }}" class="button">Add New Cell Line</a></p>
+    <a href="{{ url_for('main.add_cell_line') }}" class="btn btn-primary">Add New Cell Line</a>
+</div>
 
-    {% if cell_lines %}
-        <ul>
-        {% for cl in cell_lines %}
-            <li>
-                <strong>{{ cl.name }}</strong>
-                <ul>
-                    <li>Species: {{ cl.species if cl.species else 'N/A' }}</li>
-                    <li>Source: {{ cl.source if cl.source else 'N/A' }}</li>
-                    <li>Original Passage: {{ cl.original_passage if cl.original_passage else 'N/A' }}</li>
-                    <li>Culture Medium: {{ cl.culture_medium if cl.culture_medium else 'N/A' }}</li>
-                    <li>Antibiotic Resistance: {{ cl.antibiotic_resistance if cl.antibiotic_resistance else 'N/A' }}</li>
-                    <li>Growth Properties: {{ cl.growth_properties if cl.growth_properties else 'N/A' }}</li>
-                    <li>Mycoplasma Status: {{ cl.mycoplasma_status if cl.mycoplasma_status else 'N/A' }}</li>
-                    <li>Date Established: {{ cl.date_established.strftime('%Y-%m-%d') if cl.date_established else 'N/A' }}</li>
-                    <li>Notes: {{ cl.notes if cl.notes else 'N/A' }}</li>
-                    <li><a href="{{ url_for('main.edit_cell_line', cell_line_id=cl.id) }}">Edit</a></li>
-                </ul>
-            </li>
-        {% endfor %}
-        </ul>
-    {% else %}
-        <p>No cell lines found. <a href="{{ url_for('main.add_cell_line') }}">Add the first one!</a></p>
-    {% endif %}
+<div class="card shadow-sm">
+    <div class="card-body">
+        {% if cell_lines %}
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead class="table-light">
+                    <tr>
+                        <th>Name</th>
+                        <th>Species</th>
+                        <th>Source</th>
+                        <th>Mycoplasma Status</th>
+                        <th>Date Established</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for cl in cell_lines %}
+                    <tr>
+                        <td><strong>{{ cl.name }}</strong></td>
+                        <td>{{ cl.species | default_if_none }}</td>
+                        <td>{{ cl.source | default_if_none }}</td>
+                        <td>{{ cl.mycoplasma_status | default_if_none }}</td>
+                        <td>{{ cl.date_established.strftime('%Y-%m-%d') if cl.date_established else '' }}</td>
+                        <td>
+                            <a href="{{ url_for('main.edit_cell_line', cell_line_id=cl.id, next=request.url) }}" class="btn btn-sm btn-outline-primary">Edit</a>
+                            <!-- A details button could be added here later -->
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="text-center p-4">
+            <p class="mb-0">No cell lines found.</p>
+            <a href="{{ url_for('main.add_cell_line') }}">Add the first one!</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
 {% endblock %}

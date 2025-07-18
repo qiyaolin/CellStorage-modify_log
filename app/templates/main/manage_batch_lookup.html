@@ -1,11 +1,24 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Manage Batch</h1>
-<form method="post">
-  {{ form.hidden_tag() }}
-  <div class="mb-3">
-    {{ form.batch_id.label }} {{ form.batch_id(class="form-control", style="width:200px;display:inline-block;") }}
-    <button type="submit" class="btn btn-primary">{{ form.submit.label.text }}</button>
+<div class="row justify-content-center">
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-center mb-4">Manage Batch</h2>
+        <form method="post" class="row g-2 align-items-center">
+          {{ form.hidden_tag() }}
+          <div class="col">
+            <div class="form-floating">
+              {{ form.batch_id(class="form-control", placeholder="Batch ID") }}
+              {{ form.batch_id.label }}
+            </div>
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-primary btn-lg">{{ form.submit.label.text }}</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
-</form>
+</div>
 {% endblock %}

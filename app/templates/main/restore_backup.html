@@ -1,23 +1,37 @@
 {% extends "base.html" %}
 {% block content %}
   <h1>Restore Backup</h1>
-  <form method="POST" enctype="multipart/form-data">
-    {{ form.hidden_tag() }}
-    <div class="mb-3">
-      {{ form.snapshot_id.label }}<br>
-      {{ form.snapshot_id(size=40) }}
-      <div class="form-text">Leave blank to upload a file instead</div>
-      {% for error in form.snapshot_id.errors %}
-        <div class="text-danger">{{ error }}</div>
-      {% endfor %}
+
+  {% if rds_configured %}
+    <div class="alert alert-info">
+      <strong>Info:</strong> AWS RDS mode detected. You can restore from a snapshot.
     </div>
-    <div class="mb-3">
-      {{ form.backup_file.label }}<br>
-      {{ form.backup_file() }}
-      {% for error in form.backup_file.errors %}
-        <div class="text-danger">{{ error }}</div>
-      {% endfor %}
+    <form method="POST" enctype="multipart/form-data">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        {{ form.snapshot_id.label(class="form-label") }}<br>
+        {{ form.snapshot_id(class="form-control", size=40) }}
+        <div class="form-text">Enter the RDS Snapshot Identifier to restore from.</div>
+        {% for error in form.snapshot_id.errors %}
+          <div class="text-danger">{{ error }}</div>
+        {% endfor %}
+      </div>
+      {{ form.submit(class="btn btn-warning") }}
+    </form>
+  {% else %}
+    <div class="alert alert-info">
+      <strong>Info:</strong> Local database mode detected. You can restore from a backup file.
     </div>
-    {{ form.submit(class="btn btn-warning") }}
-  </form>
+    <form method="POST" enctype="multipart/form-data">
+      {{ form.hidden_tag() }}
+      <div class="mb-3">
+        {{ form.backup_file.label(class="form-label") }}<br>
+        {{ form.backup_file(class="form-control") }}
+        {% for error in form.backup_file.errors %}
+          <div class="text-danger">{{ error }}</div>
+        {% endfor %}
+      </div>
+      {{ form.submit(class="btn btn-warning") }}
+    </form>
+  {% endif %}
 {% endblock %}

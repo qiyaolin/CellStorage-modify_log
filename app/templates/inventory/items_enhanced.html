@@ -400,6 +400,14 @@
         </div>
         
         <div class="bulk-actions">
+            <div class="dropdown">
+                <button class="btn btn-secondary dropdown-toggle" type="button" id="bulkActionsBtn" data-bs-toggle="dropdown" aria-expanded="false" disabled>
+                    Bulk Actions
+                </button>
+                <ul class="dropdown-menu" aria-labelledby="bulkActionsBtn">
+                    <li><a class="dropdown-item" href="#" id="deleteSelectedBtn">Delete Selected</a></li>
+                </ul>
+            </div>
             <button class="btn btn-outline-success" id="exportBtn">
                 <i class="fas fa-download me-1"></i>Export
             </button>
@@ -542,6 +550,52 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <button type="button" class="btn btn-primary" id="saveAdjustment">Save Adjustment</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Import Inventory Items</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Upload a CSV or Excel file to bulk import inventory items. <a href="#" id="downloadTemplate">Download Template</a></p>
+                <form id="importForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="importFile" class="form-label">File</label>
+                        <input class="form-control" type="file" id="importFile" name="file" accept=".csv, .xlsx">
+                    </div>
+                </form>
+                <div id="importErrors" class="alert alert-danger d-none"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="uploadImport">Upload and Import</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Delete Confirmation Modal -->
+<div class="modal fade" id="bulkDeleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Bulk Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the selected items? This action cannot be undone.</p>
+                <p>Number of items selected: <strong id="bulkDeleteCount"></strong></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmBulkDelete">Delete</button>
             </div>
         </div>
     </div>
@@ -706,19 +760,176 @@ $(document).ready(function() {
     });
     
     // Load cards view
-    function loadCardsView() {
-        // Implementation for card view loading
-        // This would fetch data and render cards
+    function loadCardsView(page = 1) {
+        const params = {
+            q: $('#globalSearch').val(),
+            location: $('#locationFilter').val(),
+            supplier: $('#supplierFilter').val(),
+            type: $('#typeFilter').val(),
+            status: $('#statusFilter').val(),
+            expiry_from: $('#expiryFrom').val(),
+            expiry_to: $('#expiryTo').val(),
+            quantity_min: $('#quantityMin').val(),
+            quantity_max: $('#quantityMax').val(),
+            responsible: $('#responsibleFilter').val(),
+            page: page,
+            length: 12 // Number of cards per page
+        };
+
+        $.get('{{ url_for("inventory.api_search") }}', params)
+            .done(function(response) {
+                const container = $('#inventoryCards');
+                container.empty();
+                
+                if (response.data.length === 0) {
+                    container.html('<div class="col-12 text-center"><p>No items found.</p></div>');
+                    return;
+                }
+
+                response.data.forEach(function(item) {
+                    const card = createInventoryCard(item);
+                    container.append(card);
+                });
+                
+                renderPagination(response.recordsFiltered, params.length, page);
+            })
+            .fail(function() {
+                container.html('<div class="col-12 text-center"><p class="text-danger">Error loading items.</p></div>');
+            });
+    }
+
+    function createInventoryCard(item) {
+        const statusClass = item.status.toLowerCase().replace(' ', '-');
+        const expiryDate = item.expiration_date ? new Date(item.expiration_date).toLocaleDateString() : 'N/A';
+        const isExpired = item.is_expired ? 'text-danger' : '';
+
+        return `
+            <div class="inventory-card">
+                <div class="card-header">
+                    <div>
+                        <h5 class="card-title">${item.name}</h5>
+                        <span class="card-catalog">${item.catalog_number || 'No Catalog #'}</span>
+                    </div>
+                    <span class="status-badge status-${statusClass}">${item.status}</span>
+                </div>
+                <div class="card-details">
+                    <div class="card-detail">
+                        <span class="card-detail-label">Quantity:</span>
+                        <span class="card-detail-value ${item.is_low_stock ? 'quantity-low' : ''}">${item.current_quantity} ${item.unit || ''}</span>
+                    </div>
+                    <div class="card-detail">
+                        <span class="card-detail-label">Location:</span>
+                        <span class="card-detail-value">${item.location_path || 'N/A'}</span>
+                    </div>
+                    <div class="card-detail">
+                        <span class="card-detail-label">Supplier:</span>
+                        <span class="card-detail-value">${item.supplier_name || 'N/A'}</span>
+                    </div>
+                    <div class="card-detail">
+                        <span class="card-detail-label">Expiry Date:</span>
+                        <span class="card-detail-value ${isExpired}">${expiryDate}</span>
+                    </div>
+                </div>
+                <div class="action-buttons">
+                    <button class="btn-action btn-edit" onclick="quickEdit(${item.id})" title="Quick Edit"><i class="fas fa-edit"></i></button>
+                    <button class="btn-action btn-adjust" onclick="adjustQuantity(${item.id})" title="Adjust Quantity"><i class="fas fa-plus-minus"></i></button>
+                    <a href="/inventory/items/${item.id}" class="btn-action" style="background: #6f42c1; color: white;" title="View Details"><i class="fas fa-eye"></i></a>
+                </div>
+            </div>
+        `;
+    }
+    
+    function renderPagination(totalItems, perPage, currentPage) {
+        const totalPages = Math.ceil(totalItems / perPage);
+        // Simple pagination for card view - can be enhanced
+        // For now, we rely on the filters to narrow down results.
     }
     
     // Select all checkbox
     $('#selectAll').on('change', function() {
-        $('.item-checkbox').prop('checked', this.checked);
+        $('.item-checkbox').prop('checked', this.checked).trigger('change');
     });
+
+    // Individual checkbox change
+    $('#inventoryTable').on('change', '.item-checkbox', function() {
+        const selectedCount = $('.item-checkbox:checked').length;
+        if (selectedCount > 0) {
+            $('#bulkActionsBtn').prop('disabled', false);
+        } else {
+            $('#bulkActionsBtn').prop('disabled', true);
+        }
+    });
+
+    // Bulk delete button click
+    $('#deleteSelectedBtn').on('click', function(e) {
+        e.preventDefault();
+        const selectedIds = getSelectedIds();
+        if (selectedIds.length > 0) {
+            $('#bulkDeleteCount').text(selectedIds.length);
+            $('#bulkDeleteModal').modal('show');
+        }
+    });
+
+    // Confirm bulk delete
+    $('#confirmBulkDelete').on('click', function() {
+        const selectedIds = getSelectedIds();
+        $.ajax({
+            url: '{{ url_for("inventory.api_bulk_delete_items") }}',
+            method: 'POST',
+            data: JSON.stringify({ ids: selectedIds }),
+            contentType: 'application/json',
+            success: function() {
+                $('#bulkDeleteModal').modal('hide');
+                inventoryTable.ajax.reload();
+                showAlert('Selected items deleted successfully', 'success');
+                $('#bulkActionsBtn').prop('disabled', true);
+            },
+            error: function() {
+                showAlert('Error deleting items', 'error');
+            }
+        });
+    });
+
+    function getSelectedIds() {
+        return $('.item-checkbox:checked').map(function() {
+            return $(this).val();
+        }).get();
+    }
     
     // Export functionality
     $('#exportBtn').on('click', function() {
         window.location.href = '{{ url_for("inventory.export_items") }}';
+    });
+
+    // Import functionality
+    $('#importBtn').on('click', function() {
+        $('#importModal').modal('show');
+    });
+
+    $('#uploadImport').on('click', function() {
+        const formData = new FormData($('#importForm')[0]);
+        $.ajax({
+            url: '{{ url_for("inventory.api_import_items") }}',
+            method: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                $('#importModal').modal('hide');
+                inventoryTable.ajax.reload();
+                showAlert(response.message, 'success');
+            },
+            error: function(xhr) {
+                const errors = xhr.responseJSON.errors;
+                const errorHtml = '<ul>' + errors.map(e => `<li>${e}</li>`).join('') + '</ul>';
+                $('#importErrors').html(errorHtml).removeClass('d-none');
+            }
+        });
+    });
+
+    $('#downloadTemplate').on('click', function(e) {
+        e.preventDefault();
+        window.location.href = '{{ url_for("inventory.api_download_template") }}';
     });
     
     // Quick edit functionality

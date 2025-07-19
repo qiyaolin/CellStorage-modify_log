@@ -10,6 +10,7 @@ from .models import (InventoryType, InventoryItem, Location, Supplier,
 from ..cell_storage.models import User
 from .forms import (InventoryTypeForm, InventoryItemForm, LocationForm, 
                    SupplierForm, OrderForm, OrderItemForm, UsageForm)
+from .services import DataImportExportService
 
 bp = Blueprint('inventory', __name__)
 
@@ -672,6 +673,73 @@ def api_update_item(item_id):
         db.session.commit()
         
         return jsonify({'success': True, 'message': 'Item updated successfully'})
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 400
+
+@bp.route('/api/items/import', methods=['POST'])
+@login_required
+@require_permission('inventory.create')
+def api_import_items():
+    """Import items from a CSV or Excel file"""
+    if 'file' not in request.files:
+        return jsonify({'errors': ['No file part']}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'errors': ['No selected file']}), 400
+
+    try:
+        # Use a helper service to process the file
+        result = DataImportExportService.import_inventory_from_file(file, current_user.id)
+        
+        if result['success']:
+            return jsonify({'message': f'{result["imported_count"]} items imported successfully.'})
+        else:
+            return jsonify({'errors': result['errors']}), 400
+            
+    except Exception as e:
+        return jsonify({'errors': [str(e)]}), 500
+
+@bp.route('/api/items/template')
+@login_required
+def api_download_template():
+    """Download a template for importing items"""
+    try:
+        output = DataImportExportService.export_template()
+        
+        from flask import make_response
+        response = make_response(output.read())
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = 'attachment; filename=inventory_template.xlsx'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Error generating template: {str(e)}', 'error')
+        return redirect(url_for('inventory.inventory_items_enhanced'))
+
+@bp.route('/api/items/bulk-delete', methods=['POST'])
+@login_required
+@require_permission('inventory.delete')
+def api_bulk_delete_items():
+    """Delete multiple items in bulk"""
+    data = request.get_json()
+    item_ids = data.get('ids', [])
+    
+    if not item_ids:
+        return jsonify({'success': False, 'error': 'No item IDs provided'}), 400
+    
+    try:
+        # Perform bulk deletion
+        num_deleted = InventoryItem.query.filter(InventoryItem.id.in_(item_ids)).delete(synchronize_session=False)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'{num_deleted} items deleted successfully'
+        })
         
     except Exception as e:
         db.session.rollback()

@@ -467,3 +467,37 @@ class PurchaseRequest(db.Model):
     user = db.relationship('User', foreign_keys=[user_id])
     supplier = db.relationship('Supplier')
     reviewed_by = db.relationship('User', foreign_keys=[reviewed_by_user_id])
+
+class SupplierRating(db.Model):
+    __tablename__ = 'supplier_ratings'
+    id = db.Column(db.Integer, primary_key=True)
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False)
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    delivery_rating = db.Column(db.Integer)
+    quality_rating = db.Column(db.Integer)
+    service_rating = db.Column(db.Integer)
+    
+    overall_rating = db.Column(db.Float)
+    comments = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    supplier = db.relationship('Supplier', backref='ratings')
+    order = db.relationship('Order', backref='rating')
+    user = db.relationship('User', backref='supplier_ratings')
+
+class ItemPriceHistory(db.Model):
+    __tablename__ = 'item_price_history'
+    id = db.Column(db.Integer, primary_key=True)
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'), nullable=False)
+    catalog_number = db.Column(db.String(128))
+    item_name = db.Column(db.String(255))
+    unit_price = db.Column(db.Float, nullable=False)
+    currency = db.Column(db.String(8), default='USD')
+    effective_date = db.Column(db.Date, nullable=False)
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    supplier = db.relationship('Supplier', backref='price_history')
+    order = db.relationship('Order', backref='price_history')

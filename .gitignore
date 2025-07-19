@@ -1,6 +1,9 @@
 # Environments
 venv/
 .env
+Include/
+Lib/
+Scripts/
 
 # Python
 __pycache__/
@@ -10,3 +13,10 @@ __pycache__/
 # IDE
 .idea/
 *.swp
+.vscode/
+.cursor/
+.claude/
+
+# Database
+*.db
+*.db.backup*

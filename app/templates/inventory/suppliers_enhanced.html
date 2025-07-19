@@ -365,7 +365,7 @@
             <div class="supplier-card" data-supplier-id="{{ supplier.id }}">
                 <div class="supplier-header">
                     <div class="supplier-info">
-                        <div class="supplier-name">{{ supplier.name }}</div>
+                        <td><a href="{{ url_for('inventory.supplier_detail', supplier_id=supplier.id) }}">{{ supplier.name }}</a></td>
                         <div class="supplier-meta">
                             {% if supplier.website %}
                             <div class="meta-item">

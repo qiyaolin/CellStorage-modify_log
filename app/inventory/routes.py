@@ -349,6 +349,59 @@ def create_supplier():
     
     return render_template('inventory/supplier_form.html', form=form)
 
+@bp.route('/custom-fields')
+@login_required
+@admin_required
+def manage_custom_fields():
+    """Display the page for managing custom fields"""
+    return render_template('inventory/custom_fields.html')
+
+@bp.route('/api/custom-fields/<int:type_id>', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def api_manage_custom_fields(type_id):
+    inventory_type = InventoryType.query.get_or_404(type_id)
+    if request.method == 'GET':
+        return jsonify(inventory_type.get_custom_fields())
+    if request.method == 'POST':
+        data = request.get_json()
+        inventory_type.set_custom_fields(data)
+        db.session.commit()
+        return jsonify({'success': True})
+
+@bp.route('/suppliers/<int:supplier_id>')
+@login_required
+@require_permission('supplier.view')
+def supplier_detail(supplier_id):
+    """Display supplier details"""
+    supplier = Supplier.query.get_or_404(supplier_id)
+    return render_template('inventory/supplier_detail.html', supplier=supplier)
+
+@bp.route('/api/suppliers/<int:supplier_id>/ratings')
+@login_required
+@require_permission('supplier.view')
+def api_get_supplier_ratings(supplier_id):
+    ratings = SupplierRating.query.filter_by(supplier_id=supplier_id).all()
+    return jsonify([{
+        'user': r.user.username,
+        'delivery': r.delivery_rating,
+        'quality': r.quality_rating,
+        'service': r.service_rating,
+        'comments': r.comments
+    } for r in ratings])
+
+@bp.route('/api/suppliers/<int:supplier_id>/price-history')
+@login_required
+@require_permission('supplier.view')
+def api_get_price_history(supplier_id):
+    history = ItemPriceHistory.query.filter_by(supplier_id=supplier_id).all()
+    return jsonify([{
+        'item_name': h.item_name,
+        'catalog_number': h.catalog_number,
+        'unit_price': h.unit_price,
+        'effective_date': h.effective_date.isoformat()
+    } for h in history])
+
 @bp.route('/requests')
 @login_required
 @admin_required

@@ -1,53 +1,128 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Edit CryoVial</h1>
-<form method="post" action="{{ form_action }}">
-  {{ form.hidden_tag() }}
-  <div class="mb-3">
-    {{ form.unique_vial_id_tag.label }} {{ form.unique_vial_id_tag(size=20) }}
+<div class="row justify-content-center">
+  <div class="col-md-10 col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-center mb-4">Edit CryoVial</h2>
+        <form method="post" action="{{ form_action }}">
+          {{ form.hidden_tag() }}
+          {% if request.args.get('next') %}
+            <input type="hidden" name="next" value="{{ request.args.get('next') }}">
+          {% endif %}
+          <div class="row g-3">
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.unique_vial_id_tag(class="form-control" + (" is-invalid" if form.unique_vial_id_tag.errors else ""), placeholder="Vial ID Tag") }}
+                {{ form.unique_vial_id_tag.label }}
+                {% if form.unique_vial_id_tag.errors %}<div class="invalid-feedback">{{ form.unique_vial_id_tag.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.status(class="form-select" + (" is-invalid" if form.status.errors else ""), placeholder="Status") }}
+                {{ form.status.label }}
+                {% if form.status.errors %}<div class="invalid-feedback">{{ form.status.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-12">
+              <div class="form-floating">
+                {{ form.cell_line_id(class="form-select" + (" is-invalid" if form.cell_line_id.errors else "")) }}
+                {{ form.cell_line_id.label }}
+                {% if form.cell_line_id.errors %}<div class="invalid-feedback">{{ form.cell_line_id.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-floating">
+                  {{ form.box_id(class="form-select" + (" is-invalid" if form.box_id.errors else "")) }}
+                  {{ form.box_id.label }}
+                  {% if form.box_id.errors %}<div class="invalid-feedback">{{ form.box_id.errors[0] }}</div>{% endif %}
+                </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-floating">
+                {{ form.row_in_box(class="form-control" + (" is-invalid" if form.row_in_box.errors else ""), placeholder="Row") }}
+                {{ form.row_in_box.label }}
+                {% if form.row_in_box.errors %}<div class="invalid-feedback">{{ form.row_in_box.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-3">
+              <div class="form-floating">
+                {{ form.col_in_box(class="form-control" + (" is-invalid" if form.col_in_box.errors else ""), placeholder="Column") }}
+                {{ form.col_in_box.label }}
+                {% if form.col_in_box.errors %}<div class="invalid-feedback">{{ form.col_in_box.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.passage_number(class="form-control" + (" is-invalid" if form.passage_number.errors else ""), placeholder="Passage Number") }}
+                {{ form.passage_number.label }}
+                {% if form.passage_number.errors %}<div class="invalid-feedback">{{ form.passage_number.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="form-floating">
+                {{ form.date_frozen(class="form-control" + (" is-invalid" if form.date_frozen.errors else ""), placeholder="Date Frozen") }}
+                {{ form.date_frozen.label }}
+                {% if form.date_frozen.errors %}<div class="invalid-feedback">{{ form.date_frozen.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+             <div class="col-md-6">
+                <div class="form-floating">
+                    {{ form.volume_ml(class="form-control" + (" is-invalid" if form.volume_ml.errors else ""), placeholder="Volume (uL)") }}
+                    {{ form.volume_ml.label }}
+                    {% if form.volume_ml.errors %}<div class="invalid-feedback">{{ form.volume_ml.errors[0] }}</div>{% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-floating">
+                    {{ form.concentration(class="form-control" + (" is-invalid" if form.concentration.errors else ""), placeholder="Concentration") }}
+                    {{ form.concentration.label }}
+                    {% if form.concentration.errors %}<div class="invalid-feedback">{{ form.concentration.errors[0] }}</div>{% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-floating">
+                    {{ form.fluorescence_tag(class="form-control" + (" is-invalid" if form.fluorescence_tag.errors else ""), placeholder="Fluorescence Tag") }}
+                    {{ form.fluorescence_tag.label }}
+                    {% if form.fluorescence_tag.errors %}<div class="invalid-feedback">{{ form.fluorescence_tag.errors[0] }}</div>{% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="form-floating">
+                    {{ form.parental_cell_line(class="form-control" + (" is-invalid" if form.parental_cell_line.errors else ""), placeholder="Parental Cell Line") }}
+                    {{ form.parental_cell_line.label }}
+                    {% if form.parental_cell_line.errors %}<div class="invalid-feedback">{{ form.parental_cell_line.errors[0] }}</div>{% endif %}
+                </div>
+            </div>
+             <div class="col-12">
+                <label class="form-label">{{ form.resistance.label }}</label>
+                <div>
+                  {% for sub in form.resistance %}
+                  <div class="form-check form-check-inline">
+                    {{ sub(class="form-check-input" + (" is-invalid" if form.resistance.errors else "")) }}
+                    {{ sub.label(class="form-check-label") }}
+                  </div>
+                  {% endfor %}
+                </div>
+                {% if form.resistance.errors %}<div class="invalid-feedback d-block">{{ form.resistance.errors[0] }}</div>{% endif %}
+              </div>
+            <div class="col-12">
+              <div class="form-floating">
+                {{ form.notes(class="form-control" + (" is-invalid" if form.notes.errors else ""), placeholder="Notes", style="height: 100px") }}
+                {{ form.notes.label }}
+                {% if form.notes.errors %}<div class="invalid-feedback">{{ form.notes.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+          </div>
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+            {% set cancel_url = request.args.get('next') or request.headers.get('Referer') or url_for('main.cryovial_inventory') %}
+            <a href="{{ cancel_url }}" class="btn btn-secondary me-md-2">Cancel</a>
+            {{ form.submit(class='btn btn-primary') }}
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
-  <div class="mb-3">
-    {{ form.cell_line_id.label }} {{ form.cell_line_id() }}
-  </div>
-  <div class="mb-3">
-    {{ form.box_id.label }} {{ form.box_id() }}
-  </div>
-  <div class="mb-3">
-    {{ form.row_in_box.label }} {{ form.row_in_box(size=5) }}
-    {{ form.col_in_box.label }} {{ form.col_in_box(size=5) }}
-  </div>
-  <div class="mb-3">
-    {{ form.passage_number.label }} {{ form.passage_number(size=20) }}
-  </div>
-  <div class="mb-3">
-    {{ form.date_frozen.label }} {{ form.date_frozen() }}
-  </div>
-  <div class="mb-3">
-    {{ form.number_of_vials_at_creation.label }} {{ form.number_of_vials_at_creation(size=5) }}
-  </div>
-  <div class="mb-3">
-    {{ form.volume_ml.label }} {{ form.volume_ml(size=10) }}
-  </div>
-  <div class="mb-3">
-    {{ form.concentration.label }} {{ form.concentration(size=20) }}
-  </div>
-  <div class="mb-3">
-    {{ form.fluorescence_tag.label }} {{ form.fluorescence_tag(size=20) }}
-  </div>
-  <div class="mb-3">
-    {{ form.resistance.label }}<br>
-    {% for sub in form.resistance %}<label>{{ sub() }} {{ sub.label.text }}</label><br>{% endfor %}
-  </div>
-  <div class="mb-3">
-    {{ form.parental_cell_line.label }} {{ form.parental_cell_line(size=20) }}
-  </div>
-  <div class="mb-3">
-    {{ form.status.label }} {{ form.status() }}
-  </div>
-  <div class="mb-3">
-    {{ form.notes.label }} {{ form.notes(rows=3, cols=40) }}
-  </div>
-  <p>{{ form.submit(class_='btn btn-primary') }}</p>
-</form>
-<p><a href="{{ url_for('main.inventory_summary') }}">Back</a></p>
+</div>
 {% endblock %}

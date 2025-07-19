@@ -1,49 +1,1147 @@
 {% extends "base.html" %}
+
 {% block content %}
-<h1>Inventory Summary</h1>
-<form method="get" class="row g-2 mb-3">
-  <div class="col-md-4">
-    <input type="text" name="q" value="{{ search_q }}" placeholder="Search by tag, batch or cell line" class="form-control">
-  </div>
-  <div class="col-md-3">
-    <select name="status" class="form-select">
-      <option value="">Any Status</option>
-      {% for s in statuses %}
-        <option value="{{ s }}" {% if search_status == s %}selected{% endif %}>{{ s }}</option>
-      {% endfor %}
-    </select>
-  </div>
-  <div class="col-auto">
-    <button type="submit" class="btn btn-secondary">Filter</button>
-    <a href="{{ url_for('main.inventory_summary', q=search_q, status=search_status, export='csv') }}" class="btn btn-outline-primary ms-2">Export CSV</a>
-  </div>
-</form>
-<table class="table table-bordered table-sm table-striped table-hover">
-  <thead>
-    <tr>
-      <th>ID</th><th>Batch</th><th>Vial Tag</th><th>Cell Line</th><th>Location</th><th>Date Frozen</th><th>Status</th><th></th>
-    </tr>
-  </thead>
-  <tbody>
-    {% for v in vials %}
-    <tr>
-      <td>{{ v.id }}</td>
-      <td>
-        {% if current_user.is_admin %}
-          <a href="{{ url_for('main.edit_batch', batch_id=v.batch.id) }}">{{ v.batch.id }}</a>
-        {% else %}
-          {{ v.batch.id }}
-        {% endif %}
-         - {{ v.batch.name }}
-      </td>
-      <td>{{ v.unique_vial_id_tag }}</td>
-      <td>{{ v.cell_line_info.name }}</td>
-      <td>{{ v.box_location.drawer_info.tower_info.name }}/{{ v.box_location.drawer_info.name }}/{{ v.box_location.name }} R{{ v.row_in_box }}C{{ v.col_in_box }}</td>
-      <td>{{ v.date_frozen }}</td>
-      <td>{{ v.status }}</td>
-      <td><a href="{{ url_for('main.edit_cryovial', vial_id=v.id) }}" class="btn btn-sm btn-primary">Edit</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="container-fluid">
+    <!-- Modern Page Title -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 fw-bold text-dark mb-1 d-flex align-items-center fade-in-up">
+                        <div class="rounded-circle p-2 me-3" style="background-color: #f0f7ff;">
+                            <i class="bi bi-graph-up text-primary"></i>
+                        </div>
+                        Analytics Dashboard
+                    </h1>
+                    <p class="text-muted mb-0 fade-in-up" style="animation-delay: 0.1s;">Comprehensive overview of your cell storage inventory</p>
+                </div>
+                <div class="fade-in-up" style="animation-delay: 0.2s;">
+                    <a href="{{ url_for('main.inventory_summary', q=search_q, status=search_status, export='csv') }}" class="btn btn-outline-success">
+                        <i class="bi bi-download me-1"></i>Export CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row g-4 mb-5">
+        <div class="col-xl-3 col-md-6 fade-in-up">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle p-3 me-3" style="background-color: #f0f7ff;">
+                            <i class="bi bi-thermometer-snow fs-4 text-primary"></i>
+                        </div>
+                        <div class="flex-fill">
+                            <h6 class="text-muted mb-1">Total Vials</h6>
+                            <h3 class="fw-bold mb-0" id="total-vials">{{ total_stats.total or 0 }}</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 fade-in-up" style="animation-delay: 0.1s;">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle p-3 me-3" style="background-color: #f0fff4;">
+                            <i class="bi bi-check-circle fs-4 text-success"></i>
+                        </div>
+                        <div class="flex-fill">
+                            <h6 class="text-muted mb-1">Available</h6>
+                            <h3 class="fw-bold mb-0 text-success" id="available-vials">{{ total_stats.available or 0 }}</h3>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="progress" style="height: 4px;">
+                            <div class="progress-bar bg-success" role="progressbar" 
+                                 style="width: {{ (total_stats.available / total_stats.total * 100) if total_stats.total > 0 else 0 }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 fade-in-up" style="animation-delay: 0.2s;">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle p-3 me-3" style="background-color: #fffdf0;">
+                            <i class="bi bi-hourglass-split fs-4 text-warning"></i>
+                        </div>
+                        <div class="flex-fill">
+                            <h6 class="text-muted mb-1">In Use</h6>
+                            <h3 class="fw-bold mb-0 text-warning" id="used-vials">{{ total_stats.used or 0 }}</h3>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <div class="progress" style="height: 4px;">
+                            <div class="progress-bar bg-warning" role="progressbar" 
+                                 style="width: {{ (total_stats.used / total_stats.total * 100) if total_stats.total > 0 else 0 }}%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-xl-3 col-md-6 fade-in-up" style="animation-delay: 0.3s;">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle p-3 me-3" style="background-color: #f0fdff;">
+                            <i class="bi bi-collection fs-4 text-info"></i>
+                        </div>
+                        <div class="flex-fill">
+                            <h6 class="text-muted mb-1">Batches</h6>
+                            <h3 class="fw-bold mb-0 text-info" id="total-batches">{{ batch_stats.total_batches or 0 }}</h3>
+                        </div>
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            <i class="bi bi-diagram-3 me-1"></i>
+                            {{ low_stock_stats.total_cell_lines or 0 }} Cell Lines
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Low Stock Records Area -->
+    <div class="row g-4 mb-5">
+        <!-- Low Stock Records -->
+        <div class="col-12 fade-in-up" style="animation-delay: 0.4s;">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-header bg-transparent border-0 pb-0">
+                    <h6 class="fw-semibold text-dark mb-1">Low Stock Records (Available < 2)</h6>
+                    <small class="text-muted">Inventory records with less than 2 available vials</small>
+                </div>
+                <div class="card-body pt-3">
+                    {% if low_stock_stats.low_stock_records %}
+                    <div class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Cell Line</th>
+                                    <th>Batch Name</th>
+                                    <th>Batch ID</th>
+                                    <th class="text-center">Available Count</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for record in low_stock_stats.low_stock_records %}
+                                <tr>
+                                    <td>
+                                        <span class="fw-medium text-primary">{{ record.cell_line_name }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="fw-medium">{{ record.batch_name }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark">{{ record.batch_id }}</span>
+                                    </td>
+                                    <td class="text-center">
+                                        <span class="badge bg-{{ 'danger' if record.available_count == 0 else 'warning' }} rounded-pill">
+                                            {{ record.available_count }}
+                                        </span>
+                                    </td>
+                                    <td class="text-center">
+                                        <a href="{{ url_for('main.manage_batch', batch_id=record.batch_id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-eye me-1"></i>View Batch
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-check-circle text-success fs-1 mb-3"></i>
+                        <h6 class="text-muted">No low stock records found</h6>
+                        <p class="text-muted mb-0">All batches have 2 or more available vials</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Section - Enhanced -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent border-0 pb-0">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle p-2 me-3" style="background-color: #f0f7ff;">
+                                <i class="bi bi-search text-primary"></i>
+                            </div>
+                            <h5 class="mb-0 fw-bold">Smart Search & Filters</h5>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" type="button" data-bs-toggle="collapse" 
+                                data-bs-target="#advancedFilters" aria-expanded="false">
+                            <i class="bi bi-sliders me-1"></i>Advanced Filters
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body pt-3">
+                    <!-- Smart Search Box -->
+                    <div class="row mb-3">
+                        <div class="col-lg-8">
+                            <div class="position-relative">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-light border-end-0">
+                                        <i class="bi bi-search text-muted"></i>
+                                    </span>
+                                    <input type="text" class="form-control border-start-0" id="smartSearchInput" 
+                                           placeholder="Search vials, batches, cell lines..." value="{{ search_q }}"
+                                           autocomplete="off">
+                                </div>
+                                <!-- Search Suggestions Dropdown -->
+                                <div id="searchSuggestions" class="dropdown-menu w-100 shadow-lg" style="max-height: 300px; overflow-y: auto;"></div>
+                                <!-- Search History Button -->
+                                <button type="button" class="btn btn-sm btn-outline-secondary position-absolute" 
+                                        style="top: 50%; right: 15px; transform: translateY(-50%); z-index: 10;" 
+                                        id="searchHistoryBtn" title="Search History">
+                                    <i class="bi bi-clock-history"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-lg-2">
+                            <div class="form-floating">
+                                <select class="form-select" id="statusFilter">
+                                    <option value="">All Status</option>
+                                    <option value="Available" {{ 'selected' if search_status == 'Available' }}>Available</option>
+                                    <option value="Used" {{ 'selected' if search_status == 'Used' }}>Used</option>
+                                    <option value="Depleted" {{ 'selected' if search_status == 'Depleted' }}>Depleted</option>
+                                    <option value="Discarded" {{ 'selected' if search_status == 'Discarded' }}>Discarded</option>
+                                </select>
+                                <label for="statusFilter">Status</label>
+                            </div>
+                        </div>
+                        <div class="col-lg-2">
+                            <button type="button" class="btn btn-primary w-100 h-100 d-flex align-items-center justify-content-center" 
+                                    id="searchBtn">
+                                <i class="bi bi-search me-2"></i>Search
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Filters -->
+                    <div class="collapse" id="advancedFilters">
+                        <div class="border-top pt-3">
+                            <div class="row g-3">
+                                <div class="col-md-3">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="cellLineFilter">
+                                            <option value="">All Cell Lines</option>
+                                            <!-- Dynamically load cell line list -->
+                                        </select>
+                                        <label>Cell Line</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-floating">
+                                        <input type="date" class="form-control" id="dateFromFilter">
+                                        <label>Date From</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-floating">
+                                        <input type="date" class="form-control" id="dateToFilter">
+                                        <label>Date To</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="creatorFilter">
+                                            <option value="">All Creators</option>
+                                            <!-- Dynamically load user list -->
+                                        </select>
+                                        <label>Created By</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="fluorescenceFilter" placeholder="e.g., GFP, RFP">
+                                        <label>Fluorescence Tag</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-floating">
+                                        <input type="text" class="form-control" id="resistanceFilter" placeholder="e.g., Ampicillin">
+                                        <label>Resistance</label>
+                                    </div>
+                                </div>
+                                {% if current_user.is_admin %}
+                                <div class="col-md-3">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="locationTypeFilter">
+                                            <option value="">All Locations</option>
+                                            <option value="tower">By Tower</option>
+                                            <option value="drawer">By Drawer</option>
+                                            <option value="box">By Box</option>
+                                        </select>
+                                        <label>Location Type</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-3">
+                                    <div class="form-floating">
+                                        <select class="form-select" id="locationFilter" disabled>
+                                            <option value="">Select Location</option>
+                                            <!-- Dynamically load location list -->
+                                        </select>
+                                        <label>Location</label>
+                                    </div>
+                                </div>
+                                {% endif %}
+                                <div class="col-12">
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-primary" id="applyFiltersBtn">
+                                            <i class="bi bi-funnel me-1"></i>Apply Filters
+                                        </button>
+                                        <button type="button" class="btn btn-outline-secondary" id="clearFiltersBtn">
+                                            <i class="bi bi-arrow-clockwise me-1"></i>Clear All
+                                        </button>
+                                        <button type="button" class="btn btn-outline-info" id="saveSearchBtn">
+                                            <i class="bi bi-bookmark me-1"></i>Save Search
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Search Results Statistics -->
+                    <div id="searchResultsStats" class="d-none">
+                        <div class="alert alert-info border-0 shadow-sm d-flex align-items-center">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <span id="searchStatsText">Found 0 results</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary ms-auto" id="exportSearchBtn">
+                                <i class="bi bi-download me-1"></i>Export Results
+                            </button>
+                        </div>
+                    </div>
+                </div>
+        </div>
+    </div>
+</div>
+
+    <!-- Batch Operation Toolbar -->
+    <div id="batchOperationToolbar" class="card border-0 shadow-sm mb-3 d-none" style="animation: slideDown 0.3s ease;">
+        <div class="card-body py-3">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle p-2 me-3" style="background-color: #f0f7ff;">
+                            <i class="bi bi-check-square text-primary"></i>
+                        </div>
+                        <div>
+                            <h6 class="mb-0 fw-bold">Batch Operations</h6>
+                            <small class="text-muted"><span id="selectedCount">0</span> vials selected</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="d-flex gap-2 justify-content-end">
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-arrow-repeat me-1"></i>Change Status
+                            </button>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item batch-status-action" href="#" data-status="Available">
+                                    <i class="bi bi-check-circle text-success me-2"></i>Mark as Available
+                                </a></li>
+                                <li><a class="dropdown-item batch-status-action" href="#" data-status="Used">
+                                    <i class="bi bi-info-circle text-info me-2"></i>Mark as Used
+                                </a></li>
+                                <li><a class="dropdown-item batch-status-action" href="#" data-status="Depleted">
+                                    <i class="bi bi-exclamation-circle text-warning me-2"></i>Mark as Depleted
+                                </a></li>
+                                <li><a class="dropdown-item batch-status-action" href="#" data-status="Discarded">
+                                    <i class="bi bi-x-circle text-danger me-2"></i>Mark as Discarded
+                                </a></li>
+                            </ul>
+                        </div>
+                        <button class="btn btn-sm btn-outline-success" id="batchExportBtn">
+                            <i class="bi bi-download me-1"></i>Export Selected
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" id="clearSelectionBtn">
+                            <i class="bi bi-x me-1"></i>Clear Selection
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Inventory Table -->
+    <div class="card border-0 shadow-sm fade-in-up" style="animation-delay: 0.7s;">
+        <div class="card-header bg-transparent border-0">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <div class="bg-info bg-opacity-10 rounded-circle p-2 me-3">
+                        <i class="bi bi-table text-info"></i>
+                    </div>
+                    <div>
+                        <h6 class="fw-semibold mb-0">Detailed Inventory</h6>
+                        <small class="text-muted">{{ grouped_vials|length }} batches found</small>
+                    </div>
+                </div>
+                <div class="d-flex gap-2 align-items-center">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="enableBatchSelect">
+                        <label class="form-check-label fw-medium" for="enableBatchSelect">
+                            Batch Select
+                        </label>
+                    </div>
+                    <!-- Pagination Information -->
+                    {% if pagination.pages > 1 %}
+                    <small class="text-muted">
+                        Page {{ pagination.page }} of {{ pagination.pages }}
+                    </small>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+        <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+              <thead class="table-light">
+                <tr>
+                      <th style="width: 50px;">
+                          <input type="checkbox" class="form-check-input" id="selectAllCheckbox" style="display: none;">
+                      </th>
+                  <th>Batch</th>
+                  <th>Cell Line</th>
+                  <th>Date Frozen</th>
+                  <th class="text-center">Vial Count</th>
+                      <th style="width: 120px;">Actions</th>
+                </tr>
+              </thead>
+              {% for group in grouped_vials %}
+              <tbody class="accordion-body">
+                    <tr data-bs-toggle="collapse" data-bs-target="#collapse-{{ group.batch_obj.id }}" 
+                        aria-expanded="false" aria-controls="collapse-{{ group.batch_obj.id }}" 
+                        style="cursor: pointer;" class="batch-row">
+                        <td>
+                            <i class="bi bi-chevron-down transition-transform"></i>
+                        </td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <div class="rounded px-2 py-1 me-2" style="background-color: #f0f7ff;">
+                                    <small class="fw-medium text-primary">{{ group.batch_obj.id }}</small>
+                                </div>
+                                <strong>{{ group.batch_obj.name }}</strong>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="fw-medium">{{ group.cell_line_name }}</span>
+                        </td>
+                        <td>
+                            <span class="text-muted">{{ group.date_frozen.strftime('%Y-%m-%d') }}</span>
+                        </td>
+                    <td class="text-center">
+                            <div class="d-flex justify-content-center gap-1">
+                                <span class="badge rounded-pill bg-success" title="Available">{{ group.status_counts.Available or 0 }}</span>
+                                <span class="badge rounded-pill bg-warning text-dark" title="Used">{{ group.status_counts.Used or 0 }}</span>
+                        <span class="badge rounded-pill bg-danger" title="Depleted/Discarded">{{ (group.status_counts.Depleted or 0) + (group.status_counts.Discarded or 0) }}</span>
+                            </div>
+                    </td>
+                    <td>
+                        {% if current_user.is_admin %}
+                            <a href="{{ url_for('main.edit_batch', batch_id=group.batch_obj.id, next=request.url) }}" 
+                               class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-pencil me-1"></i>Edit
+                            </a>
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <td colspan="6" class="p-0">
+                        <div id="collapse-{{ group.batch_obj.id }}" class="collapse">
+                                <div class="bg-light border-top">
+                                    <table class="table table-sm mb-0">
+                                        <thead class="bg-white">
+                                    <tr>
+                                                <th style="width: 40px;">
+                                                    <input type="checkbox" class="form-check-input batch-select-all" style="display: none;" data-batch-id="{{ group.batch_obj.id }}">
+                                                </th>
+                                        <th>Vial ID</th>
+                                        <th>Vial Tag</th>
+                                        {% if current_user.is_admin %}
+                                        <th>Location</th>
+                                        {% endif %}
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for v in group.vials %}
+                                            <tr class="vial-row" data-vial-id="{{ v.id }}">
+                                                <td>
+                                                    <input type="checkbox" class="form-check-input vial-checkbox" style="display: none;" 
+                                                           data-vial-id="{{ v.id }}" data-batch-id="{{ group.batch_obj.id }}">
+                                                </td>
+                                                <td><small class="text-muted">{{ v.id }}</small></td>
+                                                <td><span class="fw-medium">{{ v.unique_vial_id_tag }}</span></td>
+                                        {% if current_user.is_admin %}
+                                                <td>
+                                                    <small class="text-muted">
+                                                        {{ v.box_location.drawer_info.tower_info.name }}/{{ v.box_location.drawer_info.name }}/{{ v.box_location.name }} 
+                                                        <span class="badge bg-light text-dark">R{{ v.row_in_box }}C{{ v.col_in_box }}</span>
+                                                    </small>
+                                                </td>
+                                        {% endif %}
+                                        <td>
+                                                    <span class="badge rounded-pill bg-{{ 'success' if v.status == 'Available' else 'warning' if v.status == 'Used' else 'danger' if v.status in ['Depleted', 'Discarded'] else 'secondary' }}">
+                                                        {{ v.status }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {% if current_user.is_admin %}
+                                                    <a href="{{ url_for('main.edit_cryovial', vial_id=v.id, next=request.url) }}" 
+                                                       class="btn btn-xs btn-outline-secondary">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </a>
+                                                    {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                                </div>
+                        </div>
+                    </td>
+                </tr>
+              </tbody>
+              {% endfor %}
+            </table>
+        </div>
+    </div>
+    
+        <!-- Pagination -->
+        {% if pagination.pages > 1 %}
+        <div class="card-footer bg-transparent border-0">
+            <nav aria-label="Page navigation">
+                <ul class="pagination pagination-sm justify-content-center mb-0">
+                {% if pagination.has_prev %}
+                <li class="page-item">
+                        <a class="page-link" href="{{ url_for('main.inventory_summary', page=pagination.prev_num, q=search_q, status=search_status) }}">
+                            <i class="bi bi-chevron-left"></i>
+                        </a>
+                </li>
+                {% endif %}
+                
+                {% for page_num in pagination.iter_pages() %}
+                    {% if page_num %}
+                        {% if page_num != pagination.page %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('main.inventory_summary', page=page_num, q=search_q, status=search_status) }}">{{ page_num }}</a>
+                        </li>
+                        {% else %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ page_num }}</span>
+                        </li>
+                        {% endif %}
+                    {% else %}
+                    <li class="page-item disabled">
+                        <span class="page-link">…</span>
+                    </li>
+                    {% endif %}
+                {% endfor %}
+                
+                {% if pagination.has_next %}
+                <li class="page-item">
+                        <a class="page-link" href="{{ url_for('main.inventory_summary', page=pagination.next_num, q=search_q, status=search_status) }}">
+                            <i class="bi bi-chevron-right"></i>
+                        </a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add any additional JavaScript functionality here if needed
+    console.log('Analytics Dashboard loaded');
+
+    // Initialize smart search functionality
+    initializeSmartSearch();
+    
+    // Initialize batch operation functionality
+    initializeBatchOperations();
+
+    // Add animation effects
+    const cards = document.querySelectorAll('.fade-in-up');
+    cards.forEach(card => {
+        card.classList.add('fade-in-up');
+    });
+
+    // Improve collapse animation
+    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(element => {
+        element.addEventListener('click', function() {
+            const icon = this.querySelector('.bi-chevron-down');
+            if (icon) {
+                icon.style.transform = icon.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
+                icon.style.transition = 'transform 0.3s ease';
+            }
+        });
+    });
+});
+
+// Smart search functionality
+function initializeSmartSearch() {
+    const searchInput = document.getElementById('smartSearchInput');
+    const searchSuggestions = document.getElementById('searchSuggestions');
+    const searchHistoryBtn = document.getElementById('searchHistoryBtn');
+    const searchBtn = document.getElementById('searchBtn');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    
+    let searchTimeout;
+    let currentSuggestionIndex = -1;
+    
+    // Search input handling
+    searchInput.addEventListener('input', function() {
+        const query = this.value.trim();
+        
+        clearTimeout(searchTimeout);
+        
+        if (query.length >= 2) {
+            searchTimeout = setTimeout(() => {
+                fetchSearchSuggestions(query);
+            }, 300);
+        } else {
+            hideSuggestions();
+        }
+    });
+    
+    // Keyboard navigation
+    searchInput.addEventListener('keydown', function(e) {
+        const suggestions = searchSuggestions.querySelectorAll('.dropdown-item');
+        
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            currentSuggestionIndex = Math.min(currentSuggestionIndex + 1, suggestions.length - 1);
+            updateSuggestionHighlight(suggestions);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            currentSuggestionIndex = Math.max(currentSuggestionIndex - 1, -1);
+            updateSuggestionHighlight(suggestions);
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            if (currentSuggestionIndex >= 0 && suggestions[currentSuggestionIndex]) {
+                selectSuggestion(suggestions[currentSuggestionIndex]);
+            } else {
+                performSearch();
+            }
+        } else if (e.key === 'Escape') {
+            hideSuggestions();
+        }
+    });
+    
+    // Click elsewhere to hide suggestions
+    document.addEventListener('click', function(e) {
+        if (!searchInput.contains(e.target) && !searchSuggestions.contains(e.target)) {
+            hideSuggestions();
+        }
+    });
+    
+    // Search button
+    searchBtn.addEventListener('click', performSearch);
+    
+    // Search history button
+    searchHistoryBtn.addEventListener('click', showSearchHistory);
+    
+    // Advanced filter handling
+    initializeAdvancedFilters();
+    
+    async function fetchSearchSuggestions(query) {
+        try {
+            const response = await fetch(`/api/search/suggestions?q=${encodeURIComponent(query)}&limit=8`);
+            const data = await response.json();
+            
+            if (data.suggestions && data.suggestions.length > 0) {
+                showSuggestions(data.suggestions);
+            } else {
+                hideSuggestions();
+            }
+        } catch (error) {
+            console.error('Error fetching suggestions:', error);
+            hideSuggestions();
+        }
+    }
+    
+    function showSuggestions(suggestions) {
+        let html = '';
+        suggestions.forEach((suggestion, index) => {
+            html += `
+                <button type="button" class="dropdown-item d-flex align-items-center" data-value="${suggestion.value}" data-type="${suggestion.type}">
+                    <i class="bi bi-${suggestion.icon} me-2 text-muted"></i>
+                    <span>${suggestion.label}</span>
+                </button>
+            `;
+        });
+        
+        searchSuggestions.innerHTML = html;
+        searchSuggestions.classList.add('show');
+        currentSuggestionIndex = -1;
+        
+        // Add click events
+        searchSuggestions.querySelectorAll('.dropdown-item').forEach(item => {
+            item.addEventListener('click', () => selectSuggestion(item));
+        });
+    }
+    
+    function hideSuggestions() {
+        searchSuggestions.classList.remove('show');
+        currentSuggestionIndex = -1;
+    }
+    
+    function updateSuggestionHighlight(suggestions) {
+        suggestions.forEach((item, index) => {
+            if (index === currentSuggestionIndex) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
+    
+    function selectSuggestion(item) {
+        const value = item.getAttribute('data-value');
+        searchInput.value = value;
+        hideSuggestions();
+        
+        // Add to search history
+        addToSearchHistory(value);
+        
+        // Execute search
+        performSearch();
+    }
+    
+    async function addToSearchHistory(query) {
+        try {
+            await fetch('/api/search/history', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ query: query })
+            });
+        } catch (error) {
+            console.error('Error adding to search history:', error);
+        }
+    }
+    
+    async function showSearchHistory() {
+        try {
+            const response = await fetch('/api/search/history');
+            const data = await response.json();
+            
+            if (data.history && data.history.length > 0) {
+                let html = '<h6 class="dropdown-header">Recent Searches</h6>';
+                data.history.forEach(query => {
+                    html += `
+                        <button type="button" class="dropdown-item d-flex align-items-center" data-value="${query}">
+                            <i class="bi bi-clock-history me-2 text-muted"></i>
+                            <span>${query}</span>
+                        </button>
+                    `;
+                });
+                
+                searchSuggestions.innerHTML = html;
+                searchSuggestions.classList.add('show');
+                
+                // Add click events
+                searchSuggestions.querySelectorAll('.dropdown-item').forEach(item => {
+                    item.addEventListener('click', () => selectSuggestion(item));
+                });
+            } else {
+                showToast('info', 'No search history found.');
+            }
+        } catch (error) {
+            console.error('Error fetching search history:', error);
+            showToast('error', 'Failed to load search history.');
+        }
+    }
+    
+    function performSearch() {
+        const query = searchInput.value.trim();
+        const status = document.getElementById('statusFilter').value;
+        
+        if (query) {
+            addToSearchHistory(query);
+        }
+        
+        // Build search URL
+        const params = new URLSearchParams();
+        if (query) params.append('q', query);
+        if (status) params.append('status', status);
+        
+        // Redirect to search results
+        window.location.href = `${window.location.pathname}?${params.toString()}`;
+    }
+}
+
+// Advanced filter functionality
+function initializeAdvancedFilters() {
+    const applyFiltersBtn = document.getElementById('applyFiltersBtn');
+    const clearFiltersBtn = document.getElementById('clearFiltersBtn');
+    
+    // Apply filters
+    applyFiltersBtn.addEventListener('click', applyAdvancedFilters);
+    
+    // Clear filters
+    clearFiltersBtn.addEventListener('click', clearAllFilters);
+    
+    function applyAdvancedFilters() {
+        const params = new URLSearchParams();
+        
+        // Basic search
+        const query = document.getElementById('smartSearchInput').value.trim();
+        const status = document.getElementById('statusFilter').value;
+        
+        if (query) params.append('q', query);
+        if (status) params.append('status', status);
+        
+        // Advanced filters
+        const dateFrom = document.getElementById('dateFromFilter').value;
+        const dateTo = document.getElementById('dateToFilter').value;
+        const fluorescence = document.getElementById('fluorescenceFilter').value.trim();
+        const resistance = document.getElementById('resistanceFilter').value.trim();
+        
+        if (dateFrom) params.append('date_from', dateFrom);
+        if (dateTo) params.append('date_to', dateTo);
+        if (fluorescence) params.append('fluorescence', fluorescence);
+        if (resistance) params.append('resistance', resistance);
+        
+        window.location.href = `${window.location.pathname}?${params.toString()}`;
+    }
+    
+    function clearAllFilters() {
+        document.getElementById('smartSearchInput').value = '';
+        document.getElementById('statusFilter').value = '';
+        document.getElementById('dateFromFilter').value = '';
+        document.getElementById('dateToFilter').value = '';
+        document.getElementById('fluorescenceFilter').value = '';
+        document.getElementById('resistanceFilter').value = '';
+    }
+}
+
+// Toast notification function
+function showToast(type, message) {
+    // Create toast container (if not exists)
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast element
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <i class="bi bi-${type === 'success' ? 'check-circle-fill text-success' : type === 'info' ? 'info-circle-fill text-info' : 'exclamation-triangle-fill text-danger'} me-2"></i>
+                <strong class="me-auto">${type === 'success' ? 'Success' : type === 'info' ? 'Info' : 'Error'}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    // Show toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: true,
+        delay: 3000
+    });
+    toast.show();
+    
+    // Auto cleanup
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        this.remove();
+    });
+}
+
+// Batch operation functionality
+function initializeBatchOperations() {
+    const enableBatchSelectCheckbox = document.getElementById('enableBatchSelect');
+    const batchOperationToolbar = document.getElementById('batchOperationToolbar');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const vialCheckboxes = document.querySelectorAll('.vial-checkbox');
+    const batchSelectAllCheckboxes = document.querySelectorAll('.batch-select-all');
+    const selectedCountSpan = document.getElementById('selectedCount');
+    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+    const batchStatusActions = document.querySelectorAll('.batch-status-action');
+    const batchExportBtn = document.getElementById('batchExportBtn');
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    
+    let selectedVials = new Set();
+    let isDragSelecting = false;
+    let dragStartElement = null;
+    
+    // Enable/disable batch selection mode
+    enableBatchSelectCheckbox.addEventListener('change', function() {
+        const isEnabled = this.checked;
+        toggleBatchSelectMode(isEnabled);
+    });
+    
+    // Select all/deselect all
+    selectAllCheckbox.addEventListener('change', function() {
+        const isChecked = this.checked;
+        vialCheckboxes.forEach(checkbox => {
+            checkbox.checked = isChecked;
+            if (isChecked) {
+                selectedVials.add(checkbox.dataset.vialId);
+            } else {
+                selectedVials.delete(checkbox.dataset.vialId);
+            }
+        });
+        updateSelectionUI();
+    });
+    
+    // 批次全选/取消全选
+    batchSelectAllCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const batchId = this.dataset.batchId;
+            const isChecked = this.checked;
+            const batchVials = document.querySelectorAll(`[data-batch-id="${batchId}"].vial-checkbox`);
+            
+            batchVials.forEach(vialCheckbox => {
+                vialCheckbox.checked = isChecked;
+                if (isChecked) {
+                    selectedVials.add(vialCheckbox.dataset.vialId);
+                } else {
+                    selectedVials.delete(vialCheckbox.dataset.vialId);
+                }
+            });
+            updateSelectionUI();
+        });
+    });
+    
+    // 单个vial选择
+    vialCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            if (this.checked) {
+                selectedVials.add(this.dataset.vialId);
+            } else {
+                selectedVials.delete(this.dataset.vialId);
+            }
+            updateSelectionUI();
+            updateBatchSelectAllState(this.dataset.batchId);
+        });
+    });
+    
+    // 拖拽选择功能
+    document.addEventListener('mousedown', function(e) {
+        if (enableBatchSelectCheckbox.checked && e.target.closest('.vial-row')) {
+            isDragSelecting = true;
+            dragStartElement = e.target.closest('.vial-row');
+            e.preventDefault();
+        }
+    });
+    
+    document.addEventListener('mousemove', function(e) {
+        if (isDragSelecting && e.target.closest('.vial-row')) {
+            const currentElement = e.target.closest('.vial-row');
+            selectRangeBetween(dragStartElement, currentElement);
+        }
+    });
+    
+    document.addEventListener('mouseup', function() {
+        isDragSelecting = false;
+        dragStartElement = null;
+    });
+    
+    // Clear selection
+    clearSelectionBtn.addEventListener('click', function() {
+        selectedVials.clear();
+        vialCheckboxes.forEach(checkbox => checkbox.checked = false);
+        batchSelectAllCheckboxes.forEach(checkbox => checkbox.checked = false);
+        selectAllCheckbox.checked = false;
+        updateSelectionUI();
+    });
+    
+    // 批量状态更新
+    batchStatusActions.forEach(action => {
+        action.addEventListener('click', async function(e) {
+            e.preventDefault();
+            const status = this.dataset.status;
+            await updateSelectedVialsStatus(status);
+        });
+    });
+    
+    // 批量导出
+    batchExportBtn.addEventListener('click', function() {
+        exportSelectedVials();
+    });
+    
+    function toggleBatchSelectMode(enabled) {
+        const checkboxes = [selectAllCheckbox, ...vialCheckboxes, ...batchSelectAllCheckboxes];
+        
+        checkboxes.forEach(checkbox => {
+            checkbox.style.display = enabled ? 'block' : 'none';
+        });
+        
+        if (enabled) {
+            document.body.classList.add('batch-select-mode');
+            // 添加样式提示
+            const vialRows = document.querySelectorAll('.vial-row');
+            vialRows.forEach(row => {
+                row.style.userSelect = 'none';
+                row.style.cursor = 'pointer';
+            });
+        } else {
+            document.body.classList.remove('batch-select-mode');
+            batchOperationToolbar.classList.add('d-none');
+            selectedVials.clear();
+            checkboxes.forEach(checkbox => checkbox.checked = false);
+            
+            // 移除样式
+            const vialRows = document.querySelectorAll('.vial-row');
+            vialRows.forEach(row => {
+                row.style.userSelect = '';
+                row.style.cursor = '';
+            });
+        }
+    }
+    
+    function updateSelectionUI() {
+        const count = selectedVials.size;
+        selectedCountSpan.textContent = count;
+        
+        if (count > 0) {
+            batchOperationToolbar.classList.remove('d-none');
+        } else {
+            batchOperationToolbar.classList.add('d-none');
+        }
+        
+        // 更新全选checkbox状态
+        selectAllCheckbox.checked = vialCheckboxes.length > 0 && selectedVials.size === vialCheckboxes.length;
+        selectAllCheckbox.indeterminate = selectedVials.size > 0 && selectedVials.size < vialCheckboxes.length;
+    }
+    
+    function updateBatchSelectAllState(batchId) {
+        const batchVials = document.querySelectorAll(`[data-batch-id="${batchId}"].vial-checkbox`);
+        const batchSelectAll = document.querySelector(`[data-batch-id="${batchId}"].batch-select-all`);
+        
+        if (batchSelectAll) {
+            const checkedCount = Array.from(batchVials).filter(checkbox => checkbox.checked).length;
+            batchSelectAll.checked = checkedCount === batchVials.length;
+            batchSelectAll.indeterminate = checkedCount > 0 && checkedCount < batchVials.length;
+        }
+    }
+    
+    function selectRangeBetween(startElement, endElement) {
+        const allRows = Array.from(document.querySelectorAll('.vial-row'));
+        const startIndex = allRows.indexOf(startElement);
+        const endIndex = allRows.indexOf(endElement);
+        
+        const minIndex = Math.min(startIndex, endIndex);
+        const maxIndex = Math.max(startIndex, endIndex);
+        
+        for (let i = minIndex; i <= maxIndex; i++) {
+            const row = allRows[i];
+            const checkbox = row.querySelector('.vial-checkbox');
+            if (checkbox) {
+                checkbox.checked = true;
+                selectedVials.add(checkbox.dataset.vialId);
+            }
+        }
+        updateSelectionUI();
+    }
+    
+    async function updateSelectedVialsStatus(status) {
+        if (selectedVials.size === 0) {
+            showToast('warning', 'No vials selected.');
+            return;
+        }
+        
+        const vialIds = Array.from(selectedVials);
+        
+        try {
+            const response = await fetch('/api/vials/batch-update-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({
+                    vial_ids: vialIds,
+                    status: status
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                showToast('success', `Updated ${vialIds.length} vials to status: ${status}`);
+                
+                // 更新UI中的状态显示
+                vialIds.forEach(vialId => {
+                    const row = document.querySelector(`[data-vial-id="${vialId}"]`);
+                    if (row) {
+                        const statusBadge = row.querySelector('.badge');
+                        if (statusBadge) {
+                            statusBadge.textContent = status;
+                            statusBadge.className = `badge rounded-pill bg-${getStatusColor(status)}`;
+                        }
+                    }
+                });
+                
+                // Clear selection
+                setTimeout(() => {
+                    clearSelectionBtn.click();
+                }, 1000);
+            } else {
+                showToast('error', data.message || 'Failed to update vial status.');
+            }
+        } catch (error) {
+            console.error('Error updating vials status:', error);
+            showToast('error', 'An error occurred while updating vials.');
+        }
+    }
+    
+    function exportSelectedVials() {
+        if (selectedVials.size === 0) {
+            showToast('warning', 'No vials selected for export.');
+            return;
+        }
+        
+        const vialIds = Array.from(selectedVials).join(',');
+        const url = `${window.location.pathname}?export=csv&vial_ids=${vialIds}`;
+        window.open(url, '_blank');
+    }
+    
+    function getStatusColor(status) {
+        switch (status) {
+            case 'Available': return 'success';
+            case 'Used': return 'info';
+            case 'Depleted': return 'warning';
+            case 'Discarded': return 'danger';
+            default: return 'secondary';
+        }
+    }
+}
+</script>
+{% endblock %}
 {% endblock %}

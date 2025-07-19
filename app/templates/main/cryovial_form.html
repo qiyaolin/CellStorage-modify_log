@@ -1,92 +1,112 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>{{ title }}</h1>
-    <form method="POST" action="{{ form_action }}" novalidate>
-        {{ form.hidden_tag() }}
+<div class="row justify-content-center">
+  <div class="col-md-10 col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-center mb-4">{{ title }}</h2>
+        <form method="POST" action="{{ form_action }}" novalidate>
+          {{ form.hidden_tag() }}
 
-        <fieldset>
-            <legend>Vial Identification & Content</legend>
-            <p>
-                {{ form.batch_name.label }}<br>
-                {{ form.batch_name(size=40) }}<br>
-                {% for error in form.batch_name.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-            <p>
-                {{ form.quantity_to_add.label }}<br>
-                {{ form.quantity_to_add(size=5) }}<br>
-                {% for error in form.quantity_to_add.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-            <p>
-                {{ form.cell_line_id.label }}<br>
-                {{ form.cell_line_id() }}
-                <small>(If cell line not listed, an admin may need to <a href="{{ url_for('main.add_cell_line') }}" target="_blank">add it first</a>)</small><br>
-                {% for error in form.cell_line_id.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-            <p>
-                {{ form.passage_number.label }}<br>
-                {{ form.passage_number(size=20) }}<br>
-                {% for error in form.passage_number.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-            <p>
-                {{ form.date_frozen.label }} (YYYY-MM-DD)<br>
-                {{ form.date_frozen() }}<br>
-                {% for error in form.date_frozen.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-            <p>
-                {{ form.volume_ml.label }}<br>
-                {{ form.volume_ml(size=10) }}<br>
-                {% for error in form.volume_ml.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-            <p>
-                {{ form.concentration.label }}<br>
-                {{ form.concentration(size=30) }}<br>
-                {% for error in form.concentration.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-            <p>
-                {{ form.fluorescence_tag.label }}<br>
-                {{ form.fluorescence_tag(size=20) }}<br>
-                {% for error in form.fluorescence_tag.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-            <p>
-                {{ form.resistance.label }}<br>
-                {% for sub in form.resistance %}
-                    <label>{{ sub() }} {{ sub.label.text }}</label><br>
-                {% endfor %}
-                {% for error in form.resistance.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-            <p>
-                {{ form.parental_cell_line.label }}<br>
-                {{ form.parental_cell_line(size=30) }}<br>
-                {% for error in form.parental_cell_line.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-        </fieldset>
+          <fieldset class="mb-4">
+            <legend class="h5 mb-3">Vial Identification & Content</legend>
+            <div class="row g-3">
+              <div class="col-md-6">
+                <div class="form-floating">
+                  {{ form.batch_name(class="form-control" + (" is-invalid" if form.batch_name.errors else ""), placeholder="Batch Name") }}
+                  {{ form.batch_name.label }}
+                  {% if form.batch_name.errors %}<div class="invalid-feedback">{{ form.batch_name.errors[0] }}</div>{% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-floating">
+                  {{ form.quantity_to_add(class="form-control" + (" is-invalid" if form.quantity_to_add.errors else ""), placeholder="Quantity to Add") }}
+                  {{ form.quantity_to_add.label }}
+                  {% if form.quantity_to_add.errors %}<div class="invalid-feedback">{{ form.quantity_to_add.errors[0] }}</div>{% endif %}
+                </div>
+              </div>
+              <div class="col-12">
+                <div class="form-floating">
+                  {{ form.cell_line_id(class="form-select" + (" is-invalid" if form.cell_line_id.errors else "")) }}
+                  {{ form.cell_line_id.label }}
+                  <small class="form-text text-muted">If cell line not listed, an admin may need to <a href="{{ url_for('main.add_cell_line') }}" target="_blank">add it first</a>.</small>
+                  {% if form.cell_line_id.errors %}<div class="invalid-feedback">{{ form.cell_line_id.errors[0] }}</div>{% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-floating">
+                  {{ form.passage_number(class="form-control" + (" is-invalid" if form.passage_number.errors else ""), placeholder="Passage Number") }}
+                  {{ form.passage_number.label }}
+                  {% if form.passage_number.errors %}<div class="invalid-feedback">{{ form.passage_number.errors[0] }}</div>{% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-floating">
+                  {{ form.date_frozen(class="form-control" + (" is-invalid" if form.date_frozen.errors else ""), placeholder="Date Frozen") }}
+                  {{ form.date_frozen.label }}
+                  {% if form.date_frozen.errors %}<div class="invalid-feedback">{{ form.date_frozen.errors[0] }}</div>{% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-floating">
+                  {{ form.volume_ml(class="form-control" + (" is-invalid" if form.volume_ml.errors else ""), placeholder="Volume (uL)") }}
+                  {{ form.volume_ml.label }}
+                  {% if form.volume_ml.errors %}<div class="invalid-feedback">{{ form.volume_ml.errors[0] }}</div>{% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-floating">
+                  {{ form.concentration(class="form-control" + (" is-invalid" if form.concentration.errors else ""), placeholder="Concentration") }}
+                  {{ form.concentration.label }}
+                  {% if form.concentration.errors %}<div class="invalid-feedback">{{ form.concentration.errors[0] }}</div>{% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-floating">
+                  {{ form.fluorescence_tag(class="form-control" + (" is-invalid" if form.fluorescence_tag.errors else ""), placeholder="Fluorescence Tag") }}
+                  {{ form.fluorescence_tag.label }}
+                  {% if form.fluorescence_tag.errors %}<div class="invalid-feedback">{{ form.fluorescence_tag.errors[0] }}</div>{% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="form-floating">
+                  {{ form.parental_cell_line(class="form-control" + (" is-invalid" if form.parental_cell_line.errors else ""), placeholder="Parental Cell Line") }}
+                  {{ form.parental_cell_line.label }}
+                  {% if form.parental_cell_line.errors %}<div class="invalid-feedback">{{ form.parental_cell_line.errors[0] }}</div>{% endif %}
+                </div>
+              </div>
+              <div class="col-12">
+                <label class="form-label">{{ form.resistance.label }}</label>
+                <div>
+                  {% for sub in form.resistance %}
+                  <div class="form-check form-check-inline">
+                    {{ sub(class="form-check-input" + (" is-invalid" if form.resistance.errors else "")) }}
+                    {{ sub.label(class="form-check-label") }}
+                  </div>
+                  {% endfor %}
+                </div>
+                {% if form.resistance.errors %}<div class="invalid-feedback d-block">{{ form.resistance.errors[0] }}</div>{% endif %}
+              </div>
+            </div>
+          </fieldset>
+          
+          <fieldset>
+            <legend class="h5 mb-3">Notes</legend>
+            <div class="form-floating">
+              {{ form.notes(class="form-control" + (" is-invalid" if form.notes.errors else ""), placeholder="Notes", style="height: 120px;") }}
+              {{ form.notes.label }}
+              {% if form.notes.errors %}<div class="invalid-feedback">{{ form.notes.errors[0] }}</div>{% endif %}
+            </div>
+          </fieldset>
 
-        {# REMOVE Manual Location Fields fieldset and its JavaScript #}
-        {#
-        <fieldset id="manual_location_fields" style="display: none;">
-            ...
-        </fieldset>
-        #}
-
-        <fieldset>
-            <legend>Notes</legend>
-            <p>
-                {{ form.notes.label }}<br>
-                {{ form.notes(rows=4, cols=48) }}<br>
-                {% for error in form.notes.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-            </p>
-        </fieldset>
-
-        <p>{{ form.submit() }}</p> {# Button text was 'Next: Plan Placement / Save Vial' #}
-                              {# Can be 'Next: Plan Placement' from form definition #}
-    </form>
-    <p><a href="{{ url_for('main.cryovial_inventory') }}">Back to Inventory List</a></p>
-
-    {# REMOVE the JavaScript block for toggling manual_location_fields #}
-    {#
-    <script>
-        ...
-    </script>
-    #}
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+            <a href="{{ url_for('main.cryovial_inventory') }}" class="btn btn-secondary me-md-2">Cancel</a>
+            {{ form.submit(class="btn btn-primary") }}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

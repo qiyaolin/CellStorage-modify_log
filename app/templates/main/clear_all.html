@@ -1,16 +1,39 @@
 {% extends "base.html" %}
 {% block content %}
-  <h1>Clear Database</h1>
-  <p>This will remove all data except admin accounts.</p>
-  <form method="POST">
-    {{ form.hidden_tag() }}
-    <div class="mb-3">
-      {{ form.confirm.label }}<br>
-      {{ form.confirm(size=30) }}
-      {% for error in form.confirm.errors %}
-        <div class="text-danger">{{ error }}</div>
-      {% endfor %}
+  <div class="card border-danger">
+    <div class="card-header bg-danger text-white">
+      <h1><i class="bi bi-exclamation-triangle-fill"></i> Clear Database</h1>
     </div>
-    {{ form.submit(class="btn btn-danger") }}
-  </form>
+    <div class="card-body">
+      <div class="alert alert-danger" role="alert">
+        <h4 class="alert-heading">Warning! This is a destructive action.</h4>
+        <p>
+          You are about to permanently delete all data from the database, including:
+          <ul>
+            <li>All CryoVials</li>
+            <li>All Vial Batches</li>
+            <li>All Cell Lines</li>
+            <li>All Location information (Towers, Drawers, Boxes)</li>
+            <li>All Audit Logs</li>
+          </ul>
+        </p>
+        <hr>
+        <p class="mb-0">
+          <strong>Only administrator accounts will be preserved.</strong> This action cannot be undone.
+        </p>
+      </div>
+
+      <form method="POST" class="mt-4">
+        {{ form.hidden_tag() }}
+        <div class="mb-3">
+          <label for="confirm" class="form-label">To confirm this action, please type <strong><code>confirm_hayer</code></strong> into the box below and click "Clear All Data".</label>
+          {{ form.confirm(class="form-control", size=30) }}
+          {% for error in form.confirm.errors %}
+            <div class="text-danger mt-1">{{ error }}</div>
+          {% endfor %}
+        </div>
+        {{ form.submit(class="btn btn-danger") }}
+      </form>
+    </div>
+  </div>
 {% endblock %}

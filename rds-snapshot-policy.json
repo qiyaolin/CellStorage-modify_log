@@ -1,0 +1,11 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowCreateRDSSnapshot",
+            "Effect": "Allow",
+            "Action": "rds:CreateDBSnapshot",
+            "Resource": "arn:aws:rds:us-east-2a:456495308264:db:cell-storage-db"
+        }
+    ]
+}

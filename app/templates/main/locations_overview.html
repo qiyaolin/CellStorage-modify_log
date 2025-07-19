@@ -1,54 +1,532 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>Freezer Locations Overview</h1>
-    <p>
-        <a href="{{ url_for('main.add_tower') }}" class="button">Add New Tower</a> |
-        <a href="{{ url_for('main.add_drawer') }}" class="button">Add New Drawer</a> |
-        <a href="{{ url_for('main.add_box') }}" class="button">Add New Box</a>
-    </p>
+<div class="container-fluid">
+    <!-- Modern Page Title -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 fw-bold text-dark mb-1 d-flex align-items-center fade-in-up">
+                        <div class="rounded-circle p-2 me-3" style="background-color: #f0fff4;">
+                            <i class="bi bi-building text-success"></i>
+                        </div>
+                        Storage Locations
+                    </h1>
+                    <p class="text-muted mb-0 fade-in-up" style="animation-delay: 0.1s;">Interactive freezer facility layout and management</p>
+                </div>
+                <div class="fade-in-up" style="animation-delay: 0.2s;">
+                    <a href="{{ url_for('main.add_tower') }}" class="btn btn-success">
+                        <i class="bi bi-plus-lg me-1"></i>Add New Tower
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    <h2>Towers</h2>
     {% if towers %}
-        <ul>
-            {% for tower in towers %}
-                <li>
-                    <strong>{{ tower.name }}</strong> ({{ tower.freezer_name if tower.freezer_name else 'N/A' }})
-                    - <a href="{{ url_for('main.edit_tower', tower_id=tower.id) }}">Edit Tower</a>
-                    <p>{{ tower.description if tower.description }}</p>
-                    {% if tower.drawers.all() %}
-                        <ul>
-                            {% for drawer in tower.drawers.order_by('name') %}
-                                <li>
-                                    <em>{{ drawer.name }}</em>
-                                    - <a href="{{ url_for('main.edit_drawer', drawer_id=drawer.id) }}">Edit Drawer</a>
-                                    {% if drawer.boxes.all() %}
-                                        <ul>
-                                            {% for box in drawer.boxes.order_by('name') %}
-                                                <li>
-                                                    {{ box.name }} ({{ box.rows }}x{{ box.columns }})
-                                                    - <a href="{{ url_for('main.edit_box', box_id=box.id) }}">Edit Box</a>
-                                                    {% if box.description %}<small> - {{ box.description }}</small>{% endif %}
-                                                </li>
+    <!-- Facility Overview Cards -->
+    <div class="row g-4 mb-5">
+        <div class="col-lg-3 col-md-6 fade-in-up">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4 text-center">
+                    <div class="rounded-circle p-3 d-inline-flex mb-3" style="width: 70px; height: 70px; align-items: center; justify-content: center; background-color: #f0f7ff;">
+                        <i class="bi bi-building fs-2" style="color: #0d6efd;"></i>
+                    </div>
+                    <h4 class="fw-bold text-primary">{{ towers|length }}</h4>
+                    <p class="text-muted mb-0">Towers</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 fade-in-up" style="animation-delay: 0.1s;">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4 text-center">
+                    <div class="rounded-circle p-3 d-inline-flex mb-3" style="width: 70px; height: 70px; align-items: center; justify-content: center; background-color: #f0fdff;">
+                        <i class="bi bi-archive fs-2" style="color: #0dcaf0;"></i>
+                    </div>
+                    <h4 class="fw-bold text-info">{{ total_drawers or 0 }}</h4>
+                    <p class="text-muted mb-0">Drawers</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 fade-in-up" style="animation-delay: 0.2s;">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4 text-center">
+                    <div class="rounded-circle p-3 d-inline-flex mb-3" style="width: 70px; height: 70px; align-items: center; justify-content: center; background-color: #fffdf0;">
+                        <i class="bi bi-box fs-2" style="color: #ffc107;"></i>
+                    </div>
+                    <h4 class="fw-bold text-warning">{{ total_boxes or 0 }}</h4>
+                    <p class="text-muted mb-0">Boxes</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-3 col-md-6 fade-in-up" style="animation-delay: 0.3s;">
+            <div class="card border-0 shadow-sm h-100">
+                <div class="card-body p-4 text-center">
+                    <div class="rounded-circle p-3 d-inline-flex mb-3" style="width: 70px; height: 70px; align-items: center; justify-content: center; background-color: #f0fff4;">
+                        <i class="bi bi-thermometer-snow fs-2" style="color: #198754;"></i>
+                    </div>
+                    <h4 class="fw-bold text-success">{{ total_capacity or 0 }}</h4>
+                    <p class="text-muted mb-0">Total Positions</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Facility Map -->
+    <div class="row">
+        <div class="col-12 fade-in-up" style="animation-delay: 0.4s;">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent border-0">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle p-2 me-3" style="width: 40px; height: 40px; align-items: center; justify-content: center; background-color: #f0f7ff;">
+                                <i class="bi bi-map" style="color: #0d6efd;"></i>
+                            </div>
+                            <h6 class="fw-semibold mb-0">Interactive Facility Map</h6>
+                        </div>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <input type="radio" class="btn-check" name="viewMode" id="gridView" autocomplete="off" checked>
+                            <label class="btn btn-outline-primary" for="gridView">
+                                <i class="bi bi-grid-3x3-gap me-1"></i>Grid
+                            </label>
+                            <input type="radio" class="btn-check" name="viewMode" id="listView" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="listView">
+                                <i class="bi bi-list me-1"></i>List
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-body p-4">
+                    <!-- Grid View -->
+                    <div id="gridViewContent" class="view-content">
+                        <div class="row g-4">
+                            {% for tower in towers %}
+                            <div class="col-lg-4 col-md-6 tower-card" data-tower-id="{{ tower.id }}">
+                                <div class="card border-0 shadow-sm h-100 tower-visualization">
+                                    <div class="card-header bg-gradient text-white position-relative" 
+                                         style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="fw-bold mb-1">{{ tower.name }}</h6>
+                                                <small class="opacity-75">{{ tower.freezer_name }}</small>
+                                            </div>
+                                            <div class="dropdown">
+                                                <button class="btn btn-sm btn-light btn-outline-light dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                                    <i class="bi bi-gear"></i>
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li><a class="dropdown-item" href="{{ url_for('main.edit_tower', tower_id=tower.id) }}">
+                                                        <i class="bi bi-pencil me-2"></i>Edit Tower
+                                                    </a></li>
+                                                    <li><a class="dropdown-item" href="{{ url_for('main.add_drawer', tower_id=tower.id) }}">
+                                                        <i class="bi bi-plus me-2"></i>Add Drawer
+                                                    </a></li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                        <!-- Occupancy Indicator -->
+                                        <div class="position-absolute bottom-0 start-0 w-100">
+                                            <div class="progress" style="height: 3px;">
+                                                {% set drawer_count = tower.drawers.count() %}
+                                                {% set occupancy = (drawer_count / 10 * 100) if drawer_count < 10 else 100 %}
+                                                <div class="progress-bar bg-light" role="progressbar" style="width: {{ occupancy }}%"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-body p-3">
+                                        <!-- 3D Tower Layer Visualization -->
+                                        <div class="tower-3d-view mb-3">
+                                            {% set drawers_list = tower.drawers.order_by('name').all() %}
+                                            {% if drawers_list %}
+                                                <div class="drawer-stack">
+                                                    {% for drawer in drawers_list[:8] %}
+                                                    <div class="drawer-level" 
+                                                         data-bs-toggle="tooltip" 
+                                                         title="{{ drawer.name }} - {{ drawer.boxes.count() }} boxes"
+                                                         style="animation-delay: {{ loop.index0 * 0.1 }}s;">
+                                                        <div class="drawer-front">
+                                                            <div class="drawer-handle"></div>
+                                                            <div class="drawer-label">{{ drawer.name }}</div>
+                                                            <div class="drawer-status">
+                                                                {% set box_count = drawer.boxes.count() %}
+                                                                <span class="badge bg-{{ 'success' if box_count > 0 else 'secondary' }} rounded-pill">
+                                                                    {{ box_count }}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endfor %}
+                                                    {% if drawers_list|length > 8 %}
+                                                    <div class="drawer-level more-indicator">
+                                                        <div class="drawer-front">
+                                                            <small class="text-muted">+{{ drawers_list|length - 8 }} more</small>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
                                             {% else %}
-                                                <li>No boxes in this drawer.</li>
-                                            {% endfor %}
-                                        </ul>
-                                    {% else %}
-                                        <p><small>No boxes yet in this drawer. <a href="{{ url_for('main.add_box', drawer_id=drawer.id) }}">Add one?</a></small></p>
-                                    {% endif %}
-                                </li>
-                            {% else %}
-                                 <li>No drawers in this tower.</li>
+                                                <div class="empty-tower text-center py-4">
+                                                    <i class="bi bi-archive text-muted fs-1"></i>
+                                                    <p class="text-muted mt-2">No drawers</p>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                        
+                                        <!-- Statistics Information -->
+                                        <div class="row g-2 text-center">
+                                            <div class="col-4">
+                                                <div class="bg-light rounded p-2">
+                                                    <small class="text-muted d-block">Drawers</small>
+                                                    <strong class="text-primary">{{ tower.drawers.count() }}</strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="bg-light rounded p-2">
+                                                    <small class="text-muted d-block">Boxes</small>
+                                                    <strong class="text-warning">
+                                                        {% set total_boxes = 0 %}
+                                                        {% for drawer in tower.drawers %}
+                                                            {% set total_boxes = total_boxes + drawer.boxes.count() %}
+                                                        {% endfor %}
+                                                        {{ total_boxes }}
+                                                    </strong>
+                                                </div>
+                                            </div>
+                                            <div class="col-4">
+                                                <div class="bg-light rounded p-2">
+                                                    <small class="text-muted d-block">Vials</small>
+                                                    <strong class="text-success">
+                                                        {% set total_vials = 0 %}
+                                                        {% for drawer in tower.drawers %}
+                                                            {% for box in drawer.boxes %}
+                                                                {% set total_vials = total_vials + box.cryovials.count() %}
+                                                            {% endfor %}
+                                                        {% endfor %}
+                                                        {{ total_vials }}
+                                                    </strong>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer bg-transparent border-0 pt-0">
+                                        <button class="btn btn-outline-primary btn-sm w-100 expand-tower-btn" 
+                                                data-tower-id="{{ tower.id }}">
+                                            <i class="bi bi-eye me-1"></i>View Details
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                             {% endfor %}
-                        </ul>
-                    {% else %}
-                        <p><small>No drawers yet in this tower. <a href="{{ url_for('main.add_drawer', tower_id=tower.id) }}">Add one?</a></small></p>
-                    {% endif %}
-                </li>
-            {% endfor %}
-        </ul>
+                        </div>
+                    </div>
+
+                    <!-- List View -->
+                    <div id="listViewContent" class="view-content d-none">
+                        <div class="accordion" id="towersAccordion">
+                            {% for tower in towers %}
+                            <div class="accordion-item border-0 shadow-sm mb-3 rounded">
+                                <h2 class="accordion-header" id="heading{{ tower.id }}">
+                                    <button class="accordion-button collapsed rounded" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ tower.id }}" aria-expanded="false">
+                                        <div class="d-flex align-items-center">
+                                            <div class="rounded-circle p-2 me-3" style="background-color: #f0f7ff;">
+                                                <i class="bi bi-building text-primary"></i>
+                                            </div>
+                                            <div>
+                                                <h6 class="fw-bold mb-0">{{ tower.name }}</h6>
+                                                <small class="text-muted">{{ tower.freezer_name }}</small>
+                                            </div>
+                                        </div>
+                                    </button>
+                                </h2>
+                                <div id="collapse{{ tower.id }}" class="accordion-collapse collapse">
+                                    <div class="accordion-body">
+                                        <div class="d-flex justify-content-end mb-3">
+                                            <a href="{{ url_for('main.edit_tower', tower_id=tower.id) }}" class="btn btn-sm btn-outline-secondary me-2">
+                                                <i class="bi bi-pencil me-1"></i>Edit Tower
+                                            </a>
+                                            <a href="{{ url_for('main.add_drawer', tower_id=tower.id) }}" class="btn btn-sm btn-primary">
+                                                <i class="bi bi-plus me-1"></i>Add Drawer
+                                            </a>
+                                        </div>
+                                        
+                                        {% if tower.drawers.all() %}
+                                        <div class="row g-3">
+                                            {% for drawer in tower.drawers.order_by('name') %}
+                                            <div class="col-lg-6">
+                                                <div class="card border shadow-sm">
+                                                    <div class="card-body p-3">
+                                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                                            <div>
+                                                                <h6 class="fw-bold mb-1">{{ drawer.name }}</h6>
+                                                                <span class="badge bg-secondary rounded-pill">{{ drawer.boxes.count() }} Boxes</span>
+                                                            </div>
+                                                            <div class="dropdown">
+                                                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                                                                    <i class="bi bi-three-dots"></i>
+                                                                </button>
+                                                                <ul class="dropdown-menu">
+                                                                    <li><a class="dropdown-item" href="{{ url_for('main.edit_drawer', drawer_id=drawer.id) }}">Edit</a></li>
+                                                                    <li><a class="dropdown-item" href="{{ url_for('main.add_box', drawer_id=drawer.id) }}">Add Box</a></li>
+                                                                </ul>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        {% if drawer.boxes.all() %}
+                                                        <div class="box-grid-mini">
+                                                            {% for box in drawer.boxes.order_by('name') %}
+                                                            <div class="box-mini" 
+                                                                 data-bs-toggle="tooltip" 
+                                                                 title="{{ box.name }} ({{ box.rows }}x{{ box.columns }}) - {{ box.cryovials.count() }} vials">
+                                                                <div class="box-mini-content bg-{{ 'success' if box.cryovials.count() > 0 else 'light' }} 
+                                                                                               text-{{ 'white' if box.cryovials.count() > 0 else 'muted' }}">
+                                                                    {{ box.name[:3] }}
+                                                                </div>
+                                                            </div>
+                                                            {% endfor %}
+                                                        </div>
+                                                        {% else %}
+                                                        <p class="text-muted small mb-0">No boxes in this drawer</p>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {% endfor %}
+                                        </div>
+                                        {% else %}
+                                        <div class="text-center py-4">
+                                            <i class="bi bi-archive text-muted fs-1"></i>
+                                            <p class="text-muted mt-2">No drawers in this tower</p>
+                                            <a href="{{ url_for('main.add_drawer', tower_id=tower.id) }}" class="btn btn-outline-primary btn-sm">
+                                                Add First Drawer
+                                            </a>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     {% else %}
-        <p>No towers defined yet. <a href="{{ url_for('main.add_tower') }}">Start by adding a tower.</a></p>
+    <!-- Empty State -->
+    <div class="row justify-content-center fade-in-up">
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm text-center">
+                <div class="card-body p-5">
+                    <div class="rounded-circle p-4 d-inline-flex mb-4" style="background-color: #f0f7ff;">
+                        <i class="bi bi-building fs-1 text-primary"></i>
+                    </div>
+                    <h3 class="fw-bold text-dark mb-3">No Freezer Facilities Found</h3>
+                    <p class="text-muted mb-4">Start by creating your first freezer tower to organize your storage infrastructure.</p>
+                    <a href="{{ url_for('main.add_tower') }}" class="btn btn-success btn-lg">
+                        <i class="bi bi-plus-lg me-2"></i>Create Your First Tower
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
     {% endif %}
+</div>
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // View toggle functionality
+    const gridView = document.getElementById('gridView');
+    const listView = document.getElementById('listView');
+    const gridContent = document.getElementById('gridViewContent');
+    const listContent = document.getElementById('listViewContent');
+
+    gridView.addEventListener('change', function() {
+        if (this.checked) {
+            gridContent.classList.remove('d-none');
+            listContent.classList.add('d-none');
+        }
+    });
+
+    listView.addEventListener('change', function() {
+        if (this.checked) {
+            listContent.classList.remove('d-none');
+            gridContent.classList.add('d-none');
+        }
+    });
+
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+
+    // Tower card animations
+    const towerCards = document.querySelectorAll('.tower-card');
+    towerCards.forEach((card, index) => {
+        card.style.animationDelay = `${index * 0.1}s`;
+        card.classList.add('fade-in-up');
+    });
+
+    // Drawer level animations
+    const drawerLevels = document.querySelectorAll('.drawer-level');
+    drawerLevels.forEach(level => {
+        level.classList.add('drawer-slide-in');
+    });
+
+    // Tower details expansion functionality
+    document.querySelectorAll('.expand-tower-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const towerId = this.dataset.towerId;
+            // Here you can add modal or sidebar to display detailed information
+            console.log('Expanding tower details for:', towerId);
+        });
+    });
+});
+</script>
+
+<style>
+/* 3D Tower Visualization Styles */
+.tower-3d-view {
+    perspective: 1000px;
+    height: 200px;
+    overflow: hidden;
+}
+
+.drawer-stack {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: center;
+    transform-style: preserve-3d;
+}
+
+.drawer-level {
+    width: 90%;
+    height: 20px;
+    margin-bottom: 2px;
+    transform-origin: center bottom;
+    transition: all 0.3s ease;
+    opacity: 0;
+    animation: drawerSlideIn 0.6s ease-out forwards;
+}
+
+.drawer-level:hover {
+    transform: translateZ(10px) scale(1.05);
+    z-index: 10;
+}
+
+.drawer-front {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative;
+    overflow: hidden;
+}
+
+.drawer-handle {
+    width: 8px;
+    height: 8px;
+    background: #6c757d;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.drawer-label {
+    flex: 1;
+    text-align: center;
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: #495057;
+}
+
+.drawer-status {
+    flex-shrink: 0;
+}
+
+.more-indicator .drawer-front {
+    background: linear-gradient(135deg, #e9ecef 0%, #ced4da 100%);
+    opacity: 0.7;
+}
+
+@keyframes drawerSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px) rotateX(-15deg);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) rotateX(0);
+    }
+}
+
+/* Small Box Grid */
+.box-grid-mini {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.box-mini {
+    aspect-ratio: 1;
+    cursor: pointer;
+    transition: transform 0.2s ease;
+}
+
+.box-mini:hover {
+    transform: scale(1.1);
+}
+
+.box-mini-content {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    font-size: 0.6rem;
+    font-weight: 600;
+}
+
+/* Empty Tower State */
+.empty-tower {
+    height: 200px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Responsive Improvements */
+@media (max-width: 768px) {
+    .tower-3d-view {
+        height: 150px;
+    }
+    
+    .drawer-level {
+        height: 15px;
+    }
+    
+    .drawer-label {
+        font-size: 0.65rem;
+    }
+    
+    .box-grid-mini {
+        grid-template-columns: repeat(auto-fill, minmax(25px, 1fr));
+        gap: 3px;
+    }
+}
+</style>
+{% endblock %}
 {% endblock %}

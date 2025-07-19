@@ -1,20 +1,33 @@
 {% extends "base.html" %}
 
 {% block content %}
-    <h1>{{ title }}</h1>
-    <form method="POST" action="{{ form_action }}" novalidate>
-        {{ form.hidden_tag() }}
-        <p>
-            {{ form.tower_id.label }}<br>
-            {{ form.tower_id() }}<br>
-            {% for error in form.tower_id.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>
-            {{ form.name.label }}<br>
-            {{ form.name(size=50) }}<br>
-            {% for error in form.name.errors %} <span style="color: red;">[{{ error }}]</span><br> {% endfor %}
-        </p>
-        <p>{{ form.submit() }}</p>
-    </form>
-    <p><a href="{{ url_for('main.locations_overview') }}">Back to Locations Overview</a></p>
+<div class="row justify-content-center">
+  <div class="col-md-8 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title text-center mb-4">{{ title }}</h2>
+        <form method="POST" action="{{ form_action }}" novalidate>
+          {{ form.hidden_tag() }}
+          
+          <div class="form-floating mb-3">
+            {{ form.tower_id(class="form-select" + (" is-invalid" if form.tower_id.errors else "")) }}
+            {{ form.tower_id.label(class="form-label") }}
+            {% if form.tower_id.errors %}<div class="invalid-feedback">{{ form.tower_id.errors[0] }}</div>{% endif %}
+          </div>
+          
+          <div class="form-floating mb-3">
+            {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else ""), placeholder="Drawer Name") }}
+            {{ form.name.label }}
+            {% if form.name.errors %}<div class="invalid-feedback">{{ form.name.errors[0] }}</div>{% endif %}
+          </div>
+
+          <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+            <a href="{{ url_for('main.locations_overview') }}" class="btn btn-secondary me-md-2">Cancel</a>
+            {{ form.submit(class="btn btn-primary") }}
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

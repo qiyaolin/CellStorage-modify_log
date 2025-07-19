@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 
-{% block title %}Shopping Cart{% endblock %}
+{% block title %}Submit Purchase Request{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
-    <h1 class="mt-4">Shopping Cart</h1>
-    <div id="cart-items"></div>
+    <h1 class="mt-4">Submit Purchase Request</h1>
+    <form id="request-form">
+        <div id="cart-items"></div>
+        <button type="submit" class="btn btn-primary">Submit Request</button>
+    </form>
 </div>
 {% endblock %}
 
@@ -17,10 +20,11 @@ $(document).ready(function() {
             const cartItems = $('#cart-items');
             cartItems.empty();
             if (data.length === 0) {
-                cartItems.html('<p>Your shopping cart is empty.</p>');
+                cartItems.html('<p>Your shopping cart is empty. Add items to your cart to create a purchase request.</p>');
+                $('#request-form button').hide();
                 return;
             }
-            const table = $('<table class="table"><thead><tr><th>Item</th><th>Supplier</th><th>Quantity</th><th>Price</th><th></th></tr></thead><tbody></tbody></table>');
+            const table = $('<table class="table"><thead><tr><th>Item</th><th>Supplier</th><th>Quantity</th><th>Price</th></tr></thead><tbody></tbody></table>');
             const tbody = table.find('tbody');
             data.forEach(function(item) {
                 const row = $('<tr>');
@@ -28,21 +32,19 @@ $(document).ready(function() {
                 row.append(`<td>${item.supplier_name || 'N/A'}</td>`);
                 row.append(`<td>${item.quantity} ${item.unit || ''}</td>`);
                 row.append(`<td>${item.estimated_price || 'N/A'}</td>`);
-                row.append(`<td><button class="btn btn-danger btn-sm delete-item" data-id="${item.id}">Remove</button></td>`);
                 tbody.append(row);
             });
             cartItems.append(table);
-            cartItems.append('<a href="{{ url_for('inventory.submit_request') }}" class="btn btn-primary">Submit Purchase Request</a>');
         });
     }
 
-    $('#cart-items').on('click', '.delete-item', function() {
-        const itemId = $(this).data('id');
+    $('#request-form').on('submit', function(e) {
+        e.preventDefault();
         $.ajax({
-            url: `/inventory/api/cart/${itemId}`,
-            method: 'DELETE',
+            url: '{{ url_for("inventory.api_submit_request") }}',
+            method: 'POST',
             success: function() {
-                loadCart();
+                window.location.href = '{{ url_for("inventory.orders") }}';
             }
         });
     });

@@ -444,3 +444,26 @@ class ShoppingCart(db.Model):
     
     def __repr__(self):
         return f'<ShoppingCart {self.item_name} x{self.quantity} by User {self.user_id}>'
+
+class PurchaseRequest(db.Model):
+    __tablename__ = 'purchase_requests'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    item_name = db.Column(db.String(255), nullable=False)
+    catalog_number = db.Column(db.String(128))
+    supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'))
+    quantity_requested = db.Column(db.Float, nullable=False)
+    unit = db.Column(db.String(32))
+    justification = db.Column(db.Text)
+    project_code = db.Column(db.String(64))
+    priority = db.Column(db.String(16), default='Normal')
+    status = db.Column(db.String(32), default='Draft')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    submitted_at = db.Column(db.DateTime)
+    reviewed_at = db.Column(db.DateTime)
+    reviewed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    review_notes = db.Column(db.Text)
+
+    user = db.relationship('User', foreign_keys=[user_id])
+    supplier = db.relationship('Supplier')
+    reviewed_by = db.relationship('User', foreign_keys=[reviewed_by_user_id])

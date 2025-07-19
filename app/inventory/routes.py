@@ -349,6 +349,85 @@ def create_supplier():
     
     return render_template('inventory/supplier_form.html', form=form)
 
+@bp.route('/requests')
+@login_required
+@admin_required
+def review_requests():
+    """Display the page for reviewing purchase requests"""
+    return render_template('inventory/review_requests.html')
+
+@bp.route('/api/requests')
+@login_required
+@admin_required
+def api_get_requests():
+    """Get all purchase requests"""
+    requests = PurchaseRequest.query.all()
+    return jsonify([{
+        'id': r.id,
+        'user': r.user.username,
+        'item_name': r.item_name,
+        'catalog_number': r.catalog_number,
+        'supplier_name': r.supplier.name if r.supplier else '',
+        'quantity_requested': r.quantity_requested,
+        'unit': r.unit,
+        'status': r.status
+    } for r in requests])
+
+@bp.route('/api/requests/<int:request_id>/approve', methods=['POST'])
+@login_required
+@admin_required
+def approve_request(request_id):
+    """Approve a purchase request"""
+    req = PurchaseRequest.query.get_or_404(request_id)
+    req.status = 'Approved'
+    req.reviewed_by_user_id = current_user.id
+    req.reviewed_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'success': True})
+
+@bp.route('/api/requests/<int:request_id>/reject', methods=['POST'])
+@login_required
+@admin_required
+def reject_request(request_id):
+    """Reject a purchase request"""
+    req = PurchaseRequest.query.get_or_404(request_id)
+    req.status = 'Rejected'
+    req.reviewed_by_user_id = current_user.id
+    req.reviewed_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'success': True})
+
+@bp.route('/requests/submit')
+@login_required
+def submit_request():
+    """Display the page for submitting a purchase request"""
+    return render_template('inventory/submit_request.html')
+
+@bp.route('/api/requests/submit', methods=['POST'])
+@login_required
+def api_submit_request():
+    """Submit a purchase request from the user's shopping cart"""
+    cart_items = ShoppingCart.query.filter_by(user_id=current_user.id).all()
+    if not cart_items:
+        return jsonify({'success': False, 'error': 'Shopping cart is empty'}), 400
+
+    for item in cart_items:
+        pr = PurchaseRequest(
+            user_id=current_user.id,
+            item_name=item.item_name,
+            catalog_number=item.catalog_number,
+            supplier_id=item.supplier_id,
+            quantity_requested=item.quantity,
+            unit=item.unit,
+            status='Submitted',
+            submitted_at=datetime.utcnow()
+        )
+        db.session.add(pr)
+        db.session.delete(item)
+    
+    db.session.commit()
+    return jsonify({'success': True})
+
 @bp.route('/cart')
 @login_required
 def shopping_cart():

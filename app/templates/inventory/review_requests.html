@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Review Purchase Requests{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mt-4">Review Purchase Requests</h1>
+    <div id="requests"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    function loadRequests() {
+        $.get('{{ url_for("inventory.api_get_requests") }}').done(function(data) {
+            const requests = $('#requests');
+            requests.empty();
+            if (data.length === 0) {
+                requests.html('<p>No pending purchase requests.</p>');
+                return;
+            }
+            const table = $('<table class="table"><thead><tr><th>User</th><th>Item</th><th>Supplier</th><th>Quantity</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>');
+            const tbody = table.find('tbody');
+            data.forEach(function(request) {
+                const row = $('<tr>');
+                row.append(`<td>${request.user}</td>`);
+                row.append(`<td>${request.item_name} (${request.catalog_number || 'N/A'})</td>`);
+                row.append(`<td>${request.supplier_name || 'N/A'}</td>`);
+                row.append(`<td>${request.quantity_requested} ${request.unit || ''}</td>`);
+                row.append(`<td>${request.status}</td>`);
+                if (request.status === 'Submitted') {
+                    row.append(`<td><button class="btn btn-success btn-sm approve-request" data-id="${request.id}">Approve</button> <button class="btn btn-danger btn-sm reject-request" data-id="${request.id}">Reject</button></td>`);
+                } else {
+                    row.append('<td></td>');
+                }
+                tbody.append(row);
+            });
+            requests.append(table);
+        });
+    }
+
+    $('#requests').on('click', '.approve-request', function() {
+        const requestId = $(this).data('id');
+        $.ajax({
+            url: `/inventory/api/requests/${requestId}/approve`,
+            method: 'POST',
+            success: function() {
+                loadRequests();
+            }
+        });
+    });
+
+    $('#requests').on('click', '.reject-request', function() {
+        const requestId = $(this).data('id');
+        $.ajax({
+            url: `/inventory/api/requests/${requestId}/reject`,
+            method: 'POST',
+            success: function() {
+                loadRequests();
+            }
+        });
+    });
+
+    loadRequests();
+});
+</script>
+{% endblock %}

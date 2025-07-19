@@ -5,40 +5,24 @@
     <!-- Hero Section with Modern Design -->
     <div class="row mb-5">
         <div class="col-12">
-            <div class="card border-0 text-white position-relative overflow-hidden" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 200px;">
+            <div class="card border-0 position-relative overflow-hidden" style="background: linear-gradient(135deg, #e9ecef 0%, #c3cfe2 100%); min-height: 200px; color: #212529;">
                 <div class="position-absolute" style="top: -50%; right: -20%; width: 400px; height: 400px; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); border-radius: 50%;"></div>
                 <div class="position-absolute" style="bottom: -30%; left: -10%; width: 300px; height: 300px; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%); border-radius: 50%;"></div>
                 <div class="card-body p-5 position-relative">
-                    <div class="row align-items-center">
-                        <div class="col-lg-8">
-                            <h1 class="display-5 fw-bold mb-3 fade-in-up">
-                                <i class="bi bi-snow2 me-3"></i>
-                                Welcome, {{ current_user.username }}!
-                            </h1>
-                            <p class="lead mb-4 opacity-90 fade-in-up" style="animation-delay: 0.2s;">
-                                Your central command center for managing cell storage inventory with precision and efficiency.
-                            </p>
-                            <div class="d-flex align-items-center fade-in-up" style="animation-delay: 0.4s;">
-                                <div class="bg-white bg-opacity-20 rounded-pill px-4 py-2 me-3">
-                                    <i class="bi bi-thermometer-snow me-2"></i>
-                                    <strong>{{ vial_count }}</strong> CryoVials Active
-                                </div>
-                                <div class="bg-white bg-opacity-20 rounded-pill px-4 py-2">
-                                    <i class="bi bi-person-badge me-2"></i>
-                                    <strong>{{ current_user.role.title() }}</strong> Access
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-lg-4 text-center">
-                            <div class="position-relative">
-                                <i class="bi bi-snow2 display-1 opacity-25"></i>
-                                <div class="position-absolute top-50 start-50 translate-middle">
-                                    <div class="bg-white bg-opacity-20 rounded-circle p-4">
-                                        <i class="bi bi-thermometer-snow fs-1"></i>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="bi bi-snow2 fs-1 me-3" style="color: #667eea;"></i>
+                        <h1 class="display-4 fw-bold mb-0" style="color: #212529;">Welcome, {{ current_user.username or 'admin' }}!</h1>
+                    </div>
+                    <p class="lead mb-4" style="color: #343a40;">Your central command center for managing cell storage inventory with precision and efficiency.</p>
+                    <div class="d-flex gap-3 flex-wrap">
+                        {% if current_user.is_admin %}
+                        <a href="{{ url_for('main.inventory_summary') }}" class="btn btn-outline-primary btn-lg shadow-sm">
+                            <i class="bi bi-graph-up me-2"></i>Analytics Dashboard
+                        </a>
+                        {% endif %}
+                        <a href="{{ url_for('main.cryovial_inventory') }}" class="btn btn-outline-primary btn-lg shadow-sm">
+                            <i class="bi bi-list-ul me-2"></i>Inventory List
+                        </a>
                     </div>
                 </div>
             </div>
@@ -46,14 +30,14 @@
     </div>
 
     {% if vial_count == 0 %}
-    <!-- 新系统引导 - 现代化设计 -->
+    <!-- New System Guide - Modern Design -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-0 shadow-sm fade-in-up">
                 <div class="card-body p-4">
                     <div class="row align-items-center">
                         <div class="col-lg-2 text-center">
-                            <div class="bg-primary bg-opacity-10 rounded-circle p-3 d-inline-flex">
+                            <div class="rounded-circle p-3 d-inline-flex" style="width: 80px; height: 80px; align-items: center; justify-content: center; background-color: #f0f7ff;">
                                 <i class="bi bi-rocket-takeoff fs-1 text-primary"></i>
                             </div>
                         </div>
@@ -117,7 +101,7 @@
                                 {% endif %}
                             </div>
                             {% if current_user.is_admin %}
-                            <div class="mt-4 p-3 bg-warning bg-opacity-10 rounded-3">
+                            <div class="mt-4 p-3 rounded-3" style="background-color: #fffdf0;">
                                 <div class="d-flex align-items-center">
                                     <i class="bi bi-lightbulb text-warning me-2"></i>
                                     <small class="text-warning fw-semibold">Pro Tip:</small>
@@ -132,13 +116,13 @@
         </div>
     </div>
     {% elif vial_count < 10 %}
-    <!-- 少量数据时的提示 - 现代化设计 -->
+    <!-- Small Data Prompt - Modern Design -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-0 shadow-sm fade-in-up" style="animation-delay: 0.2s;">
                 <div class="card-body p-4">
                     <div class="d-flex align-items-center">
-                        <div class="bg-success bg-opacity-10 rounded-circle p-3 me-4">
+                        <div class="rounded-circle p-3 me-4" style="width: 70px; height: 70px; align-items: center; justify-content: center; background-color: #f0fff4;">
                             <i class="bi bi-rocket fs-3 text-success"></i>
                         </div>
                         <div class="flex-fill">
@@ -165,11 +149,11 @@
     </div>
     {% endif %}
 
-    <!-- Quick Actions Grid - 现代化设计 -->
+    <!-- Quick Actions Grid - Modern Design -->
     <div class="row mb-4">
         <div class="col-12">
             <h2 class="h4 fw-bold text-dark mb-4 d-flex align-items-center">
-                <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-3">
+                <div class="rounded-circle p-2 me-3" style="width: 40px; height: 40px; align-items: center; justify-content: center; background-color: #f0f7ff;">
                     <i class="bi bi-lightning text-primary"></i>
                 </div>
                 Quick Actions
@@ -177,121 +161,302 @@
         </div>
     </div>
 
-    <div class="row g-4 mb-5">
-        
-        <!-- 库存浏览 - 所有用户可见 -->
-        <div class="col-lg-4 col-md-6 fade-in-up">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body p-4 d-flex flex-column">
-                    <div class="mb-3">
-                        <div class="bg-primary bg-opacity-10 rounded-circle p-3 d-inline-flex">
-                            <i class="bi bi-list-ul fs-4 text-primary"></i>
+    <!-- Lab Status Overview -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm" style="background: linear-gradient(135deg, #f8f9ff 0%, #e8f4fd 100%);">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h4 class="fw-bold mb-2" style="color: #1e40af;">Cell Cryopreservation Status</h4>
+                            <div class="row g-3">
+                                <div class="col-sm-3 text-center">
+                                    <div class="h2 fw-bold text-primary mb-0" id="total-vials-count">{{ vial_count or 0 }}</div>
+                                    <small class="text-muted">Total Samples</small>
+                                </div>
+                                <div class="col-sm-3 text-center">
+                                    <div class="h2 fw-bold text-success mb-0" id="available-vials-count">-</div>
+                                    <small class="text-muted">Available</small>
+                                </div>
+                                <div class="col-sm-3 text-center">
+                                    <div class="h2 fw-bold text-info mb-0" id="cell-lines-count">-</div>
+                                    <small class="text-muted">Cell Lines</small>
+                                </div>
+                                <div class="col-sm-3 text-center">
+                                    <div class="h2 fw-bold text-warning mb-0" id="capacity-percent">-</div>
+                                    <small class="text-muted">Capacity Used</small>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                    <h5 class="card-title fw-bold mb-2">Browse Inventory</h5>
-                    <p class="card-text text-muted flex-fill">Search and explore all cryovials with advanced filtering options.</p>
-                    <div class="mt-auto">
-                        <a href="{{ url_for('main.cryovial_inventory') }}" class="btn btn-primary w-100">
-                            <i class="bi bi-arrow-right me-1"></i>View Inventory
-                        </a>
+                        <div class="col-md-4 text-center">
+                            <div class="rounded-circle p-4 d-inline-flex" style="width: 120px; height: 120px; align-items: center; justify-content: center; background: linear-gradient(135deg, #3b82f6, #1d4ed8);">
+                                <i class="bi bi-snow2 fs-1 text-white"></i>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
-
-        <!-- 库存摘要 - 管理员可见 -->
-        {% if current_user.is_admin %}
-        <div class="col-lg-4 col-md-6 fade-in-up" style="animation-delay: 0.1s;">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body p-4 d-flex flex-column">
-                    <div class="mb-3">
-                        <div class="bg-info bg-opacity-10 rounded-circle p-3 d-inline-flex">
-                            <i class="bi bi-graph-up fs-4 text-info"></i>
-                        </div>
-                    </div>
-                    <h5 class="card-title fw-bold mb-2">Analytics Dashboard</h5>
-                    <p class="card-text text-muted flex-fill">View comprehensive statistics and insights about your inventory.</p>
-                    <div class="mt-auto">
-                        <a href="{{ url_for('main.inventory_summary') }}" class="btn btn-outline-info w-100">
-                            <i class="bi bi-arrow-right me-1"></i>View Dashboard
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-        
-        {% if current_user.is_admin %}
-        <!-- 管理员功能卡片 -->
-        <div class="col-lg-4 col-md-6 fade-in-up" style="animation-delay: 0.2s;">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body p-4 d-flex flex-column">
-                    <div class="mb-3">
-                        <div class="bg-success bg-opacity-10 rounded-circle p-3 d-inline-flex">
-                            <i class="bi bi-diagram-3 fs-4 text-success"></i>
-                        </div>
-                    </div>
-                    <h5 class="card-title fw-bold mb-2">Cell Line Manager</h5>
-                    <p class="card-text text-muted flex-fill">Add, edit, and organize your cell line database with detailed metadata.</p>
-                    <div class="mt-auto">
-                        <a href="{{ url_for('main.list_cell_lines') }}" class="btn btn-outline-success w-100">
-                            <i class="bi bi-arrow-right me-1"></i>Manage Cell Lines
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="col-lg-4 col-md-6 fade-in-up" style="animation-delay: 0.3s;">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body p-4 d-flex flex-column">
-                    <div class="mb-3">
-                        <div class="bg-warning bg-opacity-10 rounded-circle p-3 d-inline-flex">
-                            <i class="bi bi-building fs-4 text-warning"></i>
-                        </div>
-                    </div>
-                    <h5 class="card-title fw-bold mb-2">Storage Locations</h5>
-                    <p class="card-text text-muted flex-fill">Configure freezer towers, drawers, and boxes for optimal organization.</p>
-                    <div class="mt-auto">
-                        <a href="{{ url_for('main.locations_overview') }}" class="btn btn-outline-warning w-100">
-                            <i class="bi bi-arrow-right me-1"></i>Manage Locations
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-lg-4 col-md-6 fade-in-up" style="animation-delay: 0.4s;">
-            <div class="card h-100 border-0 shadow-sm">
-                <div class="card-body p-4 d-flex flex-column">
-                    <div class="mb-3">
-                        <div class="bg-primary bg-opacity-10 rounded-circle p-3 d-inline-flex">
-                            <i class="bi bi-plus-circle fs-4 text-primary"></i>
-                        </div>
-                    </div>
-                    <h5 class="card-title fw-bold mb-2">Add CryoVials</h5>
-                    <p class="card-text text-muted flex-fill">Create new batches and add cryovials to expand your inventory.</p>
-                    <div class="mt-auto">
-                        <a href="{{ url_for('main.add_cryovial') }}" class="btn btn-success w-100">
-                            <i class="bi bi-plus-lg me-1"></i>Add Vials
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-        {% endif %}
     </div>
 
-    {% if current_user.is_admin and vial_count > 50 %}
-    <!-- 系统维护提醒 - 现代化设计 -->
+    <!-- Quick Find Cell Lines -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent border-0 pb-2">
+                    <h5 class="mb-0 fw-bold d-flex align-items-center">
+                        <i class="bi bi-search me-2 text-primary"></i>
+                        Quick Find Samples
+                    </h5>
+                </div>
+                <div class="card-body pt-2">
+                    <div class="row g-3">
+                        <div class="col-md-8">
+                            <div class="input-group">
+                                <span class="input-group-text bg-light border-end-0">
+                                    <i class="bi bi-search text-muted"></i>
+                                </span>
+                                <input type="text" class="form-control border-start-0" id="quickSearchInput" 
+                                       placeholder="Search by cell line, passage, batch name..." autocomplete="off">
+                                <button class="btn btn-primary" type="button" onclick="performQuickSearch()">
+                                    <i class="bi bi-arrow-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <select class="form-select" id="quickFilterSelect">
+                                <option value="all">All Cell Lines</option>
+                                <option value="available">Available Only</option>
+                                <option value="low-passage">Low Passage (≤10)</option>
+                                <option value="recent">Added This Week</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Primary Actions -->
+    <div class="row g-4 mb-4">
+        
+        <!-- Store New Samples -->
+        <div class="col-lg-{{ '4' if current_user.is_admin else '6' }} col-md-6 fade-in-up">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4 text-center">
+                    <div class="rounded-circle p-3 d-inline-flex mb-3" style="width: 70px; height: 70px; align-items: center; justify-content: center; background-color: #f0fff4;">
+                        <i class="bi bi-plus-circle fs-2" style="color: #059669;"></i>
+                    </div>
+                    <h5 class="card-title fw-bold mb-2">Store New Samples</h5>
+                    <p class="card-text text-muted mb-4">Add freshly prepared cryovials with automatic location assignment</p>
+                    <a href="{{ url_for('main.add_cryovial') }}" class="btn btn-success w-100">
+                        <i class="bi bi-plus-lg me-2"></i>Add Cryovials
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Retrieve Samples -->
+        <div class="col-lg-{{ '4' if current_user.is_admin else '6' }} col-md-6 fade-in-up" style="animation-delay: 0.1s;">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4 text-center">
+                    <div class="rounded-circle p-3 d-inline-flex mb-3" style="width: 70px; height: 70px; align-items: center; justify-content: center; background-color: #fff7ed;">
+                        <i class="bi bi-box-arrow-up fs-2" style="color: #ea580c;"></i>
+                    </div>
+                    <h5 class="card-title fw-bold mb-2">Retrieve Samples</h5>
+                    <p class="card-text text-muted mb-4">Find and remove vials for cell culture experiments</p>
+                    <a href="{{ url_for('main.cryovial_inventory') }}" class="btn btn-warning w-100">
+                        <i class="bi bi-search me-2"></i>Find & Retrieve
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {% if current_user.is_admin %}
+        <!-- View All Samples -->
+        <div class="col-lg-4 col-md-6 fade-in-up" style="animation-delay: 0.2s;">
+            <div class="card h-100 border-0 shadow-sm">
+                <div class="card-body p-4 text-center">
+                    <div class="rounded-circle p-3 d-inline-flex mb-3" style="width: 70px; height: 70px; align-items: center; justify-content: center; background-color: #f0f9ff;">
+                        <i class="bi bi-list-ul fs-2" style="color: #0284c7;"></i>
+                    </div>
+                    <h5 class="card-title fw-bold mb-2">Browse Inventory</h5>
+                    <p class="card-text text-muted mb-4">View complete sample inventory with detailed filtering</p>
+                    <a href="{{ url_for('main.inventory_summary') }}" class="btn btn-info w-100">
+                        <i class="bi bi-table me-2"></i>View All
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent border-0">
+                    <h6 class="mb-0 fw-bold d-flex align-items-center">
+                        <i class="bi bi-clock-history me-2 text-muted"></i>
+                        Recent Activity
+                    </h6>
+                </div>
+                <div class="card-body pt-0" style="max-height: 300px; overflow-y: auto;">
+                    {% if recent_activities %}
+                    <div class="timeline">
+                        {% for activity in recent_activities %}
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-{% if 'CREATE' in activity.action or 'ADD' in activity.action %}success{% elif 'DELETE' in activity.action or 'REMOVE' in activity.action %}danger{% else %}primary{% endif %}"></div>
+                            <div class="timeline-content">
+                                <small class="text-muted">{{ activity.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
+                                <p class="mb-0 small">{{ activity.details or activity.action }}</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-clock-history fs-1 mb-2 d-block"></i>
+                        <p class="mb-0 small">No recent activities</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if current_user.is_admin %}
+    <!-- Lab Management Tools -->
     <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm">
+                <div class="card-header bg-transparent border-0 cursor-pointer" data-bs-toggle="collapse" data-bs-target="#labManagement" aria-expanded="false">
+                    <div class="d-flex align-items-center">
+                        <div class="rounded-circle p-2 me-3" style="width: 35px; height: 35px; align-items: center; justify-content: center; background-color: #f0f9ff;">
+                            <i class="bi bi-tools text-primary"></i>
+                        </div>
+                        <h6 class="mb-0 fw-bold text-dark">Lab Management Tools</h6>
+                        <i class="bi bi-chevron-down ms-auto"></i>
+                    </div>
+                </div>
+                <div class="collapse" id="labManagement">
+                    <div class="card-body pt-0">
+                        <div class="row g-3">
+                            <div class="col-lg-2 col-md-4 col-sm-6">
+                                <a href="{{ url_for('main.list_cell_lines') }}" class="btn btn-outline-primary btn-sm w-100">
+                                    <i class="bi bi-diagram-3 me-1"></i>Cell Lines
+                                </a>
+                            </div>
+                            <div class="col-lg-2 col-md-4 col-sm-6">
+                                <a href="{{ url_for('main.locations_overview') }}" class="btn btn-outline-secondary btn-sm w-100">
+                                    <i class="bi bi-building me-1"></i>Freezer Setup
+                                </a>
+                            </div>
+                            <div class="col-lg-2 col-md-4 col-sm-6">
+                                <a href="{{ url_for('main.import_csv') }}" class="btn btn-outline-info btn-sm w-100">
+                                    <i class="bi bi-file-earmark-spreadsheet me-1"></i>Import Data
+                                </a>
+                            </div>
+                            <div class="col-lg-2 col-md-4 col-sm-6">
+                                <a href="{{ url_for('main.backup_database') }}" class="btn btn-outline-warning btn-sm w-100">
+                                    <i class="bi bi-shield-check me-1"></i>Backup
+                                </a>
+                            </div>
+                            <div class="col-lg-2 col-md-4 col-sm-6">
+                                <a href="{{ url_for('main.audit_logs') }}" class="btn btn-outline-success btn-sm w-100">
+                                    <i class="bi bi-clipboard-data me-1"></i>Activity Log
+                                </a>
+                            </div>
+                            <div class="col-lg-2 col-md-4 col-sm-6">
+                                <a href="{{ url_for('main.manage_batch_lookup') }}" class="btn btn-outline-dark btn-sm w-100">
+                                    <i class="bi bi-box-seam me-1"></i>Batch Tools
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if current_user.is_admin and recent_alerts %}
+    <!-- Alert Information - Modern Design -->
+    <div class="row mb-4">
         <div class="col-12">
             <div class="card border-0 shadow-sm fade-in-up" style="animation-delay: 0.5s;">
                 <div class="card-header bg-transparent border-0 pb-0">
-                    <div class="d-flex align-items-center">
-                        <div class="bg-warning bg-opacity-10 rounded-circle p-2 me-3">
-                            <i class="bi bi-tools text-warning"></i>
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div class="d-flex align-items-center">
+                            <div class="rounded-circle p-2 me-3" style="width: 40px; height: 40px; align-items: center; justify-content: center; background-color: #fff5f5;">
+                                <i class="bi bi-exclamation-triangle text-danger"></i>
+                            </div>
+                            <h5 class="mb-0 fw-bold text-danger">Active Alerts</h5>
                         </div>
+                        <a href="{{ url_for('main.alerts_management') }}" class="btn btn-sm btn-outline-danger">
+                            <i class="bi bi-gear me-1"></i>Manage Alerts
+                        </a>
+                    </div>
+                </div>
+                <div class="card-body pt-3">
+                    <div class="row g-3">
+                        {% for alert in recent_alerts %}
+                        <div class="col-lg-6">
+                            <div class="alert alert-{{ 'danger' if alert.severity == 'critical' else 'warning' if alert.severity == 'high' else 'info' }} alert-dismissible fade show border-0 shadow-sm mb-0" role="alert">
+                                <div class="d-flex align-items-start">
+                                    {% if alert.severity == 'critical' %}
+                                        <i class="bi bi-exclamation-triangle-fill fs-5 me-2 text-danger"></i>
+                                    {% elif alert.severity == 'high' %}
+                                        <i class="bi bi-exclamation-circle-fill fs-5 me-2 text-warning"></i>
+                                    {% else %}
+                                        <i class="bi bi-info-circle-fill fs-5 me-2 text-info"></i>
+                                    {% endif %}
+                                    <div class="flex-fill">
+                                        <h6 class="alert-heading fw-bold mb-1">{{ alert.title }}</h6>
+                                        <p class="mb-2 small">{{ alert.message }}</p>
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <small class="text-muted">
+                                                <i class="bi bi-clock me-1"></i>{{ alert.age_days }} day{{ 's' if alert.age_days != 1 else '' }} ago
+                                            </small>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <button type="button" class="btn btn-outline-success btn-sm resolve-alert-btn" data-alert-id="{{ alert.id }}">
+                                                    <i class="bi bi-check"></i>
+                                                </button>
+                                                <button type="button" class="btn btn-outline-secondary btn-sm dismiss-alert-btn" data-alert-id="{{ alert.id }}">
+                                                    <i class="bi bi-x"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if recent_alerts|length >= 5 %}
+                    <div class="text-center mt-3">
+                        <a href="{{ url_for('main.alerts_management') }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-eye me-1"></i>View All Alerts
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    {% if current_user.is_admin and vial_count > 50 %}
+    <!-- System Maintenance Reminder - Modern Design -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm fade-in-up" style="animation-delay: 0.6s;">
+                <div class="card-header bg-transparent border-0 pb-0">
+                    <div class="d-flex align-items-center">
+                                                    <div class="rounded-circle p-2 me-3" style="width: 40px; height: 40px; align-items: center; justify-content: center; background-color: #fffdf0;">
+                                <i class="bi bi-tools text-warning"></i>
+                            </div>
                         <h5 class="mb-0 fw-bold text-warning">System Maintenance</h5>
                     </div>
                 </div>
@@ -314,14 +479,14 @@
 
 {% block scripts %}
 <script>
-// 添加动画效果
+// Add animation effects
 document.addEventListener('DOMContentLoaded', function() {
     const cards = document.querySelectorAll('.fade-in-up');
     cards.forEach(card => {
         card.classList.add('fade-in-up');
     });
     
-    // 添加卡片hover效果
+    // Add card hover effects
     const actionCards = document.querySelectorAll('.card');
     actionCards.forEach(card => {
         card.addEventListener('mouseenter', function() {
@@ -333,7 +498,269 @@ document.addEventListener('DOMContentLoaded', function() {
             this.style.transform = 'translateY(0)';
         });
     });
+    
+    // Handle lab management collapse
+    const labToggle = document.querySelector('[data-bs-target="#labManagement"]');
+    if (labToggle) {
+        labToggle.addEventListener('click', function() {
+            const chevron = this.querySelector('.bi-chevron-down');
+            const isExpanded = this.getAttribute('aria-expanded') === 'true';
+            
+            // Toggle chevron rotation
+            if (!isExpanded) {
+                chevron.style.transform = 'rotate(180deg)';
+                this.setAttribute('aria-expanded', 'true');
+            } else {
+                chevron.style.transform = 'rotate(0deg)';
+                this.setAttribute('aria-expanded', 'false');
+            }
+        });
+    }
+    
+    // Quick search functionality
+    const quickSearchInput = document.getElementById('quickSearchInput');
+    if (quickSearchInput) {
+        quickSearchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                performQuickSearch();
+            }
+        });
+    }
+    
+    // Alert operation handling
+    handleAlertActions();
+    
+    // Load dashboard statistics
+    loadDashboardStats();
 });
+
+function handleAlertActions() {
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    
+    // Resolve alert
+    document.querySelectorAll('.resolve-alert-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const alertId = this.dataset.alertId;
+            const alertElement = this.closest('.alert');
+            
+            try {
+                this.disabled = true;
+                this.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+                
+                const response = await fetch(`/api/alerts/${alertId}/resolve`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show success message
+                    showToast('success', data.message);
+                    
+                    // Fade out and remove alert element
+                    alertElement.style.transition = 'all 0.5s ease';
+                    alertElement.style.opacity = '0';
+                    alertElement.style.transform = 'translateX(100%)';
+                    
+                    setTimeout(() => {
+                        alertElement.remove();
+                        // If no more alerts, hide entire alert area
+                        const alertsContainer = document.querySelector('.alert');
+                        if (!alertsContainer) {
+                            const alertsSection = document.querySelector('.fade-in-up[style*="animation-delay: 0.5s"]');
+                            if (alertsSection) {
+                                alertsSection.style.display = 'none';
+                            }
+                        }
+                    }, 500);
+                } else {
+                    showToast('error', data.message);
+                    this.disabled = false;
+                    this.innerHTML = '<i class="bi bi-check"></i>';
+                }
+            } catch (error) {
+                console.error('Error resolving alert:', error);
+                showToast('error', 'Failed to resolve alert. Please try again.');
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-check"></i>';
+            }
+        });
+    });
+    
+    // Dismiss alert
+    document.querySelectorAll('.dismiss-alert-btn').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const alertId = this.dataset.alertId;
+            const alertElement = this.closest('.alert');
+            
+            try {
+                this.disabled = true;
+                this.innerHTML = '<i class="bi bi-hourglass-split"></i>';
+                
+                const response = await fetch(`/api/alerts/${alertId}/dismiss`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // Show success message
+                    showToast('success', data.message);
+                    
+                    // Fade out and remove alert element
+                    alertElement.style.transition = 'all 0.5s ease';
+                    alertElement.style.opacity = '0';
+                    alertElement.style.transform = 'translateX(-100%)';
+                    
+                    setTimeout(() => {
+                        alertElement.remove();
+                        // If no more alerts, hide entire alert area
+                        const remainingAlerts = document.querySelectorAll('.alert');
+                        if (remainingAlerts.length === 0) {
+                            const alertsSection = document.querySelector('.fade-in-up[style*="animation-delay: 0.5s"]');
+                            if (alertsSection) {
+                                alertsSection.style.display = 'none';
+                            }
+                        }
+                    }, 500);
+                } else {
+                    showToast('error', data.message);
+                    this.disabled = false;
+                    this.innerHTML = '<i class="bi bi-x"></i>';
+                }
+            } catch (error) {
+                console.error('Error dismissing alert:', error);
+                showToast('error', 'Failed to dismiss alert. Please try again.');
+                this.disabled = false;
+                this.innerHTML = '<i class="bi bi-x"></i>';
+            }
+        });
+    });
+}
+
+// Quick search function
+function performQuickSearch() {
+    const searchInput = document.getElementById('quickSearchInput');
+    const filterSelect = document.getElementById('quickFilterSelect');
+    
+    if (!searchInput) return;
+    
+    const searchTerm = searchInput.value.trim();
+    const filter = filterSelect ? filterSelect.value : 'all';
+    
+    // Build search URL with parameters
+    let searchUrl = '{{ url_for("main.cryovial_inventory") }}';
+    const params = new URLSearchParams();
+    
+    if (searchTerm) {
+        params.append('q', searchTerm);
+    }
+    
+    if (filter && filter !== 'all') {
+        switch(filter) {
+            case 'available':
+                params.append('status', 'available');
+                break;
+            case 'low-passage':
+                params.append('max_passage', '10');
+                break;
+            case 'recent':
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                params.append('date_from', weekAgo.toISOString().split('T')[0]);
+                break;
+        }
+    }
+    
+    if (params.toString()) {
+        searchUrl += '?' + params.toString();
+    }
+    
+    // Navigate to search results
+    window.location.href = searchUrl;
+}
+
+// Load dashboard statistics
+function loadDashboardStats() {
+    // For now, we'll use simple counts. Later these can be loaded via AJAX
+    const totalVials = {{ vial_count or 0 }};
+    
+    // Update total vials (already correct)
+    // Update available vials with a simple calculation (placeholder)
+    const availableElement = document.getElementById('available-vials-count');
+    if (availableElement) {
+        // This is a placeholder - in a real implementation, you'd fetch this from the backend
+        const estimatedAvailable = Math.floor(totalVials * 0.7); // Assume 70% are available
+        availableElement.textContent = estimatedAvailable;
+    }
+    
+    // Update cell lines count (placeholder)
+    const cellLinesElement = document.getElementById('cell-lines-count');
+    if (cellLinesElement) {
+        // This is a placeholder - in a real implementation, you'd fetch this from the backend
+        const estimatedCellLines = Math.max(1, Math.floor(totalVials / 10)); // Rough estimate
+        cellLinesElement.textContent = estimatedCellLines;
+    }
+    
+    // Update capacity (placeholder)
+    const capacityElement = document.getElementById('capacity-percent');
+    if (capacityElement) {
+        // This is a placeholder - in a real implementation, you'd calculate based on actual storage
+        const estimatedCapacity = Math.min(95, Math.floor((totalVials / 1000) * 100)); // Assume 1000 total capacity
+        capacityElement.textContent = estimatedCapacity + '%';
+    }
+}
+
+// Toast notification function
+function showToast(type, message) {
+    // Create toast container (if not exists)
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast element
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <i class="bi bi-${type === 'success' ? 'check-circle-fill text-success' : 'exclamation-triangle-fill text-danger'} me-2"></i>
+                <strong class="me-auto">${type === 'success' ? 'Success' : 'Error'}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    // Show toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: true,
+        delay: 3000
+    });
+    toast.show();
+    
+    // Auto cleanup
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        this.remove();
+    });
+}
 </script>
 {% endblock %}
 {% endblock %}

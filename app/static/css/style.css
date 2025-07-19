@@ -1,17 +1,57 @@
 /* ==========================================================================
-   现代化设计系统
+   Bootstrap Icons Font Loading Fix
    ========================================================================== */
 
-/* 全局字体和基础样式 */
+/* Ensure Bootstrap Icons load properly */
+@import url('https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css');
+
+/* Bootstrap Icons fallback and fix */
+[class^="bi-"]::before, 
+[class*=" bi-"]::before {
+    font-family: "bootstrap-icons" !important;
+    font-style: normal;
+    font-weight: normal !important;
+    font-variant: normal;
+    text-transform: none;
+    line-height: 1;
+    vertical-align: -.125em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ensure icons are displayed inline-block */
+.bi {
+    display: inline-block;
+    font-family: "bootstrap-icons" !important;
+    font-style: normal;
+    font-weight: normal !important;
+    font-variant: normal;
+    text-transform: none;
+    line-height: 1;
+    vertical-align: -.125em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ==========================================================================
+   Modern Design System
+   ========================================================================== */
+
+/* Global fonts and base styles */
 body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11', 'kern' 1, 'liga' 1, 'calt' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0.01em;
+    word-spacing: 0.02em;
     background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
     min-height: 100vh;
     padding-top: 20px;
 }
 
-/* 现代化卡片设计 */
+/* Modern card design */
 .card {
     border: 0;
     border-radius: 16px;
@@ -26,7 +66,7 @@ body {
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
 }
 
-/* 专业按钮设计 */
+/* Professional button design */
 .btn {
     border-radius: 12px !important;
     font-weight: 500;
@@ -53,26 +93,30 @@ body {
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+    box-shadow: 0 4px 15px rgba(25, 118, 210, 0.4);
+    border: none;
 }
 
 .btn-primary:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    box-shadow: 0 6px 20px rgba(25, 118, 210, 0.6);
+    background: linear-gradient(135deg, #1565C0 0%, #0D47A1 100%);
 }
 
 .btn-success {
-    background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-    box-shadow: 0 4px 15px rgba(72, 187, 120, 0.4);
+    background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%);
+    box-shadow: 0 4px 15px rgba(56, 142, 60, 0.4);
+    border: none;
 }
 
 .btn-success:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(72, 187, 120, 0.6);
+    box-shadow: 0 6px 20px rgba(56, 142, 60, 0.6);
+    background: linear-gradient(135deg, #2E7D32 0%, #1B5E20 100%);
 }
 
-/* 导航栏增强 */
+/* Enhanced navigation bar */
 .navbar {
     backdrop-filter: blur(10px);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -95,7 +139,7 @@ body {
     transform: translateY(-1px);
 }
 
-/* 下拉菜单现代化 */
+/* Modern dropdown menu */
 .dropdown-menu {
     border-radius: 12px;
     border: 0;
@@ -112,12 +156,12 @@ body {
 }
 
 .dropdown-item:hover {
-    background: linear-gradient(135deg, #667eea, #764ba2);
+    background: linear-gradient(135deg, #1976D2, #1565C0);
     color: white;
     transform: translateX(4px);
 }
 
-/* 表格现代化 */
+/* Modern table design */
 .table {
     background: rgba(255, 255, 255, 0.9);
     border-radius: 12px;
@@ -126,7 +170,7 @@ body {
 }
 
 .table thead th {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
     color: white;
     border: 0;
     font-weight: 600;
@@ -139,36 +183,82 @@ body {
 }
 
 .table tbody tr:hover {
-    background: rgba(102, 126, 234, 0.05);
+    background: rgba(25, 118, 210, 0.08);
     transform: scale(1.01);
 }
 
-/* 表单控件现代化 */
+/* Modern form controls */
 .form-control, .form-select {
     border-radius: 12px !important;
     border: 2px solid #e2e8f0;
     padding: 0.75rem 1rem;
     transition: all 0.2s ease;
     background: rgba(255, 255, 255, 0.9);
+    /* Fix text rendering issues */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0.01em;
+    word-spacing: 0.02em;
 }
 
 .form-control:focus, .form-select:focus {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: #1976D2;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
     background: white;
 }
 
 .form-floating > label {
     font-weight: 500;
     color: #64748b;
+    /* Fix text rendering issues */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0.01em;
 }
 
-/* 用户头像区域 */
+/* Fix search input group styling */
+.input-group .form-control.border-start-0 {
+    border-left: none;
+}
+
+.input-group-text.border-end-0 {
+    border-right: none;
+    background-color: #f8f9fa;
+    /* Fix text rendering issues */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0.01em;
+}
+
+.input-group .form-control.border-start-0:focus {
+    border-left: none;
+    box-shadow: none;
+}
+
+.input-group:focus-within .input-group-text.border-end-0 {
+    border-color: #1976D2;
+}
+
+.input-group:focus-within .form-control.border-start-0 {
+    border-color: #1976D2;
+    box-shadow: 0 0 0 3px rgba(25, 118, 210, 0.15);
+}
+
+/* User avatar area */
 .user-avatar {
     width: 40px;
     height: 40px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -182,14 +272,14 @@ body {
     font-weight: 600;
 }
 
-/* 页脚现代化 */
+/* Modern footer */
 footer {
     background: rgba(255, 255, 255, 0.95) !important;
     backdrop-filter: blur(10px);
     border-top: 1px solid rgba(0, 0, 0, 0.05) !important;
 }
 
-/* 消息提示现代化 */
+/* Modern alerts */
 .alert {
     border-radius: 12px;
     border: 0;
@@ -217,7 +307,7 @@ footer {
     color: white;
 }
 
-/* 动画效果 */
+/* Animation effects */
 @keyframes fadeInUp {
     from {
         opacity: 0;
@@ -227,6 +317,111 @@ footer {
         opacity: 1;
         transform: translateY(0);
     }
+}
+
+/* Collapsible admin functions */
+.cursor-pointer {
+    cursor: pointer;
+}
+
+.cursor-pointer:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Chevron rotation animation */
+.card-header[data-bs-toggle="collapse"] .bi-chevron-down {
+    transition: transform 0.3s ease;
+}
+
+.card-header[data-bs-toggle="collapse"][aria-expanded="true"] .bi-chevron-down {
+    transform: rotate(180deg);
+}
+
+/* Timeline styles for recent activity */
+.timeline {
+    position: relative;
+    padding-left: 20px;
+}
+
+.timeline-item {
+    position: relative;
+    padding-bottom: 15px;
+    border-left: 2px solid #e5e7eb;
+    padding-left: 20px;
+}
+
+.timeline-item:last-child {
+    border-left: 2px solid transparent;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -6px;
+    top: 5px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.timeline-content {
+    color: #374151;
+}
+
+/* Small alert styling */
+.alert-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+}
+
+/* Dashboard status cards */
+.status-overview .h2 {
+    font-size: 2rem;
+    line-height: 1.2;
+}
+
+/* Quick search improvements */
+.input-group:focus-within .input-group-text {
+    border-color: #1976D2;
+    background-color: #f0f7ff;
+}
+
+/* Fix text rendering for all input group elements */
+.input-group-text {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0.01em;
+}
+
+/* Additional text rendering fixes for input fields */
+input, textarea, select {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1 !important;
+    text-rendering: optimizeLegibility !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    letter-spacing: 0.01em !important;
+    word-spacing: 0.02em !important;
+}
+
+/* Force text rendering fixes for all form elements */
+.form-control, .form-select, .form-control-lg, .form-select-lg, .form-control-sm, .form-select-sm {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1 !important;
+    text-rendering: optimizeLegibility !important;
+    -webkit-font-smoothing: antialiased !important;
+    -moz-osx-font-smoothing: grayscale !important;
+    letter-spacing: 0.01em !important;
+    word-spacing: 0.02em !important;
+}
+
+/* Lab management tools spacing */
+#labManagement .btn-sm {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
 }
 
 @keyframes pulse {
@@ -242,13 +437,13 @@ footer {
     animation: fadeInUp 0.6s ease-out;
 }
 
-/* 加载状态 */
+/* Loading states */
 .loading {
     animation: pulse 2s infinite;
 }
 
 /* ==========================================================================
-   原有样式保持不变
+   Original styles remain unchanged
    ========================================================================== */
 
 .alert-container {
@@ -450,14 +645,14 @@ footer {
     color: #6c757d;
 }
 
-/* 移动设备响应式改进 */
+/* Mobile responsive improvements */
 @media (max-width: 768px) {
-    /* 移动设备上的导航改进 */
+    /* Navigation improvements on mobile devices */
     .navbar-brand {
         font-size: 1.1rem;
     }
     
-    /* 卡片和容器的间距调整 */
+    /* Spacing adjustments for cards and containers */
     .container {
         padding-left: 10px;
         padding-right: 10px;
@@ -467,7 +662,7 @@ footer {
         margin-bottom: 15px;
     }
     
-    /* 按钮组在移动设备上的改进 */
+    /* Button group improvements on mobile devices */
     .btn-group {
         flex-direction: column;
         width: 100%;
@@ -478,7 +673,7 @@ footer {
         border-radius: 0.375rem !important;
     }
     
-    /* 表格在移动设备上的改进 */
+    /* Table improvements on mobile devices */
     .table-responsive {
         border: none;
     }
@@ -495,12 +690,12 @@ footer {
         max-width: 100px;
     }
     
-    /* 搜索表单在移动设备上的改进 */
+    /* Search form improvements on mobile devices */
     .row.g-2 > .col-md {
         margin-bottom: 10px;
     }
     
-    /* 位置网格在移动设备上的改进 */
+    /* Position grid improvements on mobile devices */
     .box-grid {
         font-size: 10px;
     }
@@ -511,7 +706,7 @@ footer {
         padding: 1px;
     }
     
-    /* 模态框在移动设备上的改进 */
+    /* Modal improvements on mobile devices */
     .modal-dialog {
         margin: 10px;
         max-width: calc(100% - 20px);
@@ -526,17 +721,17 @@ footer {
         padding: 0.25rem;
     }
     
-    /* 快速操作卡片在移动设备上的堆叠 */
+    /* Quick action cards stacking on mobile devices */
     .row-cols-md-3 > .col {
         margin-bottom: 15px;
     }
     
-    /* 表单控件在移动设备上的改进 */
+    /* Form control improvements on mobile devices */
     .form-control, .form-select {
-        font-size: 16px; /* 防止iOS缩放 */
+        font-size: 16px; /* Prevent iOS zoom */
     }
     
-    /* 分页在移动设备上的改进 */
+    /* Pagination improvements on mobile devices */
     .pagination {
         flex-wrap: wrap;
         justify-content: center;
@@ -546,7 +741,7 @@ footer {
         margin: 2px;
     }
     
-    /* 长文本在移动设备上的处理 */
+    /* Long text handling on mobile devices */
     .text-truncate-mobile {
         white-space: nowrap;
         overflow: hidden;
@@ -554,12 +749,12 @@ footer {
         max-width: 150px;
     }
     
-    /* 隐藏在移动设备上不必要的列 */
+    /* Hide unnecessary columns on mobile devices */
     .d-none-mobile {
         display: none !important;
     }
     
-    /* 工具栏按钮在移动设备上的改进 */
+    /* Toolbar button improvements on mobile devices */
     .btn-toolbar {
         flex-direction: column;
         align-items: stretch;
@@ -572,7 +767,7 @@ footer {
 }
 
 @media (max-width: 576px) {
-    /* 超小屏幕设备的额外优化 */
+    /* Additional optimizations for extra small screens */
     h1 {
         font-size: 1.5rem;
     }
@@ -585,20 +780,20 @@ footer {
         font-size: 1.1rem;
     }
     
-    /* 更紧凑的表格 */
+    /* More compact table */
     .table-sm th,
     .table-sm td {
         padding: 0.25rem 0.125rem;
         font-size: 0.75rem;
     }
     
-    /* 简化的分页 */
+    /* Simplified pagination */
     .pagination-sm .page-link {
         padding: 0.25rem 0.375rem;
         font-size: 0.75rem;
     }
     
-    /* 位置网格进一步压缩 */
+    /* Further compress position grid */
     .box-grid td {
         width: 25px;
         height: 20px;
@@ -606,9 +801,9 @@ footer {
     }
 }
 
-/* 触摸友好的交互元素 */
+/* Touch-friendly interactive elements */
 @media (hover: none) and (pointer: coarse) {
-    /* 触摸设备上的链接和按钮改进 */
+    /* Link and button improvements on touch devices */
     .btn {
         min-height: 44px;
         padding: 8px 12px;
@@ -619,21 +814,21 @@ footer {
         padding: 6px 10px;
     }
     
-    /* 可点击区域增大 */
+    /* Enlarged clickable areas */
     .box-cell {
         min-height: 35px;
         min-width: 35px;
     }
     
-    /* 导航链接触摸友好 */
+    /* Touch-friendly navigation links */
     .nav-link {
         padding: 12px 16px;
     }
 }
 
-/* 特定页面的移动优化 */
+/* Mobile optimizations for specific pages */
 
-/* 库存页面移动优化 */
+/* Inventory page mobile optimization */
 .inventory-mobile-layout {
     display: flex;
     flex-direction: column;
@@ -644,13 +839,13 @@ footer {
         max-height: 300px;
     }
     
-    /* 隐藏移动设备上的次要列 */
+    /* Hide secondary columns on mobile devices */
     .inventory-table .d-none-mobile {
         display: none !important;
     }
 }
 
-/* 位置可视化的移动优化 */
+/* Location visualization mobile optimization */
 @media (max-width: 768px) {
     .d-flex.flex-wrap {
         flex-direction: column;
@@ -659,5 +854,246 @@ footer {
     .d-flex.flex-wrap > .m-2 {
         margin: 5px 0 !important;
         width: 100%;
+    }
+}
+
+/* === Global font contrast enhancement === */
+body, .card, .table, .dropdown-menu, .form-control, .form-select, .bg-white, .bg-light, .bg-secondary, .bg-opacity-10, .bg-opacity-25, .bg-opacity-50, .bg-opacity-75, .bg-opacity-100, .footer, .modal-content, .alert-container, .search-results-table-container, .box-cell, .batch-color-0, .batch-color-1, .batch-color-2, .batch-color-3, .batch-color-4, .batch-color-5, .batch-color-6, .batch-color-7, .batch-color-8, .batch-color-9, .batch-color-10, .batch-color-11 {
+    color: #212529 !important;
+}
+
+/* Force dark font for light badges */
+.badge.bg-light, .badge.bg-secondary, .badge.bg-white {
+    color: #343a40 !important;
+    border: 1px solid #dee2e6;
+}
+
+/* Force dark font for light buttons */
+.btn.btn-outline-light, .btn.btn-light {
+    color: #343a40 !important;
+    border-color: #dee2e6;
+}
+
+/* Improve contrast for form floating labels and placeholders */
+.form-floating > label {
+    color: #343a40 !important;
+    opacity: 0.95;
+}
+.form-control::placeholder, .form-select::placeholder {
+    color: #495057 !important;
+    opacity: 1 !important;
+    /* Fix text rendering issues */
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-feature-settings: 'kern' 1, 'liga' 1, 'calt' 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: 0.01em;
+    word-spacing: 0.02em;
+}
+
+/* Improve contrast for helper text, text-muted, etc. */
+.text-muted, .form-text, .small, small {
+    color: #495057 !important;
+    opacity: 0.95 !important;
+}
+
+/* Improve footer font contrast */
+footer, .footer {
+    color: #343a40 !important;
+}
+
+/* Force dark font for light background card headers and table headers */
+.card-header.bg-white, .card-header.bg-light, .table thead th.bg-white, .table thead th.bg-light {
+    color: #212529 !important;
+}
+
+/* Improve contrast for disabled/readonly input fields */
+.form-control[readonly], .form-control:disabled {
+    color: #495057 !important;
+    background-color: #e9ecef !important;
+}
+
+/* Keep font color dark for badges, tables, cards on hover/active */
+.badge, .table td, .table th, .card, .card-header, .card-body {
+    color: #212529;
+}
+
+/* Force dark font for light navbar dropdown items */
+.dropdown-menu, .dropdown-item {
+    color: #212529 !important;
+}
+
+/* Fix font too light issue caused by opacity-75, etc. */
+.opacity-75, .opacity-50, .opacity-25 {
+    color: #343a40 !important;
+    opacity: 1 !important;
+}
+
+/* Modern design primary colors unchanged, dark fonts enhance readability */
+
+/* === Theme system support === */
+
+/* Theme styles using CSS variables */
+:root {
+    --primary-color: #1976D2;
+    --secondary-color: #1565C0;
+    --accent-color: #42A5F5;
+    --background-color: #FAFAFA;
+    --text-color: #212121;
+    --navbar-style: light;
+}
+
+/* Theme-related style overrides */
+.btn-primary {
+    background-color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+}
+
+.btn-primary:hover {
+    background-color: var(--secondary-color) !important;
+    border-color: var(--secondary-color) !important;
+}
+
+.btn-outline-primary {
+    color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+}
+
+.btn-outline-primary:hover {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+}
+
+.text-primary {
+    color: var(--primary-color) !important;
+}
+
+.bg-primary {
+    background-color: var(--primary-color) !important;
+}
+
+.border-primary {
+    border-color: var(--primary-color) !important;
+}
+
+/* Navbar theme adaptation */
+.navbar {
+    background: linear-gradient(135deg, var(--background-color) 0%, var(--secondary-color) 100%) !important;
+}
+
+/* Card theme adaptation */
+.card {
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+/* Special handling for dark theme */
+[data-theme="dark"] {
+    --background-color: #212529;
+    --text-color: #f8f9fa;
+}
+
+[data-theme="dark"] .bg-light {
+    background-color: #343a40 !important;
+}
+
+[data-theme="dark"] .card {
+    background-color: #343a40;
+    color: #f8f9fa;
+}
+
+[data-theme="dark"] .navbar {
+    background: linear-gradient(135deg, #343a40 0%, #495057 100%) !important;
+}
+
+/* Special handling for high contrast theme */
+[data-theme="high_contrast"] {
+    --background-color: #ffffff;
+    --text-color: #000000;
+}
+
+[data-theme="high_contrast"] .card {
+    border: 2px solid #000000;
+}
+
+[data-theme="high_contrast"] .btn {
+    border: 2px solid #000000;
+}
+
+/* Theme switching animation */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Theme preview styles */
+.theme-preview-container {
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.theme-preview-container .navbar-preview {
+    border-radius: 6px 6px 0 0;
+}
+
+.theme-preview-container .card-preview {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+}
+
+/* Theme selection card hover effects */
+.theme-card:hover .theme-preview-header {
+    transform: scale(1.02);
+    transition: transform 0.3s ease;
+}
+
+/* Special styles for theme settings page */
+.theme-settings-page .color-preview {
+    border: 2px solid #dee2e6;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.theme-settings-page .color-dot {
+    transition: transform 0.2s ease;
+}
+
+.theme-settings-page .color-dot:hover {
+    transform: scale(1.2);
+}
+
+/* Responsive theme adaptation */
+@media (max-width: 768px) {
+    .theme-card {
+        margin-bottom: 1rem;
+    }
+    
+    .theme-preview {
+        min-height: 60px;
+    }
+}
+
+/* Theme switch success notification */
+.theme-switch-success {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 9999;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    padding: 1rem 1.5rem;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
     }
 }

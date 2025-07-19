@@ -218,7 +218,7 @@
         {% if current_user.is_admin %}
         <div class="mb-3 d-flex justify-content-end">
             <div id="batch-delete-info" class="me-3 align-self-center text-muted" style="display: none;">
-                <small>💡 点击单元格选择要删除的vials</small>
+                <small>💡 Click cells to select vials for deletion</small>
             </div>
             <button id="batch-delete-toggle" class="btn btn-outline-danger">
                 <i class="bi bi-trash"></i> Batch Delete
@@ -389,17 +389,21 @@ document.addEventListener('DOMContentLoaded', function () {
     deleteBtn.style.display = 'none'; // Default to hidden
     modalTitle.textContent = 'Loading Vial Details...';
 
+    console.log('🔍 Fetching vial details for ID:', vialId);
     fetch('/vial/' + vialId + '/details')
       .then(response => {
+        console.log('📡 Response status:', response.status);
         if (!response.ok) {
             throw new Error('Network response was not ok. Status: ' + response.status);
         }
         return response.json();
       })
       .then(data => {
+        console.log('📦 Received data:', data);
         if (data.error) {
             modalTitle.textContent = 'Error';
             document.getElementById('modal-vial-tag').textContent = data.error;
+            console.error('❌ API returned error:', data.error);
         } else {
             modalTitle.textContent = 'Vial Details: ' + data.unique_vial_id_tag;
             document.getElementById('modal-vial-tag').textContent = data.unique_vial_id_tag;
@@ -429,6 +433,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 deleteBtn.setAttribute('data-vial-id', data.id);
                 deleteBtn.setAttribute('data-vial-tag', data.unique_vial_id_tag);
             }
+            console.log('✅ Vial details loaded successfully');
         }
         modalSpinner.style.display = 'none';
         modalContent.style.display = 'block';
@@ -436,9 +441,14 @@ document.addEventListener('DOMContentLoaded', function () {
       .catch(error => {
         modalTitle.textContent = 'Error';
         document.getElementById('modal-vial-tag').textContent = 'Could not load details.';
-        console.error('Error fetching vial details:', error);
+        console.error('❌ Error fetching vial details:', error);
+        console.error('❌ Error details:', {
+            message: error.message,
+            stack: error.stack,
+            vialId: vialId
+        });
         
-        // 确保在错误时隐藏管理员按钮
+        // Ensure admin buttons are hidden on error
         var editBtn = document.getElementById('modal-edit-btn');
         var deleteBtn = document.getElementById('modal-delete-btn');
         editBtn.style.display = 'none';
@@ -449,12 +459,12 @@ document.addEventListener('DOMContentLoaded', function () {
       });
   });
 
-  // 单个冻存管删除
+  // Single cryovial deletion
   document.getElementById('modal-delete-btn').addEventListener('click', function() {
     var vialId = this.getAttribute('data-vial-id');
     var vialTag = this.getAttribute('data-vial-tag');
     
-    if (confirm('确定要删除冻存管 "' + vialTag + '" 吗？此操作不可撤销。')) {
+    if (confirm('Are you sure you want to delete cryovial "' + vialTag + '"? This action cannot be undone.')) {
       fetch('/vial/' + vialId + '/delete', {
         method: 'POST',
         headers: {
@@ -465,22 +475,22 @@ document.addEventListener('DOMContentLoaded', function () {
       .then(response => response.json())
       .then(data => {
         if (data.success) {
-          alert('成功删除冻存管：' + data.message);
+          alert('Successfully deleted cryovial: ' + data.message);
           var modal = bootstrap.Modal.getInstance(document.getElementById('vialDetailsModal'));
           modal.hide();
           location.reload();
         } else {
-          alert('删除失败：' + (data.error || '未知错误'));
+          alert('Deletion failed: ' + (data.error || 'Unknown error'));
         }
       })
       .catch(error => {
         console.error('Error deleting vial:', error);
-        alert('删除时发生错误，请稍后重试。');
+        alert('An error occurred during deletion, please try again later.');
       });
     }
   });
 
-  // 批量删除功能 (仅限管理员)
+  // Batch deletion functionality (admin only)
   var batchDeleteToggleBtn = document.getElementById('batch-delete-toggle');
   if (batchDeleteToggleBtn) {
     var batchDeleteMode = false;
@@ -490,7 +500,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var batchDeleteInfo = document.getElementById('batch-delete-info');
   
     batchDeleteToggleBtn.addEventListener('click', function() {
-      console.log('🗑️ 进入批量删除模式');
+      console.log('🗑️ Entering batch deletion mode');
       batchDeleteMode = true;
       this.style.display = 'none';
       confirmBtn.style.display = 'inline-block';
@@ -498,12 +508,12 @@ document.addEventListener('DOMContentLoaded', function () {
       batchDeleteInfo.style.display = 'block';
       
       var checkboxes = document.querySelectorAll('.batch-delete-checkbox');
-      console.log('📦 找到', checkboxes.length, '个checkboxes');
-      // 不显示checkbox，仅使用红框高亮
-      // checkboxes 保持隐藏状态，仍用于内部数据追踪
+      console.log('📦 Found', checkboxes.length, 'checkboxes');
+      // Don't display checkbox, only use red box highlighting
+      // checkboxes remain hidden but still used for internal data tracking
       
       var vialCells = document.querySelectorAll('.vial-cell');
-      console.log('🔲 找到', vialCells.length, '个vial单元格');
+      console.log('🔲 Found', vialCells.length, 'vial cells');
       vialCells.forEach(cell => {
         cell.removeAttribute('data-bs-toggle');
         cell.style.cursor = 'default';
@@ -511,23 +521,23 @@ document.addEventListener('DOMContentLoaded', function () {
         cell.addEventListener('click', handleCellClickInDeleteMode);
       });
       
-      // 添加checkbox事件监听器
+      // Add checkbox event listeners
       addCheckboxListeners();
       updateDeleteButtonState();
       
-      // 显示成功提示
-      alert('✅ 已进入批量删除模式！\n\n💡 现在可以点击单元格选择要删除的vials\n📦 找到 ' + checkboxes.length + ' 个可选择的vials');
+      // Show success prompt
+      alert('✅ Entered batch deletion mode!\n\n💡 You can now click cells to select vials for deletion\n📦 Found ' + checkboxes.length + ' selectable vials');
     });
   
     cancelBtn.addEventListener('click', exitBatchDeleteMode);
   
     confirmBtn.addEventListener('click', function() {
       if (selectedVials.size === 0) {
-        alert('请选择要删除的冻存管');
+        alert('Please select cryovials to delete');
         return;
       }
       
-      if (confirm('确定要删除选中的 ' + selectedVials.size + ' 个冻存管吗？此操作不可撤销。')) {
+      if (confirm('Are you sure you want to delete the selected ' + selectedVials.size + ' cryovials? This action cannot be undone.')) {
         fetch('/vials/batch_delete', {
           method: 'POST',
           headers: {
@@ -539,21 +549,21 @@ document.addEventListener('DOMContentLoaded', function () {
         .then(response => response.json())
         .then(data => {
           if (data.success) {
-            alert('成功删除 ' + data.deleted_count + ' 个冻存管');
+            alert('Successfully deleted ' + data.deleted_count + ' cryovials');
             location.reload();
           } else {
-            alert('删除失败：' + (data.error || '未知错误'));
+            alert('Deletion failed: ' + (data.error || 'Unknown error'));
           }
         })
         .catch(error => {
           console.error('Error deleting vials:', error);
-          alert('删除时发生错误，请稍后重试。');
+          alert('An error occurred during deletion, please try again later.');
         });
       }
     });
 
     function handleCellClickInDeleteMode(event) {
-        event.preventDefault(); // 防止触发其他事件
+        event.preventDefault(); // Prevent triggering other events
         var checkbox = this.querySelector('.batch-delete-checkbox');
         if (checkbox && event.target !== checkbox) {
             checkbox.checked = !checkbox.checked;
@@ -570,7 +580,7 @@ document.addEventListener('DOMContentLoaded', function () {
         updateDeleteButtonState();
     }
 
-    // 为checkbox添加直接事件监听器
+    // Add direct event listeners for checkboxes
     function addCheckboxListeners() {
         var checkboxes = document.querySelectorAll('.batch-delete-checkbox');
         checkboxes.forEach(checkbox => {
@@ -591,7 +601,7 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   
     function exitBatchDeleteMode() {
-      console.log('❌ 退出批量删除模式');
+      console.log('❌ Exiting batch deletion mode');
       batchDeleteMode = false;
       selectedVials.clear();
       

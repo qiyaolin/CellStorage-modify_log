@@ -1,191 +1,288 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <title>{{ title + " - Cell Storage App" if title else "Cell Storage App" }}</title>
+    <title>{% block title %}{% endblock %} - CellStorage</title>
     
-    <!-- 使用更现代的Bootstrap版本和专业主题 -->
+    <!-- Bootstrap 5.3.3 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- 添加专业图标库 -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
-    <!-- 添加Google Fonts for professional typography -->
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" crossorigin="anonymous">
+    <!-- Fallback Bootstrap Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.11.3/font/bootstrap-icons.min.css" rel="stylesheet" crossorigin="anonymous">
+    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  </head>
-  <body class="bg-light">
-    <!-- 现代化的导航栏 -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-gradient shadow-sm sticky-top" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
-      <div class="container-fluid">
-        <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('main.index') }}">
-          <i class="bi bi-snow2 me-2 fs-4"></i>
-          <span>CellStorage</span>
-          <small class="badge bg-light text-dark ms-2">Lab</small>
-        </a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-          <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarContent">
-          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-            {% if current_user.is_authenticated %}
-              <!-- 基本功能 - 所有用户都可见 -->
-              <li class="nav-item">
-                <a class="nav-link d-flex align-items-center" href="{{ url_for('main.cryovial_inventory') }}">
-                  <i class="bi bi-list-ul me-1"></i>
-                  Inventory
-                </a>
-              </li>
-              {% if current_user.is_admin %}
-                <li class="nav-item">
-                  <a class="nav-link d-flex align-items-center" href="{{ url_for('main.inventory_summary') }}">
-                    <i class="bi bi-graph-up me-1"></i>
-                    Dashboard
-                  </a>
-                </li>
-              {% endif %}
-              
-              {% if current_user.is_admin %}
-                <!-- 管理功能下拉菜单 - 仅管理员可见 -->
-                <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-gear me-1"></i>
-                    Manage
-                  </a>
-                  <ul class="dropdown-menu shadow border-0" aria-labelledby="inventoryDropdown">
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.list_cell_lines') }}">
-                      <i class="bi bi-diagram-3 me-2 text-primary"></i>Cell Lines
-                    </a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.locations_overview') }}">
-                      <i class="bi bi-building me-2 text-success"></i>Freezer Locations
-                    </a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.add_cryovial') }}">
-                      <i class="bi bi-plus-circle me-2 text-info"></i>Add CryoVials
-                    </a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.batch_edit_vials') }}">
-                      <i class="bi bi-pencil-square me-2 text-warning"></i>Batch Edit
-                    </a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.manage_batch_lookup') }}">
-                      <i class="bi bi-search me-2 text-secondary"></i>Manage Batch
-                    </a></li>
-                  </ul>
-                </li>
-                <!-- Admin Tools Dropdown -->
-                <li class="nav-item dropdown">
-                  <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i class="bi bi-shield-check me-1"></i>
-                    Admin
-                  </a>
-                  <ul class="dropdown-menu shadow border-0" aria-labelledby="adminDropdown">
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.create_user') }}">
-                      <i class="bi bi-person-plus me-2 text-primary"></i>Create User
-                    </a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.list_users') }}">
-                      <i class="bi bi-people me-2 text-info"></i>Manage Users
-                    </a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.audit_logs') }}">
-                      <i class="bi bi-clock-history me-2 text-secondary"></i>Activity Logs
-                    </a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.backup_database') }}">
-                      <i class="bi bi-download me-2 text-success"></i>Backup
-                    </a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.restore_database') }}">
-                      <i class="bi bi-upload me-2 text-warning"></i>Restore
-                    </a></li>
-                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.import_csv') }}">
-                      <i class="bi bi-file-earmark-spreadsheet me-2 text-info"></i>Import CSV
-                    </a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('main.clear_all') }}">
-                      <i class="bi bi-trash me-2"></i>Clear All
-                    </a></li>
-                  </ul>
-                </li>
-              {% endif %}
-            {% endif %}
-          </ul>
-          <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
-            {% if current_user.is_authenticated %}
-              <li class="nav-item dropdown">
-                <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
-                  <div class="user-avatar me-2">
-                    <i class="bi bi-person-circle fs-5"></i>
-                  </div>
-                  <div class="d-flex flex-column">
-                    <span class="small">{{ current_user.username }}</span>
-                    <span class="badge badge-role bg-light text-dark">{{ current_user.role }}</span>
-                  </div>
-                </a>
-                <ul class="dropdown-menu dropdown-menu-end shadow border-0" aria-labelledby="userDropdown">
-                  <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.reset_password') }}">
-                    <i class="bi bi-key me-2 text-warning"></i>Reset Password
-                  </a></li>
-                  <li><hr class="dropdown-divider"></li>
-                  <li><a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('auth.logout') }}">
-                    <i class="bi bi-box-arrow-right me-2"></i>Logout
-                  </a></li>
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    
+    <!-- Theme CSS Variables -->
+    <style id="theme-variables">
+        :root {
+            --primary-color: #667eea;
+            --secondary-color: #764ba2;
+            --accent-color: #f093fb;
+            --background-color: #f8f9fa;
+            --text-color: #212529;
+            --navbar-style: light;
+        }
+    </style>
+    
+    <!-- Bootstrap Icons Loading Check -->
+    <script>
+        // Check if Bootstrap Icons are loading properly
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
+                const testIcon = document.createElement('i');
+                testIcon.className = 'bi bi-house';
+                testIcon.style.visibility = 'hidden';
+                testIcon.style.position = 'absolute';
+                document.body.appendChild(testIcon);
+                
+                const computedStyle = window.getComputedStyle(testIcon, '::before');
+                const content = computedStyle.getPropertyValue('content');
+                
+                // If Bootstrap Icons aren't loading, the content will be 'none' or empty
+                if (!content || content === 'none' || content === '""') {
+                    console.warn('Bootstrap Icons may not be loading properly. Adding fallback...');
+                    
+                    // Add additional fallback CSS
+                    const fallbackStyle = document.createElement('style');
+                    fallbackStyle.textContent = `
+                        .bi-plus-circle::before { content: "⊕"; }
+                        .bi-search::before { content: "🔍"; }
+                        .bi-building::before { content: "🏢"; }
+                        .bi-diagram-3::before { content: "📊"; }
+                        .bi-graph-up::before { content: "📈"; }
+                        .bi-list-ul::before { content: "📋"; }
+                        .bi-snow2::before { content: "❄"; }
+                        .bi-gear::before { content: "⚙"; }
+                        .bi-person-circle::before { content: "👤"; }
+                        .bi-plus-lg::before { content: "+"; }
+                        .bi-arrow-right::before { content: "→"; }
+                        .bi-eye::before { content: "👁"; }
+                        .bi-pencil::before { content: "✏"; }
+                        .bi-trash::before { content: "🗑"; }
+                        .bi-download::before { content: "⬇"; }
+                        .bi-upload::before { content: "⬆"; }
+                        .bi-check::before { content: "✓"; }
+                        .bi-x::before { content: "✗"; }
+                        .bi-info-circle::before { content: "ℹ"; }
+                        .bi-exclamation-triangle::before { content: "⚠"; }
+                        .bi-clock-history::before { content: "🕒"; }
+                        .bi-palette::before { content: "🎨"; }
+                    `;
+                    document.head.appendChild(fallbackStyle);
+                }
+                
+                document.body.removeChild(testIcon);
+            }, 100);
+        });
+    </script>
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="bg-light">
+    <!-- Modern Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-light bg-gradient shadow-sm sticky-top" style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);">
+        <div class="container-fluid">
+            <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('main.index') }}" style="color: #212529;">
+                <i class="bi bi-snow2 me-2 fs-4" style="color: #667eea;"></i>
+                <span style="color: #212529;">CellStorage</span>
+                <small class="badge bg-light text-dark ms-2" style="color: #343a40; border: 1px solid #dee2e6;">Lab</small>
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    {% if current_user.is_authenticated %}
+                        <!-- Basic Functions - Visible to All Users -->
+                        <li class="nav-item">
+                            <a class="nav-link d-flex align-items-center" href="{{ url_for('main.cryovial_inventory') }}" style="color: #212529;">
+                                <i class="bi bi-list-ul me-1" style="color: #667eea;"></i>
+                                Inventory
+                            </a>
+                        </li>
+                        {% if current_user.is_admin %}
+                            <li class="nav-item">
+                                <a class="nav-link d-flex align-items-center" href="{{ url_for('main.inventory_summary') }}" style="color: #212529;">
+                                    <i class="bi bi-graph-up me-1" style="color: #667eea;"></i>
+                                    Dashboard
+                                </a>
+                            </li>
+                        {% endif %}
+                        
+                        {% if current_user.is_admin %}
+                            <!-- Admin Functions Dropdown - Admin Only -->
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="inventoryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="color: #212529;">
+                                    <i class="bi bi-gear me-1" style="color: #667eea;"></i>
+                                    Manage
+                                </a>
+                                <ul class="dropdown-menu shadow border-0" aria-labelledby="inventoryDropdown">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.list_cell_lines') }}" style="color: #212529;">
+                                        <i class="bi bi-diagram-3 me-2 text-primary"></i>Cell Lines
+                                    </a></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.locations_overview') }}" style="color: #212529;">
+                                        <i class="bi bi-building me-2 text-success"></i>Freezer Locations
+                                    </a></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.add_cryovial') }}" style="color: #212529;">
+                                        <i class="bi bi-plus-circle me-2 text-info"></i>Add CryoVials
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.batch_edit_vials') }}" style="color: #212529;">
+                                        <i class="bi bi-pencil-square me-2 text-warning"></i>Batch Edit
+                                    </a></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.manage_batch_lookup') }}" style="color: #212529;">
+                                        <i class="bi bi-search me-2 text-secondary"></i>Manage Batch
+                                    </a></li>
+                                </ul>
+                            </li>
+                            <!-- Admin Tools Dropdown -->
+                            <li class="nav-item dropdown">
+                                <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="color: #212529;">
+                                    <i class="bi bi-shield-check me-1" style="color: #667eea;"></i>
+                                    Admin
+                                </a>
+                                <ul class="dropdown-menu shadow border-0" aria-labelledby="adminDropdown">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.create_user') }}" style="color: #212529;">
+                                        <i class="bi bi-person-plus me-2 text-primary"></i>Create User
+                                    </a></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.list_users') }}" style="color: #212529;">
+                                        <i class="bi bi-people me-2 text-info"></i>Manage Users
+                                    </a></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.audit_logs') }}" style="color: #212529;">
+                                        <i class="bi bi-clock-history me-2 text-secondary"></i>Activity Logs
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.theme_settings') }}" style="color: #212529;">
+                                        <i class="bi bi-palette me-2 text-warning"></i>Theme Settings
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.backup_database') }}" style="color: #212529;">
+                                        <i class="bi bi-download me-2 text-success"></i>Backup
+                                    </a></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.restore_database') }}" style="color: #212529;">
+                                        <i class="bi bi-upload me-2 text-warning"></i>Restore
+                                    </a></li>
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.import_csv') }}" style="color: #212529;">
+                                        <i class="bi bi-file-earmark-spreadsheet me-2 text-info"></i>Import CSV
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('main.clear_all') }}" style="color: #dc3545;">
+                                        <i class="bi bi-trash me-2"></i>Clear All
+                                    </a></li>
+                                </ul>
+                            </li>
+                        {% endif %}
+                    {% endif %}
                 </ul>
-              </li>
-            {% else %}
-              <li class="nav-item">
-                <a class="nav-link btn btn-outline-light rounded-pill px-3" href="{{ url_for('auth.login') }}">
-                  <i class="bi bi-box-arrow-in-right me-1"></i>Login
-                </a>
-              </li>
-            {% endif %}
-          </ul>
+                <ul class="navbar-nav ms-auto mb-2 mb-lg-0">
+                    {% if current_user.is_authenticated %}
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="color: #212529;">
+                                <div class="user-avatar me-2">
+                                    <i class="bi bi-person-circle fs-5" style="color: #667eea;"></i>
+                                </div>
+                                <div class="d-flex flex-column">
+                                    <span class="small" style="color: #212529;">{{ current_user.username }}</span>
+                                    <span class="badge badge-role bg-light text-dark" style="color: #343a40; border: 1px solid #dee2e6;">{{ current_user.role }}</span>
+                                </div>
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0" aria-labelledby="userDropdown">
+                                <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.reset_password') }}" style="color: #212529;">
+                                    <i class="bi bi-key me-2 text-warning"></i>Reset Password
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('auth.logout') }}" style="color: #dc3545;">
+                                    <i class="bi bi-box-arrow-right me-2"></i>Logout
+                                </a></li>
+                            </ul>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link btn btn-outline-primary rounded-pill px-3" href="{{ url_for('auth.login') }}" style="color: #667eea; border-color: #667eea;">
+                                <i class="bi bi-box-arrow-in-right me-1"></i>Login
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
         </div>
-      </div>
     </nav>
 
-    <div class="container-fluid px-4">
-      <!-- 改进的消息提示 -->
-      {% with messages = get_flashed_messages(with_categories=true) %}
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-          <div class="alert-container mt-3">
-          {% for category, message in messages %}
-            <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-sm border-0" role="alert">
-              <div class="d-flex align-items-center">
-                {% if category == 'success' %}
-                  <i class="bi bi-check-circle-fill me-2"></i>
-                {% elif category == 'warning' %}
-                  <i class="bi bi-exclamation-triangle-fill me-2"></i>
-                {% elif category == 'error' or category == 'danger' %}
-                  <i class="bi bi-x-circle-fill me-2"></i>
-                {% else %}
-                  <i class="bi bi-info-circle-fill me-2"></i>
-                {% endif %}
-                <span>{{ message|safe }}</span>
-              </div>
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            <div class="alert-container position-fixed top-0 start-50 translate-middle-x p-3" style="z-index: 9999;">
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show shadow-sm" role="alert">
+                        <i class="bi bi-{{ 'exclamation-triangle' if category == 'error' else 'info-circle' }} me-2"></i>
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
             </div>
-          {% endfor %}
-          </div>
         {% endif %}
-      {% endwith %}
-      
-      {% block content %}{% endblock %}
-      
-      <!-- 现代化的页脚 -->
-      <footer class="mt-5 py-4 border-top bg-white rounded-top shadow-sm">
-        <div class="text-center">
-          <div class="d-flex justify-content-center align-items-center mb-2">
-            <i class="bi bi-snow2 text-muted me-2"></i>
-            <span class="text-muted">CellStorage Lab Management System</span>
-          </div>
-          <p class="text-muted small mb-0">
-            &copy; {{ current_year }} HayerLab | 
-            <a href="#" class="text-decoration-none text-muted">Help</a> | 
-            <a href="#" class="text-decoration-none text-muted">Contact</a>
-          </p>
+    {% endwith %}
+
+    <!-- Main Content -->
+    <main class="flex-grow-1">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-light text-center py-4 mt-5" style="color: #343a40;">
+        <div class="container">
+            <p class="mb-0">
+                <i class="bi bi-snow2 me-2" style="color: #667eea;"></i>
+                CellStorage v1.0 - Professional Cell Line Management System
+            </p>
+            <small class="text-muted" style="color: #495057;">© 2024 All rights reserved</small>
         </div>
-      </footer>
-    </div>
-    
-    <!-- Bootstrap JS Bundle -->
+    </footer>
+
+    <!-- Bootstrap 5.3.3 JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    {% block scripts %}{% endblock %}
-  </body>
+    
+    <!-- Theme Switching Script -->
+    <script>
+        // Get current theme on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (document.querySelector('body').classList.contains('bg-light')) {
+                // User logged in, get theme configuration
+                fetch('/api/theme/current')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            applyTheme(data.theme);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Failed to load theme:', error);
+                    });
+            }
+        });
+
+        function applyTheme(theme) {
+            const styleElement = document.getElementById('theme-variables');
+            if (styleElement) {
+                styleElement.textContent = `
+                    :root {
+                        --primary-color: ${theme.primary_color};
+                        --secondary-color: ${theme.secondary_color};
+                        --accent-color: ${theme.accent_color};
+                        --background-color: ${theme.background_color};
+                        --text-color: ${theme.text_color};
+                        --navbar-style: ${theme.navbar_style};
+                    }
+                `;
+            }
+        }
+    </script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
 </html>

@@ -2,7 +2,7 @@
 
 {% block head %}
 <style media="print">
-  /* 打印专用样式 */
+  /* Print-specific styles */
   @page {
     margin: 1cm;
     size: A4;
@@ -14,12 +14,12 @@
     color: black !important;
   }
   
-  /* 隐藏不需要打印的元素 */
+  /* Hide elements not needed for printing */
   .no-print, nav, .navbar, .btn, .alert, .card-header {
     display: none !important;
   }
   
-  /* 打印时显示的标题 */
+  /* Title displayed when printing */
   .print-title {
     display: block !important;
     text-align: center;
@@ -37,7 +37,7 @@
     margin-bottom: 15pt;
   }
   
-  /* 卡片样式调整 */
+  /* Card style adjustments */
   .card {
     border: none !important;
     box-shadow: none !important;
@@ -48,7 +48,7 @@
     padding: 0 !important;
   }
   
-  /* 表格样式优化 */
+  /* Table style optimization */
   .table {
     font-size: 10pt;
     margin-bottom: 15pt;
@@ -64,7 +64,7 @@
     font-weight: bold;
   }
   
-  /* Box网格打印样式 */
+  /* Box grid print styles */
   .box-grid-print {
     border-collapse: collapse;
     margin: 10pt 0;
@@ -84,7 +84,7 @@
     background-color: #d0d0d0 !important;
   }
   
-  /* 批次信息打印样式 */
+  /* Batch information print styles */
   .batch-info-print {
     border: 2pt solid black;
     margin: 10pt 0;
@@ -97,12 +97,12 @@
     font-size: 12pt;
   }
   
-  /* 分页控制 */
+  /* Page break control */
   .page-break {
     page-break-before: always;
   }
   
-  /* 徽章在打印时的样式 */
+  /* Badge styles when printing */
   .badge {
     border: 1pt solid black !important;
     background-color: white !important;
@@ -110,7 +110,7 @@
     padding: 2pt 4pt !important;
   }
   
-  /* 简化布局 */
+  /* Simplified layout */
   .container-fluid, .row, .col-12, .col-md-6 {
     width: 100% !important;
     max-width: none !important;
@@ -121,7 +121,7 @@
 {% endblock %}
 
 {% block content %}
-<!-- 打印专用标题（屏幕上隐藏） -->
+<!-- Print-specific title (hidden on screen) -->
 <div class="print-title" style="display: none;">
   CryoVial Pick Up Report
 </div>
@@ -138,7 +138,7 @@
   </div>
 </div>
 
-<!-- 快速定位指南（打印时显示） -->
+<!-- Quick location guide (displayed when printing) -->
 <div class="card mb-4">
   <div class="card-header no-print">
     <h5><i class="bi bi-compass"></i> Quick Location Guide</h5>

@@ -79,6 +79,7 @@ from app.models import (
     CryoVial,
     VialBatch,
     AuditLog,
+    Alert,
 )
 
 from app.utils import log_audit, clear_database_except_admin
@@ -88,15 +89,52 @@ import csv
 from io import StringIO
 import re
 
+def validate_csrf_token(token):
+    """验证CSRF token"""
+    from flask_wtf.csrf import generate_csrf
+    try:
+        # 使用Flask-WTF的CSRF验证
+        from flask_wtf.csrf import validate_csrf
+        validate_csrf(token)
+        return True
+    except Exception:
+        return False
+
 
 @bp.route('/') # Defines the root URL for the main blueprint
 @bp.route('/index') # Also accessible via /index
 @login_required # Ensure only logged-in users can access the main dashboard
 def index():
-    # For now, just render a simple welcome page.
-    # Later, this can be a dashboard showing inventory summaries, etc.
+    # 基础统计
     vial_count = CryoVial.query.count()
-    return render_template('main/index.html', title='Dashboard', vial_count=vial_count)
+    
+    # 获取预警信息
+    from app.utils import get_active_alerts, generate_all_alerts
+    
+    # 为管理员生成和显示预警
+    if current_user.is_admin:
+        # 每次访问主页时生成新预警（实际使用中可能需要用定时任务）
+        try:
+            generate_all_alerts()
+        except Exception as e:
+            current_app.logger.warning(f'Alert generation failed: {e}')
+        
+        # 获取最新的活跃预警
+        recent_alerts = get_active_alerts(limit=5)
+    else:
+        recent_alerts = []
+    
+    # 获取最近活动记录
+    from app.models import AuditLog
+    recent_activities = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(5).all()
+    
+    return render_template(
+        'main/index.html', 
+        title='Dashboard', 
+        vial_count=vial_count,
+        recent_alerts=recent_alerts,
+        recent_activities=recent_activities
+    )
 
 
 @bp.route('/audit_logs')
@@ -1527,7 +1565,7 @@ def manage_batch(batch_id):
 @login_required
 @admin_required
 def inventory_summary():
-    """Display all cryovials for all users, grouped by batch."""
+    """Display all cryovials for all users, grouped by batch with analytics."""
     search_q = request.args.get('q', '').strip()
     search_status = request.args.get('status', '').strip()
     page = request.args.get('page', 1, type=int)
@@ -1548,6 +1586,47 @@ def inventory_summary():
         )
     if search_status:
         query = query.filter(CryoVial.status == search_status)
+
+    # 计算总体统计数据（不受搜索筛选影响）
+    total_stats = {}
+    status_counts = db.session.query(
+        CryoVial.status, 
+        db.func.count(CryoVial.id)
+    ).group_by(CryoVial.status).all()
+    
+    total_stats = {
+        'total': sum(count for _, count in status_counts),
+        'available': 0,
+        'used': 0,
+        'depleted': 0,
+        'discarded': 0
+    }
+    
+    for status, count in status_counts:
+        if status == 'Available':
+            total_stats['available'] = count
+        elif status == 'Used':
+            total_stats['used'] = count
+        elif status == 'Depleted':
+            total_stats['depleted'] = count
+        elif status == 'Discarded':
+            total_stats['discarded'] = count
+
+    # 批次统计
+    batch_stats = {
+        'total_batches': VialBatch.query.count()
+    }
+
+    # 细胞系统计
+    cell_line_counts = db.session.query(
+        CellLine.name,
+        db.func.count(CryoVial.id).label('count')
+    ).join(CryoVial).group_by(CellLine.name).order_by(db.func.count(CryoVial.id).desc()).limit(10).all()
+    
+    cell_line_stats = {
+        'total_cell_lines': CellLine.query.count(),
+        'top_cell_lines': [{'name': name, 'count': count} for name, count in cell_line_counts]
+    }
 
     # 先获取批次分页，然后获取对应的冻存管
     batch_query = db.session.query(VialBatch.id).distinct()
@@ -1630,7 +1709,7 @@ def inventory_summary():
                 location = (
                     f"{v.box_location.drawer_info.tower_info.name}/"
                     f"{v.box_location.drawer_info.name}/"
-                    f"{v.box_location.name} R{v.row_in_box}C{v.col_in_box}"
+                    f"{v.box_location.name} R{vial.row_in_box}C{vial.col_in_box}"
                 )
                 row_data.append(location)
             
@@ -1652,12 +1731,15 @@ def inventory_summary():
 
     return render_template(
         'main/inventory_summary.html',
-        title='Inventory Summary',
+        title='Analytics Dashboard',
         grouped_vials=grouped_vials,
         pagination=batch_pagination,
         statuses=statuses,
         search_q=search_q,
         search_status=search_status,
+        total_stats=total_stats,
+        batch_stats=batch_stats,
+        cell_line_stats=cell_line_stats,
     )
 
 @bp.route('/admin/import_csv', methods=['GET', 'POST'])
@@ -1970,6 +2052,8 @@ def import_csv():
 @login_required
 def vial_details(vial_id):
     try:
+        current_app.logger.info(f'Fetching vial details for ID {vial_id} by user {current_user.username}')
+        
         vial = db.session.query(
             CryoVial
         ).options(
@@ -1979,6 +2063,7 @@ def vial_details(vial_id):
         ).get(vial_id)
 
         if not vial:
+            current_app.logger.warning(f'Vial not found for ID {vial_id}')
             return jsonify({"error": "Vial not found"}), 404
 
         # 安全地获取相关信息，防止None值导致的AttributeError
@@ -2005,7 +2090,7 @@ def vial_details(vial_id):
         except AttributeError:
             location = "Location not available"
 
-        return jsonify({
+        response_data = {
             "id": vial.id,
             "unique_vial_id_tag": vial.unique_vial_id_tag or "Unknown",
             "cell_line": cell_line_name,
@@ -2017,9 +2102,13 @@ def vial_details(vial_id):
             "notes": vial.notes or "No notes available",
             "location": location,
             "is_admin": current_user.is_admin  # 添加用户权限信息
-        })
+        }
+        
+        current_app.logger.info(f'Successfully fetched vial details for ID {vial_id}')
+        return jsonify(response_data)
     except Exception as e:
         current_app.logger.error(f'Error fetching vial details for ID {vial_id}: {e}')
+        current_app.logger.error(f'Error details: {str(e)}')
         return jsonify({"error": "Unable to fetch vial details. Please try again later."}), 500
 
 
@@ -2028,6 +2117,11 @@ def vial_details(vial_id):
 @admin_required
 def delete_vial(vial_id):
     try:
+        # 验证CSRF token
+        csrf_token = request.headers.get('X-CSRFToken')
+        if not csrf_token or not validate_csrf_token(csrf_token):
+            return jsonify({"success": False, "error": "CSRF token validation failed"}), 400
+        
         vial = CryoVial.query.get_or_404(vial_id)
         
         # 记录日志
@@ -2049,6 +2143,11 @@ def delete_vial(vial_id):
 @admin_required
 def batch_delete_vials():
     try:
+        # 验证CSRF token
+        csrf_token = request.headers.get('X-CSRFToken')
+        if not csrf_token or not validate_csrf_token(csrf_token):
+            return jsonify({"success": False, "error": "CSRF token validation failed"}), 400
+        
         data = request.get_json()
         vial_ids = data.get('vial_ids', [])
         
@@ -2095,3 +2194,626 @@ def batch_delete_vials():
         db.session.rollback()
         current_app.logger.error(f'Error batch deleting vials {vial_ids}: {e}')
         return jsonify({"success": False, "error": "Unable to delete vials. Please try again later."}), 500
+
+# =============================================================================
+# 预警管理相关路由
+# =============================================================================
+
+@bp.route('/alerts')
+@login_required
+@admin_required
+def alerts_management():
+    """预警管理页面"""
+    from app.utils import get_active_alerts
+    from app.models import Alert
+    
+    # 获取查询参数
+    status_filter = request.args.get('status', 'active')  # active, resolved, dismissed, all
+    alert_type_filter = request.args.get('type', '')
+    page = request.args.get('page', 1, type=int)
+    per_page = 20
+    
+    # 构建查询
+    query = Alert.query
+    
+    if status_filter == 'active':
+        query = query.filter_by(is_resolved=False, is_dismissed=False)
+    elif status_filter == 'resolved':
+        query = query.filter_by(is_resolved=True)
+    elif status_filter == 'dismissed':
+        query = query.filter_by(is_dismissed=True)
+    # 'all' 不添加额外过滤条件
+    
+    if alert_type_filter:
+        query = query.filter_by(alert_type=alert_type_filter)
+    
+    # 分页查询
+    alerts_pagination = query.order_by(Alert.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False
+    )
+    
+    # 获取统计信息
+    alert_stats = {
+        'active': Alert.query.filter_by(is_resolved=False, is_dismissed=False).count(),
+        'resolved': Alert.query.filter_by(is_resolved=True).count(),
+        'dismissed': Alert.query.filter_by(is_dismissed=True).count(),
+        'total': Alert.query.count()
+    }
+    
+    # 获取预警类型列表
+    alert_types = db.session.query(Alert.alert_type).distinct().all()
+    alert_types = [t[0] for t in alert_types]
+    
+    return render_template(
+        'main/alerts_management.html',
+        title='Alerts Management',
+        alerts_pagination=alerts_pagination,
+        alert_stats=alert_stats,
+        alert_types=alert_types,
+        status_filter=status_filter,
+        alert_type_filter=alert_type_filter
+    )
+
+
+@bp.route('/api/alerts/<int:alert_id>/resolve', methods=['POST'])
+@login_required
+@admin_required
+def resolve_alert_api(alert_id):
+    """解决预警API"""
+    from app.utils import resolve_alert
+    
+    try:
+        alert = resolve_alert(alert_id, current_user.id)
+        if alert:
+            return jsonify({
+                'success': True,
+                'message': f'Alert "{alert.title}" has been resolved.'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Alert not found or already resolved.'
+            }), 404
+    except Exception as e:
+        current_app.logger.error(f'Error resolving alert {alert_id}: {e}')
+        return jsonify({
+            'success': False,
+            'message': 'An error occurred while resolving the alert.'
+        }), 500
+
+
+@bp.route('/api/alerts/<int:alert_id>/dismiss', methods=['POST'])
+@login_required
+@admin_required
+def dismiss_alert_api(alert_id):
+    """忽略预警API"""
+    from app.utils import dismiss_alert
+    
+    try:
+        alert = dismiss_alert(alert_id, current_user.id)
+        if alert:
+            return jsonify({
+                'success': True,
+                'message': f'Alert "{alert.title}" has been dismissed.'
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'message': 'Alert not found or already dismissed.'
+            }), 404
+    except Exception as e:
+        current_app.logger.error(f'Error dismissing alert {alert_id}: {e}')
+        return jsonify({
+            'success': False,
+            'message': 'An error occurred while dismissing the alert.'
+        }), 500
+
+
+@bp.route('/api/alerts/generate', methods=['POST'])
+@login_required
+@admin_required
+def generate_alerts_api():
+    """手动生成预警API"""
+    from app.utils import generate_all_alerts
+    
+    try:
+        alert_count = generate_all_alerts()
+        return jsonify({
+            'success': True,
+            'message': f'Generated {alert_count} new alerts.',
+            'alert_count': alert_count
+        })
+    except Exception as e:
+        current_app.logger.error(f'Error generating alerts: {e}')
+        return jsonify({
+            'success': False,
+            'message': 'An error occurred while generating alerts.'
+        }), 500
+
+
+# =============================================================================
+# 高级搜索相关API
+# =============================================================================
+
+@bp.route('/api/search/suggestions')
+@login_required
+def search_suggestions():
+    """搜索建议API"""
+    query = request.args.get('q', '').strip()
+    category = request.args.get('category', 'all')  # all, vials, batches, cell_lines
+    limit = min(int(request.args.get('limit', 10)), 20)  # 最多20个建议
+    
+    if len(query) < 2:
+        return jsonify({'suggestions': []})
+    
+    suggestions = []
+    
+    try:
+        if category in ['all', 'vials']:
+            # 冻存管标签建议
+            vial_tags = db.session.query(CryoVial.unique_vial_id_tag)\
+                .filter(CryoVial.unique_vial_id_tag.ilike(f'%{query}%'))\
+                .distinct().limit(limit//3 if category == 'all' else limit).all()
+            
+            for tag, in vial_tags:
+                suggestions.append({
+                    'type': 'vial',
+                    'value': tag,
+                    'label': f'Vial: {tag}',
+                    'icon': 'thermometer-snow'
+                })
+        
+        if category in ['all', 'batches']:
+            # 批次名称建议
+            batch_names = db.session.query(VialBatch.name)\
+                .filter(VialBatch.name.ilike(f'%{query}%'))\
+                .distinct().limit(limit//3 if category == 'all' else limit).all()
+            
+            for name, in batch_names:
+                suggestions.append({
+                    'type': 'batch',
+                    'value': name,
+                    'label': f'Batch: {name}',
+                    'icon': 'collection'
+                })
+        
+        if category in ['all', 'cell_lines']:
+            # 细胞系名称建议
+            cell_line_names = db.session.query(CellLine.name)\
+                .filter(CellLine.name.ilike(f'%{query}%'))\
+                .distinct().limit(limit//3 if category == 'all' else limit).all()
+            
+            for name, in cell_line_names:
+                suggestions.append({
+                    'type': 'cell_line',
+                    'value': name,
+                    'label': f'Cell Line: {name}',
+                    'icon': 'diagram-3'
+                })
+        
+        # 荧光标签建议
+        if category in ['all']:
+            fluorescence_tags = db.session.query(CryoVial.fluorescence_tag)\
+                .filter(CryoVial.fluorescence_tag.ilike(f'%{query}%'))\
+                .filter(CryoVial.fluorescence_tag.isnot(None))\
+                .filter(CryoVial.fluorescence_tag != '')\
+                .distinct().limit(3).all()
+            
+            for tag, in fluorescence_tags:
+                suggestions.append({
+                    'type': 'fluorescence',
+                    'value': tag,
+                    'label': f'Fluorescence: {tag}',
+                    'icon': 'lightbulb'
+                })
+        
+        # 排序并限制结果
+        suggestions = suggestions[:limit]
+        
+        return jsonify({
+            'suggestions': suggestions,
+            'query': query
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Error generating search suggestions: {e}')
+        return jsonify({'suggestions': []})
+
+
+@bp.route('/api/search/history')
+@login_required
+def search_history():
+    """获取用户搜索历史"""
+    # 从session中获取搜索历史
+    search_history = session.get('search_history', [])
+    return jsonify({'history': search_history[-10:]})  # 最近10个搜索
+
+
+@bp.route('/api/search/history', methods=['POST'])
+@login_required
+def add_search_history():
+    """添加搜索历史"""
+    data = request.get_json()
+    query = data.get('query', '').strip()
+    
+    if query and len(query) >= 2:
+        search_history = session.get('search_history', [])
+        
+        # 移除重复项
+        if query in search_history:
+            search_history.remove(query)
+        
+        # 添加到开头
+        search_history.insert(0, query)
+        
+        # 限制历史记录数量
+        search_history = search_history[:20]
+        
+        session['search_history'] = search_history
+        session.permanent = True
+        
+        return jsonify({'success': True})
+    
+    return jsonify({'success': False})
+
+
+@bp.route('/api/search/advanced')
+@login_required
+def advanced_search_api():
+    """高级搜索API"""
+    # 搜索参数
+    query = request.args.get('q', '').strip()
+    cell_line_id = request.args.get('cell_line_id', type=int)
+    status = request.args.get('status', '')
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    creator_id = request.args.get('creator_id', type=int)
+    fluorescence = request.args.get('fluorescence', '')
+    resistance = request.args.get('resistance', '')
+    batch_id = request.args.get('batch_id', type=int)
+    location_type = request.args.get('location_type', '')  # tower, drawer, box
+    location_id = request.args.get('location_id', type=int)
+    
+    # 基础查询
+    vial_query = CryoVial.query.join(VialBatch).join(CellLine)
+    
+    # 添加用户权限相关的表
+    vial_query = vial_query.join(User, VialBatch.created_by_user_id == User.id)
+    
+    # 添加位置相关的表
+    if current_user.is_admin:
+        vial_query = vial_query.join(Box).join(Drawer).join(Tower)
+    
+    # 应用搜索条件
+    if query:
+        like_pattern = f'%{query}%'
+        vial_query = vial_query.filter(
+            (CryoVial.unique_vial_id_tag.ilike(like_pattern)) |
+            (VialBatch.name.ilike(like_pattern)) |
+            (CellLine.name.ilike(like_pattern)) |
+            (CryoVial.fluorescence_tag.ilike(like_pattern)) |
+            (CryoVial.resistance.ilike(like_pattern)) |
+            (CryoVial.notes.ilike(like_pattern))
+        )
+    
+    if cell_line_id:
+        vial_query = vial_query.filter(CryoVial.cell_line_id == cell_line_id)
+    
+    if status:
+        vial_query = vial_query.filter(CryoVial.status == status)
+    
+    if date_from:
+        try:
+            from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+            vial_query = vial_query.filter(CryoVial.date_frozen >= from_date)
+        except ValueError:
+            pass
+    
+    if date_to:
+        try:
+            to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
+            vial_query = vial_query.filter(CryoVial.date_frozen <= to_date)
+        except ValueError:
+            pass
+    
+    if creator_id:
+        vial_query = vial_query.filter(VialBatch.created_by_user_id == creator_id)
+    
+    if fluorescence:
+        vial_query = vial_query.filter(CryoVial.fluorescence_tag.ilike(f'%{fluorescence}%'))
+    
+    if resistance:
+        vial_query = vial_query.filter(CryoVial.resistance.ilike(f'%{resistance}%'))
+    
+    if batch_id:
+        vial_query = vial_query.filter(CryoVial.batch_id == batch_id)
+    
+    # 位置过滤
+    if current_user.is_admin and location_type and location_id:
+        if location_type == 'tower':
+            vial_query = vial_query.filter(Tower.id == location_id)
+        elif location_type == 'drawer':
+            vial_query = vial_query.filter(Drawer.id == location_id)
+        elif location_type == 'box':
+            vial_query = vial_query.filter(Box.id == location_id)
+    
+    # 执行查询并分页
+    page = request.args.get('page', 1, type=int)
+    per_page = min(request.args.get('per_page', 50, type=int), 100)
+    
+    vials_pagination = vial_query.order_by(VialBatch.id, CryoVial.unique_vial_id_tag)\
+                                .paginate(page=page, per_page=per_page, error_out=False)
+    
+    # 格式化结果
+    results = []
+    for vial in vials_pagination.items:
+        vial_data = {
+            'id': vial.id,
+            'unique_vial_id_tag': vial.unique_vial_id_tag,
+            'batch_name': vial.batch.name,
+            'batch_id': vial.batch_id,
+            'cell_line_name': vial.cell_line_info.name,
+            'status': vial.status,
+            'date_frozen': vial.date_frozen.strftime('%Y-%m-%d') if vial.date_frozen else None,
+            'fluorescence_tag': vial.fluorescence_tag,
+            'resistance': vial.resistance,
+            'notes': vial.notes
+        }
+        
+        # 添加位置信息（如果用户是管理员）
+        if current_user.is_admin:
+            vial_data.update({
+                'location': {
+                    'tower_name': vial.box_location.drawer_info.tower_info.name,
+                    'drawer_name': vial.box_location.drawer_info.name,
+                    'box_name': vial.box_location.name,
+                    'position': f'R{vial.row_in_box}C{vial.col_in_box}'
+                }
+            })
+        
+        results.append(vial_data)
+    
+    return jsonify({
+        'results': results,
+        'pagination': {
+            'page': vials_pagination.page,
+            'pages': vials_pagination.pages,
+            'per_page': vials_pagination.per_page,
+            'total': vials_pagination.total,
+            'has_prev': vials_pagination.has_prev,
+            'has_next': vials_pagination.has_next
+        }
+    })
+
+
+# =============================================================================
+# 批量操作相关API
+# =============================================================================
+
+@bp.route('/api/vials/batch-update-status', methods=['POST'])
+@login_required
+@admin_required
+def batch_update_vials_status():
+    """批量更新冻存管状态"""
+    try:
+        data = request.get_json()
+        vial_ids = data.get('vial_ids', [])
+        new_status = data.get('status', '')
+        
+        if not vial_ids or not new_status:
+            return jsonify({
+                'success': False,
+                'message': 'Missing vial IDs or status.'
+            }), 400
+        
+        if new_status not in ['Available', 'Used', 'Depleted', 'Discarded']:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid status value.'
+            }), 400
+        
+        # 查询要更新的冻存管
+        vials = CryoVial.query.filter(CryoVial.id.in_(vial_ids)).all()
+        
+        if not vials:
+            return jsonify({
+                'success': False,
+                'message': 'No vials found with the provided IDs.'
+            }), 404
+        
+        # 记录更新前的状态
+        old_statuses = {vial.id: vial.status for vial in vials}
+        
+        # 批量更新状态
+        updated_count = 0
+        for vial in vials:
+            old_status = vial.status
+            vial.status = new_status
+            updated_count += 1
+            
+            # 记录审计日志
+            log_audit(
+                user_id=current_user.id,
+                action='UPDATE_VIAL_STATUS',
+                target_type='CryoVial',
+                target_id=vial.id,
+                details={
+                    'old_status': old_status,
+                    'new_status': new_status,
+                    'vial_tag': vial.unique_vial_id_tag,
+                    'batch_operation': True
+                }
+            )
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Successfully updated {updated_count} vials to status: {new_status}',
+            'updated_count': updated_count
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error in batch status update: {e}')
+        return jsonify({
+            'success': False,
+            'message': 'An error occurred while updating vial statuses.'
+        }), 500
+
+
+@bp.route('/api/vials/batch-export', methods=['POST'])
+@login_required
+@admin_required
+def batch_export_vials():
+    """批量导出选中的冻存管"""
+    try:
+        data = request.get_json()
+        vial_ids = data.get('vial_ids', [])
+        
+        if not vial_ids:
+            return jsonify({
+                'success': False,
+                'message': 'No vials selected for export.'
+            }), 400
+        
+        # 查询选中的冻存管
+        vials = db.session.query(CryoVial).join(VialBatch).join(CellLine)\
+                          .filter(CryoVial.id.in_(vial_ids))\
+                          .order_by(VialBatch.id, CryoVial.unique_vial_id_tag).all()
+        
+        if not vials:
+            return jsonify({
+                'success': False,
+                'message': 'No vials found with the provided IDs.'
+            }), 404
+        
+        # 生成CSV数据
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # 表头
+        headers = [
+            'Vial ID', 'Batch ID', 'Batch Name', 'Vial Tag', 'Cell Line',
+            'Passage Number', 'Date Frozen', 'Frozen By', 'Status'
+        ]
+        if current_user.is_admin:
+            headers.append('Location')
+        headers.extend([
+            'Volume (ml)', 'Concentration', 'Fluorescence Tag', 
+            'Resistance', 'Parental Cell Line', 'Notes'
+        ])
+        writer.writerow(headers)
+        
+        # 数据行
+        for vial in vials:
+            row_data = [
+                vial.id,
+                vial.batch.id,
+                vial.batch.name,
+                vial.unique_vial_id_tag,
+                vial.cell_line_info.name,
+                vial.passage_number or '',
+                vial.date_frozen,
+                vial.freezer_operator.username if vial.freezer_operator else '',
+                vial.status,
+            ]
+            if current_user.is_admin:
+                location = (
+                    f"{vial.box_location.drawer_info.tower_info.name}/"
+                    f"{vial.box_location.drawer_info.name}/"
+                    f"{vial.box_location.name} R{vial.row_in_box}C{vial.col_in_box}"
+                )
+                row_data.append(location)
+            
+            row_data.extend([
+                vial.volume_ml or '',
+                vial.concentration or '',
+                vial.fluorescence_tag or '',
+                vial.resistance or '',
+                vial.parental_cell_line or '',
+                vial.notes or ''
+            ])
+            writer.writerow(row_data)
+        
+        # 记录审计日志
+        log_audit(
+            user_id=current_user.id,
+            action='BATCH_EXPORT_VIALS',
+            details={
+                'vial_count': len(vials),
+                'vial_ids': vial_ids[:10]  # 只记录前10个ID
+            }
+        )
+        
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={
+                'Content-Disposition': f'attachment;filename=selected_vials_{len(vials)}_items.csv'
+            }
+        )
+        
+    except Exception as e:
+        current_app.logger.error(f'Error in batch export: {e}')
+        return jsonify({
+            'success': False,
+            'message': 'An error occurred while exporting vials.'
+        }), 500
+
+@bp.route('/theme-settings')
+@login_required
+def theme_settings():
+    """Theme settings page"""
+    from app.utils import get_available_themes, get_user_theme
+    
+    available_themes = get_available_themes()
+    current_theme = get_user_theme(current_user.id)
+    
+    return render_template(
+        'main/theme_settings.html',
+        title='Theme Settings',
+        available_themes=available_themes,
+        current_theme=current_theme
+    )
+
+@bp.route('/api/theme/switch', methods=['POST'])
+@login_required
+def switch_theme():
+    """Switch theme API"""
+    try:
+        data = request.get_json()
+        theme_name = data.get('theme_name')
+        
+        if not theme_name:
+            return jsonify({'success': False, 'message': 'Theme name cannot be empty'}), 400
+        
+        from app.utils import update_user_theme
+        success, message = update_user_theme(current_user.id, theme_name)
+        
+        if success:
+            return jsonify({'success': True, 'message': message})
+        else:
+            return jsonify({'success': False, 'message': message}), 400
+            
+    except Exception as e:
+        current_app.logger.error(f'Theme switch error: {e}')
+        return jsonify({'success': False, 'message': 'Theme switch failed'}), 500
+
+@bp.route('/api/theme/current')
+@login_required
+def get_current_theme():
+    """Get current theme configuration API"""
+    try:
+        from app.utils import get_user_theme, get_theme_css_variables
+        theme_config = get_user_theme(current_user.id)
+        css_variables = get_theme_css_variables(theme_config)
+        
+        return jsonify({
+            'success': True,
+            'theme': theme_config,
+            'css_variables': css_variables
+        })
+    except Exception as e:
+        current_app.logger.error(f'Get theme error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get theme configuration'}), 500

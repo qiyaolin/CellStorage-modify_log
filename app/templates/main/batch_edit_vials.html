@@ -3,30 +3,30 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-8 col-lg-6">
-    <div class="card shadow-sm">
+    <div class="card shadow-sm" style="color: #212529;">
       <div class="card-body">
-        <h2 class="card-title text-center mb-4">Batch Edit Vials</h2>
-        <p class="text-muted text-center mb-4">Enter a list of Vial ID Tags (one per line) to update their status and add notes in bulk.</p>
+        <h2 class="card-title text-center mb-4" style="color: #212529;">Batch Edit Vials</h2>
+        <p class="text-center mb-4" style="color: #495057;">Enter a list of Vial ID Tags (one per line) to update their status and add notes in bulk.</p>
         <form method="POST" action="{{ url_for('main.batch_edit_vials') }}">
           {{ form.hidden_tag() }}
           <div class="form-floating mb-3">
-            {{ form.vial_tags(class="form-control" + (" is-invalid" if form.vial_tags.errors else ""), rows=6, placeholder="Vial ID Tags") }}
-            {{ form.vial_tags.label }}
-            {% if form.vial_tags.errors %}<div class="invalid-feedback">{{ form.vial_tags.errors[0] }}</div>{% endif %}
+            {{ form.vial_tags(class="form-control" + (" is-invalid" if form.vial_tags.errors else ""), rows=6, placeholder="Vial ID Tags", style="color: #212529;") }}
+            {{ form.vial_tags.label(style="color: #343a40;") }}
+            {% if form.vial_tags.errors %}<div class="invalid-feedback" style="color: #dc3545;">{{ form.vial_tags.errors[0] }}</div>{% endif %}
           </div>
           <div class="form-floating mb-3">
-            {{ form.new_status(class="form-select" + (" is-invalid" if form.new_status.errors else "")) }}
-            {{ form.new_status.label }}
-            {% if form.new_status.errors %}<div class="invalid-feedback">{{ form.new_status.errors[0] }}</div>{% endif %}
+            {{ form.new_status(class="form-select" + (" is-invalid" if form.new_status.errors else ""), style="color: #212529;") }}
+            {{ form.new_status.label(style="color: #343a40;") }}
+            {% if form.new_status.errors %}<div class="invalid-feedback" style="color: #dc3545;">{{ form.new_status.errors[0] }}</div>{% endif %}
           </div>
           <div class="form-floating mb-3">
-            {{ form.notes(class="form-control" + (" is-invalid" if form.notes.errors else ""), rows=4, placeholder="Notes") }}
-            {{ form.notes.label }}
-            <small class="form-text text-muted">These notes will be appended to the existing notes of each vial.</small>
-            {% if form.notes.errors %}<div class="invalid-feedback">{{ form.notes.errors[0] }}</div>{% endif %}
+            {{ form.notes(class="form-control" + (" is-invalid" if form.notes.errors else ""), rows=4, placeholder="Notes", style="color: #212529;") }}
+            {{ form.notes.label(style="color: #343a40;") }}
+            <small class="form-text" style="color: #495057;">These notes will be appended to the existing notes of each vial.</small>
+            {% if form.notes.errors %}<div class="invalid-feedback" style="color: #dc3545;">{{ form.notes.errors[0] }}</div>{% endif %}
           </div>
           <div class="d-grid">
-            <button type="submit" class="btn btn-primary btn-lg">{{ form.submit.label.text }}</button>
+            <button type="submit" class="btn btn-primary btn-lg" style="color: #fff;">{{ form.submit.label.text }}</button>
           </div>
         </form>
       </div>

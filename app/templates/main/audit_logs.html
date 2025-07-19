@@ -4,20 +4,14 @@
     <h1>Inventory Logs</h1>
 </div>
 
-<div class="card shadow-sm mb-4">
-    <div class="card-header">
-        <h5 class="mb-0">
-            <button class="btn btn-link text-decoration-none" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapse" aria-expanded="true" aria-controls="filterCollapse">
-                Filter Logs
-            </button>
-        </h5>
-    </div>
+<div class="card shadow-sm mb-4" style="color: #212529;">
+    <div class="card-header" style="color: #212529;">Filter Logs</div>
     <div class="collapse show" id="filterCollapse">
-        <div class="card-body bg-light">
+        <div class="card-body bg-light" style="color: #212529;">
             <form method="get" class="row g-3 align-items-end">
               <div class="col-md-3">
-                <label for="user_select" class="form-label">User</label>
-                <select name="user" id="user_select" class="form-select">
+                <label for="user_select" class="form-label" style="color: #343a40;">User</label>
+                <select name="user" id="user_select" class="form-select" style="color: #212529;">
                   <option value="">All Users</option>
                   {% for u in all_users %}
                     <option value="{{ u.username }}" {% if search_user==u.username %}selected{% endif %}>{{ u.username }}</option>
@@ -25,16 +19,16 @@
                 </select>
               </div>
               <div class="col-md-3">
-                  <label for="start_date" class="form-label">Start Date</label>
-                  <input type="date" name="start" id="start_date" class="form-control" value="{{ start }}">
+                  <label for="start_date" class="form-label" style="color: #343a40;">Start Date</label>
+                  <input type="date" name="start" id="start_date" class="form-control" value="{{ start }}" style="color: #212529;">
               </div>
               <div class="col-md-3">
-                  <label for="end_date" class="form-label">End Date</label>
-                  <input type="date" name="end" id="end_date" class="form-control" value="{{ end }}">
+                  <label for="end_date" class="form-label" style="color: #343a40;">End Date</label>
+                  <input type="date" name="end" id="end_date" class="form-control" value="{{ end }}" style="color: #212529;">
               </div>
               <div class="col-md-3">
-                  <label for="keyword_search" class="form-label">Keyword</label>
-                  <input type="text" name="keyword" id="keyword_search" class="form-control" placeholder="e.g., 'Create', 'Vial'" value="{{ keyword }}">
+                  <label for="keyword_search" class="form-label" style="color: #343a40;">Keyword</label>
+                  <input type="text" name="keyword" id="keyword_search" class="form-control" placeholder="e.g., 'Create', 'Vial'" value="{{ keyword }}" style="color: #212529;">
               </div>
               <div class="col-12 text-end">
                 <a href="{{ url_for('main.audit_logs') }}" class="btn btn-secondary">Reset</a>
@@ -125,7 +119,7 @@
             </table>
         </div>
         
-        <!-- 分页导航 -->
+        <!-- Pagination Navigation -->
         {% if pagination.pages > 1 %}
         <div class="d-flex justify-content-between align-items-center mt-3">
             <div class="text-muted">

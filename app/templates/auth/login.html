@@ -3,39 +3,35 @@
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-6 col-lg-4">
-    <div class="card shadow-sm">
+    <div class="card shadow-sm" style="color: #212529;">
       <div class="card-body">
-        <h2 class="card-title text-center mb-4">Sign In</h2>
+        <h2 class="card-title text-center mb-4" style="color: #212529;">Sign In</h2>
         <form action="" method="post" novalidate>
           {{ form.hidden_tag() }}
           
           <div class="form-floating mb-3">
-            {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), id="floatingUsername", placeholder="Username") }}
-            {{ form.username.label(for="floatingUsername") }}
+            {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), id="floatingUsername", placeholder="Username", style="color: #212529;") }}
+            {{ form.username.label(for="floatingUsername", style="color: #343a40;") }}
             {% if form.username.errors %}
-              <div class="invalid-feedback">
-                {{ form.username.errors[0] }}
-              </div>
+              <div class="invalid-feedback" style="color: #dc3545;">{{ form.username.errors[0] }}</div>
             {% endif %}
           </div>
           
           <div class="form-floating mb-3">
-            {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), id="floatingPassword", placeholder="Password") }}
-            {{ form.password.label(for="floatingPassword") }}
+            {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), id="floatingPassword", placeholder="Password", style="color: #212529;") }}
+            {{ form.password.label(for="floatingPassword", style="color: #343a40;") }}
             {% if form.password.errors %}
-              <div class="invalid-feedback">
-                {{ form.password.errors[0] }}
-              </div>
+              <div class="invalid-feedback" style="color: #dc3545;">{{ form.password.errors[0] }}</div>
             {% endif %}
           </div>
           
           <div class="form-check mb-3">
             {{ form.remember_me(class="form-check-input") }}
-            {{ form.remember_me.label(class="form-check-label") }}
+            {{ form.remember_me.label(class="form-check-label", style="color: #343a40;") }}
           </div>
           
           <div class="d-grid">
-            {{ form.submit(class="btn btn-primary btn-lg") }}
+            {{ form.submit(class="btn btn-primary btn-lg", style="color: #fff;") }}
           </div>
         </form>
       </div>

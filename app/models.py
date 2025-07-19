@@ -1,13 +1,14 @@
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
-from . import db  # 从 app 包的 __init__.py 导入 db 对象
+from . import db  # Import db object from app package's __init__.py
+import json
 
 
-# 我们将在 app/__init__.py 中初始化 LoginManager，并设置 user_loader
-# from . import login_manager # 这行现在不需要，user_loader 在 __init__.py 中设置
+# We will initialize LoginManager in app/__init__.py and set user_loader
+# from . import login_manager # This line is not needed now, user_loader is set in __init__.py
 
-# flask_login UserMixin 提供了用户会话管理所需的默认实现
+# flask_login UserMixin provides default implementation for user session management
 class User(UserMixin, db.Model):
     __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
@@ -47,18 +48,18 @@ class CellLine(db.Model):
     name = db.Column(db.String(128), unique=True, index=True, nullable=False)
     source = db.Column(db.String(128))  # e.g., ATCC, Gift
     species = db.Column(db.String(64))  # e.g., Human, Mouse
-    original_passage = db.Column(db.String(64))  # 可以是数字或范围，所以用字符串
+    original_passage = db.Column(db.String(64))  # Can be number or range, so use string
     culture_medium = db.Column(db.String(255))
     antibiotic_resistance = db.Column(db.String(255))  # e.g., Puromycin, Blasticidin
     growth_properties = db.Column(db.Text)  # e.g., Adherent, Suspension
     mycoplasma_status = db.Column(db.String(64))  # e.g., Negative (Date), Positive
-    date_established = db.Column(db.Date)  # 细胞系建立或接收日期
+    date_established = db.Column(db.Date)  # Cell line establishment or receipt date
     notes = db.Column(db.Text)
 
-    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))  # 关联创建者
-    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)  # 记录创建或最后修改时间
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))  # Associated creator
+    timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)  # Record creation or last modification time
 
-    # 关联到使用此细胞系的所有冻存管
+    # Associated with all cryovials using this cell line
     cryovials = db.relationship('CryoVial', backref='cell_line_info', lazy='dynamic')
 
     def __repr__(self):
@@ -156,7 +157,7 @@ class CryoVial(db.Model):
     # __table_args__ = (db.UniqueConstraint('box_id', 'row_in_box', 'col_in_box', name='_box_position_uc'),)
 
     # If you have other table arguments, keep them, just remove the specific UniqueConstraint.
-    # If this was the only one, you can remove the __table_args__ line entirely.
+    # If this was the only one, you can remove the line entirely.
     # For example, if you wanted to keep other constraints (though we don't have them here for CryoVial yet):
     # __table_args__ = (
     #     # Other constraints here,
@@ -171,11 +172,11 @@ class AuditLog(db.Model):
     __tablename__ = 'audit_logs'
     id = db.Column(db.Integer, primary_key=True)
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))  # 操作用户
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))  # Operating user
     action = db.Column(db.String(255), nullable=False)  # e.g., "LOGIN", "CREATE_VIAL", "EDIT_CELL_LINE"
     target_type = db.Column(db.String(64))  # e.g., "CryoVial", "CellLine", "User"
-    target_id = db.Column(db.Integer)  # 相关记录的ID
-    details = db.Column(db.Text)  # 可以存JSON格式的变更详情
+    target_id = db.Column(db.Integer)  # Related record ID
+    details = db.Column(db.Text)  # Can store JSON format change details
 
     def __repr__(self):
         return f'<AuditLog {self.action} by User ID {self.user_id} at {self.timestamp}>'
@@ -184,8 +185,123 @@ class AuditLog(db.Model):
 class AppConfig(db.Model):
     """Simple key/value store for application-wide settings."""
     __tablename__ = 'app_config'
-    key = db.Column(db.String(64), primary_key=True)
-    value = db.Column(db.String(255))
+    id = db.Column(db.Integer, primary_key=True)
+    key = db.Column(db.String(100), unique=True, nullable=False)
+    value = db.Column(db.Text)
+    description = db.Column(db.String(200))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     def __repr__(self):
         return f"<AppConfig {self.key}={self.value}>"
+
+
+class AlertConfig(db.Model):
+    """Configuration for inventory alerts."""
+    __tablename__ = 'alert_configs'
+    id = db.Column(db.Integer, primary_key=True)
+    alert_type = db.Column(db.String(64), nullable=False)  # 'low_stock', 'box_capacity', 'old_samples'
+    is_enabled = db.Column(db.Boolean, default=True)
+    threshold_value = db.Column(db.Integer)  # Threshold value
+    threshold_days = db.Column(db.Integer)  # Days threshold
+    cell_line_id = db.Column(db.Integer, db.ForeignKey('cell_lines.id'), nullable=True)  # Specific cell line configuration
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    cell_line = db.relationship('CellLine', backref='alert_configs')
+    created_by = db.relationship('User', backref='alert_configs_created')
+
+    def __repr__(self):
+        return f"<AlertConfig {self.alert_type}>"
+
+
+class Alert(db.Model):
+    """Generated alerts for inventory management."""
+    __tablename__ = 'alerts'
+    id = db.Column(db.Integer, primary_key=True)
+    alert_type = db.Column(db.String(64), nullable=False)
+    severity = db.Column(db.String(20), default='medium')  # 'low', 'medium', 'high', 'critical'
+    title = db.Column(db.String(255), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    
+    # Associated objects
+    cell_line_id = db.Column(db.Integer, db.ForeignKey('cell_lines.id'), nullable=True)
+    box_id = db.Column(db.Integer, db.ForeignKey('boxes.id'), nullable=True)
+    batch_id = db.Column(db.Integer, db.ForeignKey('vial_batches.id'), nullable=True)
+    
+    # Status and time
+    is_resolved = db.Column(db.Boolean, default=False)
+    is_dismissed = db.Column(db.Boolean, default=False)
+    resolved_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    resolved_at = db.Column(db.DateTime, nullable=True)
+    dismissed_at = db.Column(db.DateTime, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    # Additional data (JSON format)
+    extra_data = db.Column(db.Text)  # Store additional information like current count, threshold, etc
+
+    # Relationships
+    cell_line = db.relationship('CellLine', backref='alerts')
+    box = db.relationship('Box', backref='alerts')
+    batch = db.relationship('VialBatch', backref='alerts')
+    resolved_by = db.relationship('User', backref='alerts_resolved')
+
+    @property
+    def is_active(self):
+        """Check if alert is still active (unresolved and not dismissed)"""
+        return not self.is_resolved and not self.is_dismissed
+
+    @property
+    def age_days(self):
+        """Number of days the alert has existed"""
+        return (datetime.utcnow() - self.created_at).days
+
+    def to_dict(self):
+        """Convert to dictionary format"""
+        return {
+            'id': self.id,
+            'alert_type': self.alert_type,
+            'severity': self.severity,
+            'title': self.title,
+            'message': self.message,
+            'is_resolved': self.is_resolved,
+            'is_dismissed': self.is_dismissed,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'age_days': self.age_days,
+            'extra_data': json.loads(self.extra_data) if self.extra_data else None
+        }
+
+    def __repr__(self):
+        return f"<Alert {self.alert_type}: {self.title}>"
+
+
+class ThemeConfig(db.Model):
+    """Theme configuration model"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    theme_name = db.Column(db.String(50), nullable=False, default='classic')  # Theme name
+    primary_color = db.Column(db.String(7), nullable=False, default='#667eea')  # Primary color
+    secondary_color = db.Column(db.String(7), nullable=False, default='#764ba2')  # Secondary color
+    accent_color = db.Column(db.String(7), nullable=False, default='#f093fb')  # Accent color
+    background_color = db.Column(db.String(7), nullable=False, default='#f8f9fa')  # Background color
+    text_color = db.Column(db.String(7), nullable=False, default='#212529')  # Text color
+    navbar_style = db.Column(db.String(20), nullable=False, default='light')  # Navbar style
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Associated user
+    user = db.relationship('User', backref='theme_config')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'theme_name': self.theme_name,
+            'primary_color': self.primary_color,
+            'secondary_color': self.secondary_color,
+            'accent_color': self.accent_color,
+            'background_color': self.background_color,
+            'text_color': self.text_color,
+            'navbar_style': self.navbar_style
+        }

@@ -233,11 +233,18 @@ class UserPermission(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     permission = db.Column(db.String(64), nullable=False)
+    resource_type = db.Column(db.String(64))
+    resource_id = db.Column(db.Integer)
     granted_at = db.Column(db.DateTime, default=datetime.utcnow)
     granted_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    expires_at = db.Column(db.DateTime)
+    is_active = db.Column(db.Boolean, default=True)
     
     granted_by = db.relationship('User', foreign_keys=[granted_by_user_id])
     user = db.relationship('User', foreign_keys=[user_id], backref='permissions')
+    
+    def __repr__(self):
+        return f'<UserPermission {self.permission} for user {self.user_id}>'
 
 class SupplierRating(db.Model):
     __tablename__ = 'supplier_ratings'
@@ -338,3 +345,35 @@ class StockAlert(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     expires_at = db.Column(db.DateTime)
     extra_data = db.Column(db.Text)
+    
+    item = db.relationship('InventoryItem', backref='alerts')
+    location = db.relationship('Location', backref='alerts')
+    acknowledged_by = db.relationship('User', foreign_keys=[acknowledged_by_user_id], backref='acknowledged_alerts')
+    
+    def acknowledge(self, user_id):
+        self.is_acknowledged = True
+        self.acknowledged_by_user_id = user_id
+        self.acknowledged_at = datetime.utcnow()
+    
+    def __repr__(self):
+        return f'<StockAlert {self.title}>'
+
+
+class Notification(db.Model):
+    """User notifications system"""
+    __tablename__ = 'notifications'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    link = db.Column(db.String(255))
+    is_read = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    user = db.relationship('User', backref='notifications')
+    
+    def mark_as_read(self):
+        self.is_read = True
+    
+    def __repr__(self):
+        return f'<Notification {self.title} for user {self.user_id}>'

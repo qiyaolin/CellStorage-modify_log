@@ -47,13 +47,13 @@
                     <i class="fas fa-eye"></i>
                 </button>
                 
-                <a href="{{ url_for('inventory.create_location') }}?parent_id={{ location.id }}" 
+                <a href="{{ url_for('inventory.locations') }}?parent_id={{ location.id }}" 
                    class="btn-location btn-add" 
                    title="Add Child Location">
                     <i class="fas fa-plus"></i>
                 </a>
                 
-                <a href="{{ url_for('inventory.edit_location', id=location.id) }}" 
+                <a href="{{ url_for('inventory.locations') }}" 
                    class="btn-location btn-edit" 
                    title="Edit Location">
                     <i class="fas fa-edit"></i>

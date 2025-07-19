@@ -184,7 +184,7 @@ body {
 
 .table tbody tr:hover {
     background: rgba(25, 118, 210, 0.08);
-    transform: scale(1.01);
+    /* Remove transform scale to prevent content overflow */
 }
 
 /* Modern form controls */
@@ -337,7 +337,350 @@ footer {
     transform: rotate(180deg);
 }
 
-/* Timeline styles for recent activity */
+/* Modern Activity Feed Styles */
+.activity-feed {
+    padding: 0;
+}
+
+.activity-item {
+    display: flex;
+    align-items: flex-start;
+    padding: 16px 0;
+    border-bottom: 1px solid #f1f5f9;
+    transition: all 0.2s ease;
+}
+
+.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-item:hover {
+    background-color: #f8fafc;
+    margin: 0 -16px;
+    padding: 16px;
+    border-radius: 8px;
+    border-bottom: 1px solid transparent;
+}
+
+.activity-item:hover:last-child {
+    border-bottom: none;
+}
+
+.activity-avatar {
+    margin-right: 12px;
+    margin-top: 2px;
+}
+
+.user-avatar-small {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+    box-shadow: 0 2px 4px rgba(25, 118, 210, 0.2);
+}
+
+.system-avatar-small {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 0.875rem;
+    box-shadow: 0 2px 4px rgba(107, 114, 128, 0.2);
+}
+
+.activity-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.activity-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 4px;
+}
+
+.activity-action {
+    display: flex;
+    align-items: center;
+    flex: 1;
+    min-width: 0;
+}
+
+.action-text {
+    color: #374151;
+    font-size: 0.875rem;
+    line-height: 1.4;
+    margin-right: 8px;
+}
+
+.action-text strong {
+    color: #1f2937;
+    font-weight: 600;
+}
+
+.activity-time {
+    text-align: right;
+    white-space: nowrap;
+    margin-left: 12px;
+}
+
+.time-ago {
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+.activity-details {
+    margin-top: 6px;
+    padding: 8px 12px;
+    background-color: #f8fafc;
+    border-radius: 6px;
+    border-left: 3px solid #e2e8f0;
+}
+
+.activity-details small {
+    color: #64748b;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+/* Badge styles for activity types */
+.badge {
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 12px;
+}
+
+.bg-success-subtle {
+    background-color: #dcfce7 !important;
+}
+
+.bg-danger-subtle {
+    background-color: #fee2e2 !important;
+}
+
+.bg-warning-subtle {
+    background-color: #fef3c7 !important;
+}
+
+.bg-info-subtle {
+    background-color: #dbeafe !important;
+}
+
+.bg-primary-subtle {
+    background-color: #dbeafe !important;
+}
+
+.bg-secondary-subtle {
+    background-color: #f1f5f9 !important;
+}
+
+.text-success {
+    color: #16a34a !important;
+}
+
+.text-danger {
+    color: #dc2626 !important;
+}
+
+.text-warning {
+    color: #d97706 !important;
+}
+
+.text-info {
+    color: #0ea5e9 !important;
+}
+
+.text-primary {
+    color: #2563eb !important;
+}
+
+.text-secondary {
+    color: #64748b !important;
+}
+
+/* Responsive adjustments for activity feed */
+@media (max-width: 768px) {
+    .activity-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .activity-time {
+        text-align: left;
+        margin-left: 0;
+        margin-top: 4px;
+    }
+    
+    .activity-action {
+        margin-bottom: 4px;
+    }
+    
+    .badge {
+        margin-left: 0 !important;
+        margin-top: 4px;
+    }
+    
+    .user-avatar-small,
+    .system-avatar-small {
+        width: 32px;
+        height: 32px;
+        font-size: 0.75rem;
+    }
+    
+    .activity-item:hover {
+        margin: 0 -12px;
+        padding: 12px;
+    }
+}
+
+/* Activity feed scrollbar styling */
+.card-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.card-body::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 3px;
+}
+
+.card-body::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 3px;
+}
+
+.card-body::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Compact Activity List Styles */
+.compact-activity-list {
+    margin: 0;
+    padding: 0;
+}
+
+.compact-activity-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    transition: background-color 0.2s ease;
+}
+
+.compact-activity-item:last-child {
+    border-bottom: none;
+}
+
+.compact-activity-item:hover {
+    background-color: #f8fafc;
+}
+
+.activity-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: #f8fafc;
+    border-radius: 50%;
+    margin-right: 12px;
+    flex-shrink: 0;
+}
+
+.activity-icon i {
+    font-size: 0.875rem;
+}
+
+.activity-details {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.activity-description {
+    flex: 1;
+    min-width: 0;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.user-name {
+    color: #1f2937;
+    font-weight: 600;
+    margin-right: 4px;
+}
+
+.action-description {
+    color: #6b7280;
+}
+
+.activity-time {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    white-space: nowrap;
+    margin-left: 12px;
+    font-weight: 500;
+}
+
+/* Professional button sizing */
+.btn-xs {
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    border-radius: 4px;
+}
+
+/* Responsive adjustments for compact activity */
+@media (max-width: 768px) {
+    .compact-activity-item {
+        padding: 6px 12px;
+    }
+    
+    .activity-icon {
+        width: 28px;
+        height: 28px;
+        margin-right: 8px;
+    }
+    
+    .activity-icon i {
+        font-size: 0.75rem;
+    }
+    
+    .activity-details {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .activity-time {
+        margin-left: 0;
+        margin-top: 2px;
+        font-size: 0.7rem;
+    }
+    
+    .activity-description {
+        font-size: 0.8rem;
+    }
+}
+
+/* Activity icon color variations */
+.compact-activity-item:hover .activity-icon {
+    background-color: #e2e8f0;
+}
+
+/* Legacy timeline styles (kept for compatibility) */
 .timeline {
     position: relative;
     padding-left: 20px;
@@ -611,8 +954,10 @@ input, textarea, select {
 .search-results-table-container {
     max-height: 500px;
     overflow-y: auto;
+    overflow-x: hidden; /* Prevent horizontal overflow */
     border: 1px solid #dee2e6;
     border-radius: 0.375rem;
+    position: relative; /* Ensure proper stacking context */
 }
 
 .search-results-table-container .table {
@@ -631,6 +976,22 @@ input, textarea, select {
 /* Improve table row hover in scrollable container */
 .search-results-table-container .table-hover tbody tr:hover {
     background-color: rgba(0, 0, 0, 0.075);
+}
+
+/* Prevent any transform effects on table content that might cause overflow */
+.inventory-table tbody tr:hover,
+.search-results-table-container tbody tr:hover,
+.selected-items-table-container tbody tr:hover {
+    transform: none !important; /* Override any transform animations */
+    transition: background-color 0.2s ease; /* Keep only background transition */
+}
+
+/* Selected items table container styling */
+.selected-items-table-container {
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden; /* Prevent horizontal overflow */
+    position: relative; /* Ensure proper stacking context */
 }
 
 /* Search results header with record count */

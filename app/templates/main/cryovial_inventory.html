@@ -171,7 +171,7 @@
                         <input type="hidden" name="creator" value="{{ search_creator }}">
                         <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
                         <input type="hidden" name="resistance" value="{{ search_resistance }}">
-                        <div class="table-responsive">
+                        <div class="table-responsive selected-items-table-container">
                             <table class="table table-striped table-hover table-sm">
                                 <thead>
                                   <tr>
@@ -257,13 +257,17 @@
                                           {% if vial %}
                                             <td class="box-cell batch-browse-{{ vial.batch_color }} vial-cell"
                                                 title="Batch ID: {{ vial.batch_id }}\nVial: {{ vial.tag }}\nStatus: {{ vial.status }}"
+                                                {% if current_user.is_admin %}
                                                 data-bs-toggle="modal" 
                                                 data-bs-target="#vialDetailsModal" 
                                                 data-vial-id="{{ vial.id }}"
                                                 data-box-id="{{ box.id }}"
                                                 data-row="{{ r }}"
                                                 data-col="{{ c }}"
-                                                style="cursor: pointer; position: relative;">
+                                                style="cursor: pointer; position: relative;"
+                                                {% else %}
+                                                style="position: relative;"
+                                                {% endif %}>
                                               <input type="checkbox" class="batch-delete-checkbox" 
                                                      value="{{ vial.id }}" 
                                                      style="display: none; position: absolute; top: 2px; left: 2px; z-index: 10;">
@@ -373,8 +377,20 @@ document.addEventListener('DOMContentLoaded', function () {
   var vialDetailsModal = document.getElementById('vialDetailsModal');
   vialDetailsModal.addEventListener('show.bs.modal', function (event) {
     var button = event.relatedTarget;
-    if (!button) return; // Exit if modal was triggered programmatically without a target
+    if (!button) {
+      console.error('❌ No button target found for modal trigger');
+      return; // Exit if modal was triggered programmatically without a target
+    }
     var vialId = button.getAttribute('data-vial-id');
+    
+    if (!vialId) {
+      console.error('❌ No vial ID found on button:', button);
+      document.getElementById('vialDetailsModalLabel').textContent = 'Error';
+      document.getElementById('modal-vial-tag').textContent = 'Missing vial ID';
+      document.getElementById('modal-spinner').style.display = 'none';
+      document.getElementById('modal-content-display').style.display = 'block';
+      return;
+    }
     
     var modalSpinner = document.getElementById('modal-spinner');
     var modalContent = document.getElementById('modal-content-display');
@@ -390,11 +406,43 @@ document.addEventListener('DOMContentLoaded', function () {
     modalTitle.textContent = 'Loading Vial Details...';
 
     console.log('🔍 Fetching vial details for ID:', vialId);
-    fetch('/vial/' + vialId + '/details')
+    
+    // Get CSRF token from meta tag
+    const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
+    console.log('🔐 CSRF Token found:', csrfToken ? 'Yes' : 'No');
+    
+    const headers = {
+        'Content-Type': 'application/json'
+    };
+    
+    // Add CSRF token if available (though not typically needed for GET requests)
+    if (csrfToken) {
+        headers['X-CSRFToken'] = csrfToken;
+    }
+    
+    // Create a timeout promise
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timeout after 10 seconds')), 10000);
+    });
+    
+    // Race between fetch and timeout
+    Promise.race([
+        fetch('/vial/' + vialId + '/details', {
+            method: 'GET',
+            headers: headers
+        }),
+        timeoutPromise
+    ])
       .then(response => {
         console.log('📡 Response status:', response.status);
+        console.log('📡 Response headers:', response.headers);
+        console.log('📡 Response ok:', response.ok);
+        
         if (!response.ok) {
-            throw new Error('Network response was not ok. Status: ' + response.status);
+            return response.text().then(text => {
+                console.error('❌ Error response body:', text);
+                throw new Error(`Network response was not ok. Status: ${response.status}, Body: ${text}`);
+            });
         }
         return response.json();
       })
@@ -457,6 +505,26 @@ document.addEventListener('DOMContentLoaded', function () {
         modalSpinner.style.display = 'none';
         modalContent.style.display = 'block';
       });
+  });
+
+  // Prevent vial links from interfering with modal trigger (admin only)
+  document.addEventListener('click', function(event) {
+    var target = event.target;
+    
+    // Check if clicked element is a vial link inside a modal trigger cell
+    if (target.classList.contains('vial-link')) {
+      var cell = target.closest('[data-bs-toggle="modal"]');
+      if (cell) {
+        event.preventDefault(); // Prevent the link navigation
+        // Manually trigger the modal
+        var modal = new bootstrap.Modal(document.getElementById('vialDetailsModal'));
+        // Set the event target to the cell so the modal handler can get the vial data
+        var modalEvent = new Event('show.bs.modal');
+        modalEvent.relatedTarget = cell;
+        document.getElementById('vialDetailsModal').dispatchEvent(modalEvent);
+        modal.show();
+      }
+    }
   });
 
   // Single cryovial deletion

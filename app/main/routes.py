@@ -53,6 +53,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from app.main import bp
 from app import db
+from sqlalchemy.orm import joinedload
 from app.decorators import admin_required
 from app.forms import (
     CellLineForm,
@@ -84,6 +85,7 @@ from app.models import (
 
 from app.utils import log_audit, clear_database_except_admin
 from app.utils import get_next_batch_id, get_batch_counter, set_batch_counter
+from app.audit_utils import create_audit_log, format_audit_details
 import io
 import csv
 from io import StringIO
@@ -126,7 +128,14 @@ def index():
     
     # 获取最近活动记录
     from app.models import AuditLog
-    recent_activities = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(5).all()
+    recent_activities_raw = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(5).all()
+    
+    # Format the audit details for better readability
+    recent_activities = []
+    for activity in recent_activities_raw:
+        # Add formatted details to each activity
+        activity.formatted_details = format_audit_details(activity.action, activity.details or "", db_session=db.session)
+        recent_activities.append(activity)
     
     return render_template(
         'main/index.html', 
@@ -847,21 +856,27 @@ def add_cryovial():
 
         try:
             db.session.flush() # Ensure vial IDs are available if batch.vials.all() needs them before commit
-            current_details_for_create = {
-                'general_info': f'added {len(placements)} vial(s)',
-                # It's good practice for batch.vials.all() to reflect the currently added vials.
-                # If batch.vials is populated by flush, this is fine. Otherwise, collect vial IDs differently.
-                'vial_ids': [v.id for v in batch.vials.all() if v.id is not None], # Ensure IDs are populated
-                'batch_id': batch.id
-            }
-            # MODIFICATION: Convert dictionary to JSON string for details
-            # Also ensure the call is details=... and NOT **...
-            log_audit(
-                current_user.id,
-                'CREATE_CRYOVIALS',
+            # Get vial IDs for the audit log
+            vial_ids = [v.id for v in batch.vials.all() if v.id is not None]
+            
+            # Create human-readable audit log
+            readable_details = create_audit_log(
+                user_id=current_user.id,
+                action='CREATE_CRYOVIAL',
                 target_type='VialBatch',
                 target_id=batch.id,
-                details=json.dumps(current_details_for_create) #
+                vial_ids=vial_ids,
+                batch_id=batch.id,
+                count=len(placements),
+                batch_name=batch.name if batch.name else f"Batch #{batch.id}"
+            )
+            
+            log_audit(
+                current_user.id,
+                'CREATE_CRYOVIAL',
+                target_type='VialBatch',
+                target_id=batch.id,
+                details=readable_details
             )
             db.session.commit()
             flash(
@@ -1012,29 +1027,26 @@ def update_cryovial_status(vial_id):
         if form.notes.data:  # Append usage notes to existing notes or set them
             vial.notes = (vial.notes + "\n" if vial.notes else "") + f"Usage update ({datetime.utcnow().strftime('%Y-%m-%d')}): {form.notes.data}"
         vial.last_updated = datetime.utcnow()
-        current_details_for_status_update = {
-            'old_status': old_status,
-            'new_status': vial.status,
-            'notes': form.notes.data,
-            'vial_id': vial.id,  # Storing the single vial_id
-            'batch_id': vial.batch_id  # Storing the associated batch_id
-        }
-        log_audit(
-            current_user.id,
-            'UPDATE_VIAL_STATUS',
-            target_type='CryoVial',
-            target_id=vial.id,  # Target_id still refers to the primary entity being acted upon
-            details=current_details_for_status_update
-        )
-        db.session.commit()
-        # The subsequent log_audit call can remain or be adjusted
-        log_audit(
-            current_user.id,
-            'UPDATE_VIAL_STATUS_COMMITTED',  # Example: more specific action
+        # Create readable audit log for status update
+        readable_details = create_audit_log(
+            user_id=current_user.id,
+            action='UPDATE_STATUS',
             target_type='CryoVial',
             target_id=vial.id,
-            details=f'Status for vial {vial.id} successfully updated to {vial.status}.'
+            vial_tag=vial.unique_vial_id_tag,
+            batch_id=vial.batch_id,
+            old_status=old_status,
+            new_status=vial.status,
+            notes=form.notes.data
         )
+        log_audit(
+            current_user.id,
+            'UPDATE_STATUS',
+            target_type='CryoVial',
+            target_id=vial.id,
+            details=readable_details
+        )
+        db.session.commit()
         flash(f'Status of vial "{vial.unique_vial_id_tag}" updated to {vial.status}.', 'success')
         return redirect(url_for('main.cryovial_inventory')) # Or back to where they were (e.g., box view)
 
@@ -1617,15 +1629,30 @@ def inventory_summary():
         'total_batches': VialBatch.query.count()
     }
 
-    # 细胞系统计
-    cell_line_counts = db.session.query(
-        CellLine.name,
-        db.func.count(CryoVial.id).label('count')
-    ).join(CryoVial).group_by(CellLine.name).order_by(db.func.count(CryoVial.id).desc()).limit(10).all()
+    # 库存量低于2的库存记录
+    low_stock_records = db.session.query(
+        CellLine.name.label('cell_line_name'),
+        VialBatch.name.label('batch_name'),
+        VialBatch.id.label('batch_id'),
+        db.func.count(CryoVial.id).label('available_count')
+    ).join(CryoVial, CryoVial.cell_line_id == CellLine.id)\
+     .join(VialBatch, CryoVial.batch_id == VialBatch.id)\
+     .filter(CryoVial.status == 'Available')\
+     .group_by(CellLine.name, VialBatch.name, VialBatch.id)\
+     .having(db.func.count(CryoVial.id) < 2)\
+     .order_by(db.func.count(CryoVial.id).asc(), CellLine.name.asc())\
+     .all()
     
-    cell_line_stats = {
+    low_stock_stats = {
         'total_cell_lines': CellLine.query.count(),
-        'top_cell_lines': [{'name': name, 'count': count} for name, count in cell_line_counts]
+        'low_stock_records': [
+            {
+                'cell_line_name': record.cell_line_name,
+                'batch_name': record.batch_name,
+                'batch_id': record.batch_id,
+                'available_count': record.available_count
+            } for record in low_stock_records
+        ]
     }
 
     # 先获取批次分页，然后获取对应的冻存管
@@ -1739,7 +1766,7 @@ def inventory_summary():
         search_status=search_status,
         total_stats=total_stats,
         batch_stats=batch_stats,
-        cell_line_stats=cell_line_stats,
+        low_stock_stats=low_stock_stats,
     )
 
 @bp.route('/admin/import_csv', methods=['GET', 'POST'])
@@ -2048,6 +2075,25 @@ def import_csv():
 
     return render_template('main/import_csv.html', title='Import CSV', form=form)
 
+@bp.route('/vial/<int:vial_id>/test')
+@login_required
+def vial_test(vial_id):
+    """Simple test endpoint to verify basic functionality"""
+    try:
+        current_app.logger.info(f'Test endpoint accessed for vial ID {vial_id}')
+        vial = CryoVial.query.get(vial_id)
+        if not vial:
+            return jsonify({"error": "Vial not found"}), 404
+        return jsonify({
+            "success": True,
+            "vial_id": vial.id,
+            "tag": vial.unique_vial_id_tag,
+            "message": "Test endpoint working"
+        })
+    except Exception as e:
+        current_app.logger.error(f'Test endpoint error: {e}')
+        return jsonify({"error": str(e)}), 500
+
 @bp.route('/vial/<int:vial_id>/details')
 @login_required
 def vial_details(vial_id):
@@ -2057,29 +2103,38 @@ def vial_details(vial_id):
         vial = db.session.query(
             CryoVial
         ).options(
-            db.joinedload(CryoVial.cell_line_info),
-            db.joinedload(CryoVial.batch),
-            db.joinedload(CryoVial.freezer_operator)
+            joinedload(CryoVial.cell_line_info),
+            joinedload(CryoVial.batch),
+            joinedload(CryoVial.freezer_operator),
+            joinedload(CryoVial.box_location).joinedload(Box.drawer_info).joinedload(Drawer.tower_info)
         ).get(vial_id)
 
         if not vial:
             current_app.logger.warning(f'Vial not found for ID {vial_id}')
             return jsonify({"error": "Vial not found"}), 404
+        
+        current_app.logger.debug(f'Found vial: {vial.unique_vial_id_tag} (ID: {vial.id})')
 
         # 安全地获取相关信息，防止None值导致的AttributeError
         try:
             cell_line_name = vial.cell_line_info.name if vial.cell_line_info else "Unknown"
-        except AttributeError:
+            current_app.logger.debug(f'Cell line name: {cell_line_name}')
+        except AttributeError as e:
+            current_app.logger.warning(f'Error getting cell line name: {e}')
             cell_line_name = "Unknown"
             
         try:
             batch_name = vial.batch.name if vial.batch else "Unknown"
-        except AttributeError:
+            current_app.logger.debug(f'Batch name: {batch_name}')
+        except AttributeError as e:
+            current_app.logger.warning(f'Error getting batch name: {e}')
             batch_name = "Unknown"
             
         try:
             frozen_by = vial.freezer_operator.username if vial.freezer_operator else "Unknown"
-        except AttributeError:
+            current_app.logger.debug(f'Frozen by: {frozen_by}')
+        except AttributeError as e:
+            current_app.logger.warning(f'Error getting frozen by: {e}')
             frozen_by = "Unknown"
             
         try:
@@ -2087,7 +2142,9 @@ def vial_details(vial_id):
                 location = f"{vial.box_location.drawer_info.tower_info.name}/{vial.box_location.drawer_info.name}/{vial.box_location.name} (R{vial.row_in_box}C{vial.col_in_box})"
             else:
                 location = "Location not available"
-        except AttributeError:
+            current_app.logger.debug(f'Location: {location}')
+        except AttributeError as e:
+            current_app.logger.warning(f'Error getting location: {e}')
             location = "Location not available"
 
         response_data = {
@@ -2125,8 +2182,16 @@ def delete_vial(vial_id):
         vial = CryoVial.query.get_or_404(vial_id)
         
         # 记录日志
-        vial_info = f"Vial {vial.unique_vial_id_tag} (Batch: {vial.batch.name if vial.batch else 'Unknown'})"
-        log_audit(current_user.id, 'DELETE', target_type='CryoVial', target_id=vial.id, details=f"Deleted {vial_info}")
+        readable_details = create_audit_log(
+            user_id=current_user.id,
+            action='DELETE',
+            target_type='CryoVial',
+            target_id=vial.id,
+            vial_tag=vial.unique_vial_id_tag,
+            batch_id=vial.batch_id,
+            batch_name=vial.batch.name if vial.batch else 'Unknown'
+        )
+        log_audit(current_user.id, 'DELETE', target_type='CryoVial', target_id=vial.id, details=readable_details)
         
         # 删除vial
         db.session.delete(vial)
@@ -2167,21 +2232,20 @@ def batch_delete_vials():
             vial_info = f"Vial {vial.unique_vial_id_tag} (Batch: {vial.batch.name if vial.batch else 'Unknown'})"
             vial_info_list.append(vial_info)
             
-            # 记录每个vial的删除日志
-            log_audit(current_user.id, 'BATCH_DELETE', target_type='CryoVial', target_id=vial.id, details=f"Batch deleted {vial_info}")
-            
             # 删除vial
             db.session.delete(vial)
             deleted_count += 1
         
         # 记录批量删除的总体日志
-        log_audit(current_user.id, 'BATCH_DELETE_SUMMARY', target_type='Batch', target_id=None, 
-                 details={
-                     'action': 'batch_delete_vials',
-                     'deleted_count': deleted_count,
-                     'vial_ids': vial_ids,
-                     'vials': vial_info_list
-                 })
+        readable_details = create_audit_log(
+            user_id=current_user.id,
+            action='BATCH_DELETE',
+            target_type='Batch',
+            target_id=None,
+            vial_ids=vial_ids,
+            count=deleted_count
+        )
+        log_audit(current_user.id, 'BATCH_DELETE', target_type='Batch', target_id=None, details=readable_details)
         
         db.session.commit()
         

@@ -292,33 +292,65 @@
         
     </div>
 
-    <!-- Recent Activity -->
+    <!-- Recent Activity - Compact Professional Design -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card border-0 shadow-sm">
-                <div class="card-header bg-transparent border-0">
-                    <h6 class="mb-0 fw-bold d-flex align-items-center">
-                        <i class="bi bi-clock-history me-2 text-muted"></i>
-                        Recent Activity
-                    </h6>
+                <div class="card-header bg-light border-0 py-2">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <h6 class="mb-0 fw-semibold text-dark d-flex align-items-center">
+                            <i class="bi bi-clock-history text-primary me-2"></i>
+                            Recent Activity
+                        </h6>
+                        {% if current_user.is_admin %}
+                        <a href="{{ url_for('main.audit_logs') }}" class="btn btn-xs btn-outline-primary" style="padding: 2px 8px; font-size: 0.75rem;">
+                            <i class="bi bi-list-ul me-1"></i>View All
+                        </a>
+                        {% endif %}
+                    </div>
                 </div>
-                <div class="card-body pt-0" style="max-height: 300px; overflow-y: auto;">
+                <div class="card-body p-0">
                     {% if recent_activities %}
-                    <div class="timeline">
+                    <div class="compact-activity-list">
                         {% for activity in recent_activities %}
-                        <div class="timeline-item">
-                            <div class="timeline-marker bg-{% if 'CREATE' in activity.action or 'ADD' in activity.action %}success{% elif 'DELETE' in activity.action or 'REMOVE' in activity.action %}danger{% else %}primary{% endif %}"></div>
-                            <div class="timeline-content">
-                                <small class="text-muted">{{ activity.timestamp.strftime('%Y-%m-%d %H:%M') }}</small>
-                                <p class="mb-0 small">{{ activity.details or activity.action }}</p>
+                        <div class="compact-activity-item">
+                            <div class="activity-icon">
+                                {% if activity.action == 'CREATE_CRYOVIAL' %}
+                                <i class="bi bi-plus-circle text-success"></i>
+                                {% elif activity.action == 'DELETE' %}
+                                <i class="bi bi-trash text-danger"></i>
+                                {% elif activity.action == 'BATCH_DELETE' %}
+                                <i class="bi bi-trash-fill text-danger"></i>
+                                {% elif activity.action == 'UPDATE' or activity.action == 'UPDATE_STATUS' %}
+                                <i class="bi bi-pencil text-warning"></i>
+                                {% elif activity.action == 'LOGIN' %}
+                                <i class="bi bi-box-arrow-in-right text-primary"></i>
+                                {% elif activity.action == 'PICKUP_VIALS' %}
+                                <i class="bi bi-box-arrow-up text-info"></i>
+                                {% elif activity.action == 'CREATE_CELL_LINE' %}
+                                <i class="bi bi-diagram-3 text-success"></i>
+                                {% elif activity.action == 'EXPORT' %}
+                                <i class="bi bi-download text-info"></i>
+                                {% else %}
+                                <i class="bi bi-circle text-secondary"></i>
+                                {% endif %}
+                            </div>
+                            <div class="activity-details">
+                                <div class="activity-description">
+                                    <strong class="user-name">{{ activity.user_performing_action.username if activity.user_performing_action else 'System' }}</strong>
+                                    <span class="action-description">{{ activity.formatted_details if activity.formatted_details else activity.details }}</span>
+                                </div>
+                                <div class="activity-time">
+                                    {{ activity.timestamp.strftime('%m/%d %H:%M') }}
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
                     </div>
                     {% else %}
-                    <div class="text-center text-muted py-4">
-                        <i class="bi bi-clock-history fs-1 mb-2 d-block"></i>
-                        <p class="mb-0 small">No recent activities</p>
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-clock-history fs-4 mb-2 d-block" style="opacity: 0.3;"></i>
+                        <small>No recent activity</small>
                     </div>
                     {% endif %}
                 </div>
@@ -532,6 +564,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Load dashboard statistics
     loadDashboardStats();
+    
+    // Initialize compact activity list
+    initializeCompactActivity();
 });
 
 function handleAlertActions() {
@@ -718,6 +753,41 @@ function loadDashboardStats() {
         const estimatedCapacity = Math.min(95, Math.floor((totalVials / 1000) * 100)); // Assume 1000 total capacity
         capacityElement.textContent = estimatedCapacity + '%';
     }
+}
+
+// Initialize compact activity list
+function initializeCompactActivity() {
+    // Add subtle hover effects for compact activity items
+    const activityItems = document.querySelectorAll('.compact-activity-item');
+    activityItems.forEach(item => {
+        item.addEventListener('mouseenter', function() {
+            const icon = this.querySelector('.activity-icon');
+            if (icon) {
+                icon.style.transform = 'scale(1.05)';
+                icon.style.transition = 'transform 0.2s ease';
+            }
+        });
+        
+        item.addEventListener('mouseleave', function() {
+            const icon = this.querySelector('.activity-icon');
+            if (icon) {
+                icon.style.transform = 'scale(1)';
+            }
+        });
+    });
+    
+    // Add click functionality for better accessibility
+    activityItems.forEach(item => {
+        item.style.cursor = 'pointer';
+        item.addEventListener('click', function() {
+            // Optional: Could expand to show more details or navigate somewhere
+            const userName = this.querySelector('.user-name')?.textContent;
+            const description = this.querySelector('.action-description')?.textContent;
+            if (userName && description) {
+                console.log(`Activity: ${userName} ${description}`);
+            }
+        });
+    });
 }
 
 // Toast notification function

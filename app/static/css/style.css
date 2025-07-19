@@ -880,7 +880,7 @@ body, .card, .table, .dropdown-menu, .form-control, .form-select, .bg-white, .bg
     opacity: 0.95;
 }
 .form-control::placeholder, .form-select::placeholder {
-    color: #495057 !important;
+    color: transparent !important;
     opacity: 1 !important;
     /* Fix text rendering issues */
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -890,6 +890,11 @@ body, .card, .table, .dropdown-menu, .form-control, .form-select, .bg-white, .bg
     -moz-osx-font-smoothing: grayscale;
     letter-spacing: 0.01em;
     word-spacing: 0.02em;
+}
+
+/* Show placeholder text when input is focused */
+.form-control:focus::placeholder, .form-select:focus::placeholder {
+    color: #6c757d !important;
 }
 
 /* Improve contrast for helper text, text-muted, etc. */

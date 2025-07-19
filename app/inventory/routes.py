@@ -6,7 +6,8 @@ from .. import db
 from ..shared.decorators import admin_required
 from ..shared.permissions import require_permission
 from .models import (InventoryType, InventoryItem, Location, Supplier, 
-                    Order, OrderItem, UsageLog, StockAlert, SupplierContact)
+                    Order, OrderItem, UsageLog, StockAlert, SupplierContact,
+                    ShoppingCart, PurchaseRequest)
 from ..cell_storage.models import User
 from .forms import (InventoryTypeForm, InventoryItemForm, LocationForm, 
                    SupplierForm, OrderForm, OrderItemForm, UsageForm)
@@ -402,12 +403,13 @@ def api_get_price_history(supplier_id):
         'effective_date': h.effective_date.isoformat()
     } for h in history])
 
-@bp.route('/requests')
+@bp.route('/requests/review')
 @login_required
-@admin_required
+@require_permission('order.approve') # Or a new 'request.review' permission
 def review_requests():
     """Display the page for reviewing purchase requests"""
-    return render_template('inventory/review_requests.html')
+    requests = PurchaseRequest.query.filter_by(status='Submitted').order_by(PurchaseRequest.submitted_at.desc()).all()
+    return render_template('inventory/review_requests.html', requests=requests)
 
 @bp.route('/api/requests')
 @login_required
@@ -428,20 +430,58 @@ def api_get_requests():
 
 @bp.route('/api/requests/<int:request_id>/approve', methods=['POST'])
 @login_required
-@admin_required
-def approve_request(request_id):
-    """Approve a purchase request"""
+@require_permission('order.approve')
+def approve_request_api(request_id):
+    """
+    Approve a purchase request and create a draft order.
+    """
     req = PurchaseRequest.query.get_or_404(request_id)
+    if req.status != 'Submitted':
+        return jsonify({'success': False, 'message': 'Request not in submitted state.'}), 400
+
     req.status = 'Approved'
     req.reviewed_by_user_id = current_user.id
     req.reviewed_at = datetime.utcnow()
+
+    # --- 从申请创建新订单 ---
+    # 逻辑：为每个供应商创建一个订单。如果多个申请项目来自同一供应商，将它们合并到一个订单中。
+    # 为简化，这里我们为每个批准的申请创建一个新订单。
+    
+    new_order = Order(
+        order_number=f"PO-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{req.id}",
+        status='Approved', # 或 'Draft'
+        requested_by_user_id=req.user_id,
+        approved_by_user_id=current_user.id,
+        supplier_id=req.supplier_id,
+        requested_date=req.created_at,
+        approved_date=datetime.utcnow(),
+        justification=req.justification
+    )
+    db.session.add(new_order)
+    
+    # 将申请的物品添加到新订单中
+    order_item = OrderItem(
+        order_info=new_order,
+        item_name=req.item_name,
+        catalog_number=req.catalog_number,
+        quantity_requested=req.quantity_requested,
+        unit=req.unit,
+        status='Approved'
+    )
+    db.session.add(order_item)
+    
+    # 计算总价（如果适用）
+    # new_order.total_cost = order_item.total_price
+    
     db.session.commit()
-    return jsonify({'success': True})
+    
+    flash(f"Request approved and Order {new_order.order_number} created.", "success")
+    return jsonify({'success': True, 'order_id': new_order.id})
 
 @bp.route('/api/requests/<int:request_id>/reject', methods=['POST'])
 @login_required
-@admin_required
-def reject_request(request_id):
+@require_permission('order.approve')
+def reject_request_api(request_id):
     """Reject a purchase request"""
     req = PurchaseRequest.query.get_or_404(request_id)
     req.status = 'Rejected'
@@ -450,11 +490,39 @@ def reject_request(request_id):
     db.session.commit()
     return jsonify({'success': True})
 
-@bp.route('/requests/submit')
+@bp.route('/requests/submit', methods=['GET', 'POST'])
 @login_required
 def submit_request():
-    """Display the page for submitting a purchase request"""
-    return render_template('inventory/submit_request.html')
+    """Page to review cart and submit a purchase request"""
+    if request.method == 'POST':
+        cart_items = ShoppingCart.query.filter_by(user_id=current_user.id).all()
+        if not cart_items:
+            flash('Your shopping cart is empty.', 'warning')
+            return redirect(url_for('inventory.shopping_cart'))
+
+        # Create a single purchase request with multiple items concept if needed,
+        # or individual requests per cart item as per the plan.
+        for item in cart_items:
+            pr = PurchaseRequest(
+                user_id=current_user.id,
+                item_name=item.item_name,
+                catalog_number=item.catalog_number,
+                supplier_id=item.supplier_id,
+                quantity_requested=item.quantity,
+                unit=item.unit,
+                status='Submitted',
+                submitted_at=datetime.utcnow()
+                # justification and other fields can be added to the form
+            )
+            db.session.add(pr)
+            db.session.delete(item)
+        
+        db.session.commit()
+        flash('Purchase request submitted successfully!', 'success')
+        return redirect(url_for('inventory.orders')) # Redirect to orders page to see the request
+        
+    cart_items = ShoppingCart.query.filter_by(user_id=current_user.id).all()
+    return render_template('inventory/submit_request.html', cart_items=cart_items)
 
 @bp.route('/api/requests/submit', methods=['POST'])
 @login_required
@@ -512,7 +580,8 @@ def shopping_cart_api():
             supplier_id=data.get('supplier_id'),
             quantity=data['quantity'],
             unit=data.get('unit'),
-            estimated_price=data.get('estimated_price')
+            estimated_price=data.get('estimated_price'),
+            notes=data.get('notes')
         )
         db.session.add(cart_item)
         db.session.commit()
@@ -1377,3 +1446,59 @@ def export_suppliers():
     except Exception as e:
         flash(f'Export error: {str(e)}', 'error')
         return redirect(url_for('inventory.suppliers'))
+
+@bp.route('/order/<int:order_id>/receive', methods=['GET', 'POST'])
+@login_required
+@require_permission('inventory.receive') # 使用新的权限
+def receive_order(order_id):
+    """Page for receiving items against an order."""
+    order = Order.query.get_or_404(order_id)
+
+    if request.method == 'POST':
+        form_data = request.form
+        for item in order.items:
+            received_qty_str = form_data.get(f'item_{item.id}_received_qty')
+            if received_qty_str and float(received_qty_str) > 0:
+                received_qty = float(received_qty_str)
+                item.quantity_received += received_qty
+                
+                # --- 更新主库存 ---
+                # 找到或创建一个库存物品
+                inventory_item = InventoryItem.query.filter_by(catalog_number=item.catalog_number).first()
+                if inventory_item:
+                    inventory_item.update_quantity(
+                        change=received_qty, 
+                        reason=f"Received from PO {order.order_number}",
+                        user_id=current_user.id
+                    )
+                else:
+                    # 如果物品不存在，则创建一个新的
+                    inventory_item = InventoryItem(
+                        name=item.item_name,
+                        catalog_number=item.catalog_number,
+                        supplier_id=order.supplier_id,
+                        current_quantity=received_qty,
+                        # ... 其他字段需要从表单或默认值填充 ...
+                        type_id=1, # 默认类型，实际应用中应让用户选择
+                        created_by_user_id=current_user.id
+                    )
+                    db.session.add(inventory_item)
+                
+                if item.quantity_received >= item.quantity_requested:
+                    item.status = 'Received'
+                else:
+                    item.status = 'Partially Received'
+        
+        # 检查订单中的所有物品是否都已完全接收
+        all_received = all(it.status == 'Received' for it in order.items)
+        if all_received:
+            order.status = 'Completed'
+        else:
+            order.status = 'Partially Received'
+        
+        order.received_date = datetime.utcnow()
+        db.session.commit()
+        flash('Inventory updated successfully.', 'success')
+        return redirect(url_for('inventory.order_detail', order_id=order.id))
+
+    return render_template('inventory/receive_order.html', order=order)

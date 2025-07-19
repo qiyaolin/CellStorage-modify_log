@@ -5,64 +5,60 @@
 {% block content %}
 <div class="container-fluid">
     <h1 class="mt-4">Review Purchase Requests</h1>
-    <div id="requests"></div>
+    <div class="card">
+        <div class="card-body">
+            {% if requests %}
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Submitted By</th>
+                        <th>Date</th>
+                        <th>Item</th>
+                        <th>Supplier</th>
+                        <th>Quantity</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for req in requests %}
+                    <tr id="request-{{ req.id }}">
+                        <td>{{ req.user.username }}</td>
+                        <td>{{ req.submitted_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                        <td>{{ req.item_name }}</td>
+                        <td>{{ req.supplier.name if req.supplier else 'N/A' }}</td>
+                        <td>{{ req.quantity_requested }} {{ req.unit }}</td>
+                        <td>
+                            <button class="btn btn-success btn-sm approve-request" data-id="{{ req.id }}">Approve</button>
+                            <button class="btn btn-danger btn-sm reject-request" data-id="{{ req.id }}">Reject</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="alert alert-info">No pending purchase requests to review.</div>
+            {% endif %}
+        </div>
+    </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    function loadRequests() {
-        $.get('{{ url_for("inventory.api_get_requests") }}').done(function(data) {
-            const requests = $('#requests');
-            requests.empty();
-            if (data.length === 0) {
-                requests.html('<p>No pending purchase requests.</p>');
-                return;
-            }
-            const table = $('<table class="table"><thead><tr><th>User</th><th>Item</th><th>Supplier</th><th>Quantity</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>');
-            const tbody = table.find('tbody');
-            data.forEach(function(request) {
-                const row = $('<tr>');
-                row.append(`<td>${request.user}</td>`);
-                row.append(`<td>${request.item_name} (${request.catalog_number || 'N/A'})</td>`);
-                row.append(`<td>${request.supplier_name || 'N/A'}</td>`);
-                row.append(`<td>${request.quantity_requested} ${request.unit || ''}</td>`);
-                row.append(`<td>${request.status}</td>`);
-                if (request.status === 'Submitted') {
-                    row.append(`<td><button class="btn btn-success btn-sm approve-request" data-id="${request.id}">Approve</button> <button class="btn btn-danger btn-sm reject-request" data-id="${request.id}">Reject</button></td>`);
-                } else {
-                    row.append('<td></td>');
-                }
-                tbody.append(row);
-            });
-            requests.append(table);
-        });
-    }
-
-    $('#requests').on('click', '.approve-request', function() {
+    $('.approve-request').on('click', function() {
         const requestId = $(this).data('id');
-        $.ajax({
-            url: `/inventory/api/requests/${requestId}/approve`,
-            method: 'POST',
-            success: function() {
-                loadRequests();
-            }
+        $.post(`/inventory/api/requests/${requestId}/approve`, function() {
+            $('#request-' + requestId).fadeOut();
         });
     });
 
-    $('#requests').on('click', '.reject-request', function() {
+    $('.reject-request').on('click', function() {
         const requestId = $(this).data('id');
-        $.ajax({
-            url: `/inventory/api/requests/${requestId}/reject`,
-            method: 'POST',
-            success: function() {
-                loadRequests();
-            }
+        $.post(`/inventory/api/requests/${requestId}/reject`, function() {
+            $('#request-' + requestId).fadeOut();
         });
     });
-
-    loadRequests();
 });
 </script>
 {% endblock %}

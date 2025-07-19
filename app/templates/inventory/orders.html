@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Orders{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mt-4">Order Management</h1>
+    <div class="card">
+        <div class="card-body">
+            <h5 class="card-title">All Orders</h5>
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Order #</th>
+                        <th>Supplier</th>
+                        <th>Status</th>
+                        <th>Requested By</th>
+                        <th>Requested Date</th>
+                        <th>Total Cost</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td>{{ order.order_number }}</td>
+                        <td>{{ order.supplier_info.name if order.supplier_info else 'N/A' }}</td>
+                        <td><span class="badge bg-primary">{{ order.status }}</span></td>
+                        <td>{{ order.requested_by.username }}</td>
+                        <td>{{ order.requested_date.strftime('%Y-%m-%d') }}</td>
+                        <td>${{ "%.2f"|format(order.total_cost or 0) }}</td>
+                        <td>
+                            <a href="{{ url_for('inventory.order_detail', order_id=order.id) }}" class="btn btn-sm btn-info">Details</a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center">No orders found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %} 

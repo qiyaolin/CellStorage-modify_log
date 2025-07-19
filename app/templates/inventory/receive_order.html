@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}Receive Order{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mt-4">Receive Items for Order #{{ order.order_number }}</h1>
+    
+    <form method="POST">
+        {{ csrf_token() }}
+        <div class="card">
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Qty Requested</th>
+                            <th>Qty Already Received</th>
+                            <th>Qty to Receive Now</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in order.items %}
+                        {% if item.status != 'Received' %}
+                        <tr>
+                            <td>{{ item.item_name }}<br><small class="text-muted">{{ item.catalog_number }}</small></td>
+                            <td>{{ item.quantity_requested }}</td>
+                            <td>{{ item.quantity_received }}</td>
+                            <td>
+                                <input type="number" name="item_{{ item.id }}_received_qty" class="form-control"
+                                       min="0" max="{{ item.quantity_requested - item.quantity_received }}" step="any" placeholder="0">
+                            </td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <button type="submit" class="btn btn-success"><i class="fas fa-save me-2"></i>Save and Update Inventory</button>
+                <a href="{{ url_for('inventory.order_detail', order_id=order.id) }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %} 

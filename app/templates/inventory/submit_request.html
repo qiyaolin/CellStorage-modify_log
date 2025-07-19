@@ -5,51 +5,38 @@
 {% block content %}
 <div class="container-fluid">
     <h1 class="mt-4">Submit Purchase Request</h1>
-    <form id="request-form">
-        <div id="cart-items"></div>
-        <button type="submit" class="btn btn-primary">Submit Request</button>
+    <p>Please review the items below before submitting your request.</p>
+
+    {% if cart_items %}
+    <form method="POST">
+        {{ csrf_token() }}
+        <div class="card">
+            <div class="card-body">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Supplier</th>
+                            <th>Quantity</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in cart_items %}
+                        <tr>
+                            <td>{{ item.item_name }} <small class="text-muted d-block">{{ item.catalog_number }}</small></td>
+                            <td>{{ item.supplier.name if item.supplier else 'N/A' }}</td>
+                            <td>{{ item.quantity }} {{ item.unit }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                <button type="submit" class="btn btn-success"><i class="fas fa-check me-2"></i>Confirm and Submit Request</button>
+                <a href="{{ url_for('inventory.shopping_cart') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </div>
     </form>
+    {% else %}
+    <div class="alert alert-warning">Your cart is empty. Nothing to submit.</div>
+    {% endif %}
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-$(document).ready(function() {
-    function loadCart() {
-        $.get('{{ url_for("inventory.shopping_cart_api") }}').done(function(data) {
-            const cartItems = $('#cart-items');
-            cartItems.empty();
-            if (data.length === 0) {
-                cartItems.html('<p>Your shopping cart is empty. Add items to your cart to create a purchase request.</p>');
-                $('#request-form button').hide();
-                return;
-            }
-            const table = $('<table class="table"><thead><tr><th>Item</th><th>Supplier</th><th>Quantity</th><th>Price</th></tr></thead><tbody></tbody></table>');
-            const tbody = table.find('tbody');
-            data.forEach(function(item) {
-                const row = $('<tr>');
-                row.append(`<td>${item.item_name} (${item.catalog_number || 'N/A'})</td>`);
-                row.append(`<td>${item.supplier_name || 'N/A'}</td>`);
-                row.append(`<td>${item.quantity} ${item.unit || ''}</td>`);
-                row.append(`<td>${item.estimated_price || 'N/A'}</td>`);
-                tbody.append(row);
-            });
-            cartItems.append(table);
-        });
-    }
-
-    $('#request-form').on('submit', function(e) {
-        e.preventDefault();
-        $.ajax({
-            url: '{{ url_for("inventory.api_submit_request") }}',
-            method: 'POST',
-            success: function() {
-                window.location.href = '{{ url_for("inventory.orders") }}';
-            }
-        });
-    });
-
-    loadCart();
-});
-</script>
 {% endblock %}

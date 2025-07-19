@@ -69,7 +69,8 @@ def user_permissions_detail(user_id):
                          permissions=permissions,
                          permission_categories=permission_categories,
                          all_permissions=PermissionManager.PERMISSIONS,
-                         permission_groups=PermissionManager.PERMISSION_GROUPS)
+                         permission_groups=PermissionManager.PERMISSION_GROUPS,
+                         current_time=datetime.now())
 
 
 # API Endpoints

@@ -122,7 +122,7 @@
                                 <li><a class="dropdown-item" href="{{ url_for('inventory.index') }}">Dashboard</a></li>
                                 {% if can_view_inventory() %}
                                 <li><a class="dropdown-item" href="{{ url_for('inventory.inventory_items') }}">Items</a></li>
-                                <li><a class="dropdown-item" href="{{ url_for('inventory.inventory_items_enhanced') }}">Enhanced Items</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.inventory_items') }}">Items</a></li>
                                 {% endif %}
                                 {% if has_permission('order.view') %}
                                 <li><a class="dropdown-item" href="{{ url_for('inventory.orders') }}">Orders</a></li>

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}Order Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mt-4">Order #{{ order.order_number }}</h1>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            Order Information
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Status:</strong> <span class="badge bg-success">{{ order.status }}</span></p>
+                    <p><strong>Supplier:</strong> {{ order.supplier_info.name if order.supplier_info else 'N/A' }}</p>
+                    <p><strong>Requested By:</strong> {{ order.requested_by.username }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Requested Date:</strong> {{ order.requested_date.strftime('%Y-%m-%d') }}</p>
+                    <p><strong>Approved Date:</strong> {{ order.approved_date.strftime('%Y-%m-%d') if order.approved_date }}</p>
+                    <p><strong>Total Cost:</strong> ${{ "%.2f"|format(order.total_cost or 0) }}</p>
+                </div>
+            </div>
+            {% if order.status == 'Approved' or order.status == 'Ordered' %}
+                <a href="{{ url_for('inventory.receive_order', order_id=order.id) }}" class="btn btn-primary"><i class="fas fa-box-open me-2"></i>Receive Items</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            Order Items
+        </div>
+        <div class="card-body">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Item Name</th>
+                        <th>Catalog #</th>
+                        <th>Qty Requested</th>
+                        <th>Qty Received</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order.items %}
+                    <tr>
+                        <td>{{ item.item_name }}</td>
+                        <td>{{ item.catalog_number }}</td>
+                        <td>{{ item.quantity_requested }} {{ item.unit }}</td>
+                        <td>{{ item.quantity_received }} {{ item.unit }}</td>
+                        <td><span class="badge bg-secondary">{{ item.status }}</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %} 

@@ -163,11 +163,11 @@
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm">
-                                            <a href="{{ url_for('inventory.item_detail', id=item.id) }}" 
+                                            <a href="{{ url_for('inventory.inventory_items') }}" 
                                                class="btn btn-outline-primary" title="View Details">
                                                 <i class="fas fa-eye"></i>
                                             </a>
-                                            <a href="{{ url_for('inventory.use_item', id=item.id) }}" 
+                                            <a href="{{ url_for('inventory.inventory_items') }}" 
                                                class="btn btn-outline-success" title="Record Usage">
                                                 <i class="fas fa-minus"></i>
                                             </a>

@@ -31,7 +31,7 @@ def create_app(config_class=Config):
         return render_template('errors/csrf_error.html', reason=e.description), 400
 
     with app.app_context():
-        from app.utils import get_batch_counter
+        from app.shared.utils import get_batch_counter
         db.create_all()
         try:
             db.session.execute(text(
@@ -44,22 +44,52 @@ def create_app(config_class=Config):
         # Ensure batch counter config exists
         get_batch_counter()
 
-    from .auth import bp as auth_bp
+    # Register blueprints
+    from .shared.auth import bp as auth_bp
     app.register_blueprint(auth_bp, url_prefix='/auth')
 
-    from .main import bp as main_bp # Keep commented for now
+    from .main_routes import bp as main_bp
     app.register_blueprint(main_bp)
 
-    from app import models
+    from .cell_storage.main import bp as cell_storage_bp
+    app.register_blueprint(cell_storage_bp, url_prefix='/cell-storage')
+
+    from .inventory import routes as inventory_routes
+    app.register_blueprint(inventory_routes.bp, url_prefix='/inventory')
+    
+    from .admin import bp as admin_bp
+    app.register_blueprint(admin_bp)
+
+    # Import models from both subprojects
+    from app.cell_storage import models as cell_models
+    from app.inventory import models as inventory_models
 
     @login_manager.user_loader
     def load_user(user_id):
-        return models.User.query.get(int(user_id))
+        return cell_models.User.query.get(int(user_id))
 
     # ADD THIS CONTEXT PROCESSOR
     @app.context_processor
     def inject_current_year():
         return {'current_year': datetime.utcnow().year}
+    
+    # Add permission functions to template context
+    @app.context_processor
+    def inject_permission_functions():
+        from .shared.permissions import (has_permission, get_user_permissions, 
+                                       can_view_inventory, can_edit_inventory,
+                                       can_manage_locations, can_manage_suppliers,
+                                       can_approve_orders, is_admin)
+        return {
+            'has_permission': has_permission,
+            'get_user_permissions': get_user_permissions,
+            'can_view_inventory': can_view_inventory,
+            'can_edit_inventory': can_edit_inventory,
+            'can_manage_locations': can_manage_locations,
+            'can_manage_suppliers': can_manage_suppliers,
+            'can_approve_orders': can_approve_orders,
+            'is_admin': is_admin
+        }
 
     @app.template_filter('from_json')
     def from_json_filter(value):

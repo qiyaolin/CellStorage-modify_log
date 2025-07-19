@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 import json
-from . import db
-from .models import AuditLog, AppConfig, VialBatch
+from .. import db
+from ..cell_storage.models import AuditLog, AppConfig, VialBatch
 
 def log_audit(user_id, action, target_type=None, target_id=None, details=None, **extra):
     """Create an ``AuditLog`` entry.
@@ -37,7 +37,7 @@ def clear_database_except_admin():
     The deletion order respects foreign key constraints so we remove
     dependent records before their parents."""
 
-    from app.models import (
+    from app.cell_storage.models import (
         User,
         CellLine,
         Tower,
@@ -126,7 +126,7 @@ def get_default_alert_configs():
 
 def get_alert_config(alert_type, cell_line_id=None):
     """Get alert configuration for specified type"""
-    from .models import AlertConfig
+    from app.cell_storage.models import AlertConfig
     
     # Priority search for specific cell line configuration
     if cell_line_id:
@@ -159,7 +159,7 @@ def get_alert_config(alert_type, cell_line_id=None):
 
 def check_low_stock_alerts():
     """Check low stock alerts"""
-    from .models import CellLine, CryoVial, Alert
+    from app.cell_storage.models import CellLine, CryoVial, Alert
     
     config = get_alert_config('low_stock')
     if not config or not config.is_enabled:
@@ -206,7 +206,7 @@ def check_low_stock_alerts():
 
 def check_box_capacity_alerts():
     """Check box capacity alerts"""
-    from .models import Box, CryoVial, Alert
+    from app.cell_storage.models import Box, CryoVial, Alert
     
     config = get_alert_config('box_capacity')
     if not config or not config.is_enabled:
@@ -260,7 +260,7 @@ def check_box_capacity_alerts():
 
 def check_old_samples_alerts():
     """Check old sample alerts"""
-    from .models import CryoVial, Alert, CellLine, VialBatch
+    from app.cell_storage.models import CryoVial, Alert, CellLine, VialBatch
     
     config = get_alert_config('old_samples')
     if not config or not config.is_enabled:
@@ -337,7 +337,7 @@ def generate_all_alerts():
 
 def get_active_alerts(limit=None):
     """Get active alerts"""
-    from .models import Alert
+    from app.cell_storage.models import Alert
     
     query = Alert.query.filter_by(is_resolved=False, is_dismissed=False)\
                       .order_by(Alert.created_at.desc())
@@ -350,7 +350,7 @@ def get_active_alerts(limit=None):
 
 def resolve_alert(alert_id, user_id, commit=True):
     """Resolve alert"""
-    from .models import Alert
+    from app.cell_storage.models import Alert
     
     alert = Alert.query.get(alert_id)
     if alert and not alert.is_resolved:
@@ -375,7 +375,7 @@ def resolve_alert(alert_id, user_id, commit=True):
 
 def dismiss_alert(alert_id, user_id, commit=True):
     """Dismiss alert"""
-    from .models import Alert
+    from app.cell_storage.models import Alert
     
     alert = Alert.query.get(alert_id)
     if alert and not alert.is_dismissed:
@@ -505,7 +505,7 @@ def get_available_themes():
 
 def get_user_theme(user_id):
     """Get user's current theme configuration"""
-    from app.models import ThemeConfig
+    from app.cell_storage.models import ThemeConfig
     
     theme_config = ThemeConfig.query.filter_by(user_id=user_id).first()
     if not theme_config:
@@ -528,7 +528,7 @@ def get_user_theme(user_id):
 
 def update_user_theme(user_id, theme_name):
     """Update user's theme configuration"""
-    from app.models import ThemeConfig
+    from app.cell_storage.models import ThemeConfig
     
     themes = get_available_themes()
     if theme_name not in themes:

@@ -30,7 +30,7 @@
                 <div class="form-floating">
                   {{ form.cell_line_id(class="form-select" + (" is-invalid" if form.cell_line_id.errors else "")) }}
                   {{ form.cell_line_id.label }}
-                  <small class="form-text text-muted">If cell line not listed, an admin may need to <a href="{{ url_for('main.add_cell_line') }}" target="_blank">add it first</a>.</small>
+                  <small class="form-text text-muted">If cell line not listed, an admin may need to <a href="{{ url_for('cell_storage.add_cell_line') }}" target="_blank">add it first</a>.</small>
                   {% if form.cell_line_id.errors %}<div class="invalid-feedback">{{ form.cell_line_id.errors[0] }}</div>{% endif %}
                 </div>
               </div>
@@ -101,7 +101,7 @@
           </fieldset>
 
           <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
-            <a href="{{ url_for('main.cryovial_inventory') }}" class="btn btn-secondary me-md-2">Cancel</a>
+            <a href="{{ url_for('cell_storage.cryovial_inventory') }}" class="btn btn-secondary me-md-2">Cancel</a>
             {{ form.submit(class="btn btn-primary") }}
           </div>
         </form>

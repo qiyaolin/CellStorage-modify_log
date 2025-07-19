@@ -1,0 +1,579 @@
+{% extends "base.html" %}
+
+{% block title %}Location Management{% endblock %}
+
+{% block extra_css %}
+<style>
+.location-management {
+    padding: 20px 0;
+}
+
+.location-tree {
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #fff;
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.location-node {
+    padding: 12px 15px;
+    border-bottom: 1px solid #f8f9fa;
+    cursor: pointer;
+    transition: all 0.3s;
+    position: relative;
+}
+
+.location-node:hover {
+    background: #f8f9fa;
+}
+
+.location-node.expanded {
+    background: #e3f2fd;
+}
+
+.location-indent {
+    margin-left: 20px;
+}
+
+.location-toggle {
+    margin-right: 8px;
+    color: #6c757d;
+    cursor: pointer;
+    width: 16px;
+    text-align: center;
+}
+
+.location-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.location-details {
+    flex: 1;
+}
+
+.location-name {
+    font-weight: 500;
+    color: #495057;
+}
+
+.location-type {
+    font-size: 12px;
+    color: #6c757d;
+    margin-left: 8px;
+}
+
+.location-stats {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.capacity-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.capacity-bar {
+    width: 80px;
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.capacity-fill {
+    height: 100%;
+    transition: width 0.3s;
+}
+
+.capacity-normal { background: #28a745; }
+.capacity-warning { background: #ffc107; }
+.capacity-danger { background: #dc3545; }
+.capacity-full { background: #6f42c1; }
+
+.location-actions {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-location {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s;
+}
+
+.btn-edit {
+    background: #ffc107;
+    color: #212529;
+}
+
+.btn-add {
+    background: #28a745;
+    color: white;
+}
+
+.btn-delete {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-location:hover {
+    transform: scale(1.1);
+}
+
+.location-summary-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.summary-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+}
+
+.summary-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px;
+    font-size: 24px;
+}
+
+.summary-number {
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.summary-label {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.location-filter {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.location-filter input, .location-filter select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.capacity-legend {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 6px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.legend-color {
+    width: 16px;
+    height: 6px;
+    border-radius: 3px;
+}
+
+@media (max-width: 768px) {
+    .location-stats {
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+    
+    .capacity-indicator {
+        gap: 5px;
+    }
+    
+    .capacity-bar {
+        width: 60px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid location-management">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-map-marker-alt me-2 text-primary"></i>Location Management</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('inventory.index') }}">Inventory</a></li>
+                <li class="breadcrumb-item active">Locations</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="location-summary-cards">
+        <div class="summary-card">
+            <div class="summary-icon" style="background: #e3f2fd;">
+                <i class="fas fa-map-marker-alt" style="color: #1976d2;"></i>
+            </div>
+            <div class="summary-number text-primary">{{ locations|length }}</div>
+            <div class="summary-label">Total Locations</div>
+        </div>
+        
+        <div class="summary-card">
+            <div class="summary-icon" style="background: #f3e5f5;">
+                <i class="fas fa-cubes" style="color: #7b1fa2;"></i>
+            </div>
+            <div class="summary-number text-purple">{{ total_items }}</div>
+            <div class="summary-label">Total Items Stored</div>
+        </div>
+        
+        <div class="summary-card">
+            <div class="summary-icon" style="background: #fff3e0;">
+                <i class="fas fa-chart-pie" style="color: #f57c00;"></i>
+            </div>
+            <div class="summary-number text-warning">{{ avg_utilization|round(1) }}%</div>
+            <div class="summary-label">Average Utilization</div>
+        </div>
+        
+        <div class="summary-card">
+            <div class="summary-icon" style="background: #ffebee;">
+                <i class="fas fa-exclamation-triangle" style="color: #d32f2f;"></i>
+            </div>
+            <div class="summary-number text-danger">{{ nearly_full_count }}</div>
+            <div class="summary-label">Nearly Full Locations</div>
+        </div>
+    </div>
+
+    <!-- Filters and Controls -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div class="location-filter">
+            <input type="text" id="locationSearch" placeholder="Search locations...">
+            <select id="locationTypeFilter">
+                <option value="">All Types</option>
+                <option value="room">Room</option>
+                <option value="cabinet">Cabinet</option>
+                <option value="shelf">Shelf</option>
+                <option value="freezer">Freezer</option>
+                <option value="fridge">Fridge</option>
+            </select>
+            <select id="capacityFilter">
+                <option value="">All Capacities</option>
+                <option value="available">Available Space</option>
+                <option value="warning">Nearly Full (>80%)</option>
+                <option value="full">At Capacity</option>
+            </select>
+        </div>
+        
+        <div>
+            <button class="btn btn-outline-secondary me-2" id="expandAllBtn">
+                <i class="fas fa-expand-alt me-1"></i>Expand All
+            </button>
+            <button class="btn btn-outline-secondary me-2" id="collapseAllBtn">
+                <i class="fas fa-compress-alt me-1"></i>Collapse All
+            </button>
+            <a href="{{ url_for('inventory.create_location') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>Add Location
+            </a>
+        </div>
+    </div>
+
+    <!-- Capacity Legend -->
+    <div class="capacity-legend">
+        <div class="legend-item">
+            <div class="legend-color capacity-normal"></div>
+            <span>Normal (&lt;60%)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color capacity-warning"></div>
+            <span>Warning (60-80%)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color capacity-danger"></div>
+            <span>Critical (80-100%)</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color capacity-full"></div>
+            <span>At Capacity (100%)</span>
+        </div>
+    </div>
+
+    <!-- Location Tree -->
+    <div class="location-tree" id="locationTree">
+        {% for location in root_locations %}
+            {% include 'inventory/partials/location_node.html' %}
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Location Details Modal -->
+<div class="modal fade" id="locationDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Location Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="locationDetailsContent">
+                    <!-- Content loaded via AJAX -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="editLocationBtn">Edit Location</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let expandedNodes = new Set();
+    
+    // Location tree functionality
+    function initializeLocationTree() {
+        $('.location-node').each(function() {
+            const $node = $(this);
+            const hasChildren = $node.find('.location-children').length > 0;
+            
+            if (hasChildren) {
+                $node.find('.location-toggle').html('<i class="fas fa-chevron-right"></i>');
+                $node.find('.location-children').hide();
+            } else {
+                $node.find('.location-toggle').html('<i class="fas fa-circle" style="font-size: 8px;"></i>');
+            }
+        });
+    }
+    
+    // Toggle location node
+    $(document).on('click', '.location-toggle', function(e) {
+        e.stopPropagation();
+        const $node = $(this).closest('.location-node');
+        const $children = $node.find('> .location-children');
+        const locationId = $node.data('location-id');
+        
+        if ($children.length > 0) {
+            if ($children.is(':visible')) {
+                $children.slideUp();
+                $(this).html('<i class="fas fa-chevron-right"></i>');
+                $node.removeClass('expanded');
+                expandedNodes.delete(locationId);
+            } else {
+                $children.slideDown();
+                $(this).html('<i class="fas fa-chevron-down"></i>');
+                $node.addClass('expanded');
+                expandedNodes.add(locationId);
+            }
+        }
+    });
+    
+    // Search functionality
+    $('#locationSearch').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        filterLocations();
+    });
+    
+    // Filter functionality
+    $('#locationTypeFilter, #capacityFilter').on('change', function() {
+        filterLocations();
+    });
+    
+    function filterLocations() {
+        const searchTerm = $('#locationSearch').val().toLowerCase();
+        const typeFilter = $('#locationTypeFilter').val();
+        const capacityFilter = $('#capacityFilter').val();
+        
+        $('.location-node').each(function() {
+            const $node = $(this);
+            const locationName = $node.find('.location-name').text().toLowerCase();
+            const locationType = $node.data('location-type') || '';
+            const capacityUsage = parseFloat($node.data('capacity-usage')) || 0;
+            
+            let showNode = true;
+            
+            // Search filter
+            if (searchTerm && !locationName.includes(searchTerm)) {
+                showNode = false;
+            }
+            
+            // Type filter
+            if (typeFilter && locationType !== typeFilter) {
+                showNode = false;
+            }
+            
+            // Capacity filter
+            if (capacityFilter) {
+                switch (capacityFilter) {
+                    case 'available':
+                        if (capacityUsage >= 80) showNode = false;
+                        break;
+                    case 'warning':
+                        if (capacityUsage < 80 || capacityUsage >= 100) showNode = false;
+                        break;
+                    case 'full':
+                        if (capacityUsage < 100) showNode = false;
+                        break;
+                }
+            }
+            
+            $node.toggle(showNode);
+        });
+    }
+    
+    // Expand/Collapse all
+    $('#expandAllBtn').on('click', function() {
+        $('.location-node').each(function() {
+            const $node = $(this);
+            const $children = $node.find('> .location-children');
+            const $toggle = $node.find('.location-toggle');
+            
+            if ($children.length > 0) {
+                $children.show();
+                $toggle.html('<i class="fas fa-chevron-down"></i>');
+                $node.addClass('expanded');
+                expandedNodes.add($node.data('location-id'));
+            }
+        });
+    });
+    
+    $('#collapseAllBtn').on('click', function() {
+        $('.location-node').each(function() {
+            const $node = $(this);
+            const $children = $node.find('> .location-children');
+            const $toggle = $node.find('.location-toggle');
+            
+            if ($children.length > 0) {
+                $children.hide();
+                $toggle.html('<i class="fas fa-chevron-right"></i>');
+                $node.removeClass('expanded');
+                expandedNodes.delete($node.data('location-id'));
+            }
+        });
+    });
+    
+    // Location details modal
+    $(document).on('click', '.btn-view-details', function() {
+        const locationId = $(this).data('location-id');
+        
+        $.get(`/inventory/api/locations/${locationId}`)
+            .done(function(data) {
+                $('#locationDetailsContent').html(renderLocationDetails(data));
+                $('#editLocationBtn').data('location-id', locationId);
+                $('#locationDetailsModal').modal('show');
+            })
+            .fail(function() {
+                alert('Error loading location details');
+            });
+    });
+    
+    function renderLocationDetails(location) {
+        const capacityPercent = location.max_capacity ? 
+            (location.current_usage / location.max_capacity * 100).toFixed(1) : 0;
+        
+        return `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Basic Information</h6>
+                    <table class="table table-sm">
+                        <tr><td><strong>Name:</strong></td><td>${location.name}</td></tr>
+                        <tr><td><strong>Type:</strong></td><td>${location.location_type || 'N/A'}</td></tr>
+                        <tr><td><strong>Full Path:</strong></td><td>${location.full_path}</td></tr>
+                        <tr><td><strong>Temperature:</strong></td><td>${location.temperature || 'N/A'}</td></tr>
+                        <tr><td><strong>Description:</strong></td><td>${location.description || 'N/A'}</td></tr>
+                    </table>
+                </div>
+                <div class="col-md-6">
+                    <h6>Capacity Information</h6>
+                    <table class="table table-sm">
+                        <tr><td><strong>Max Capacity:</strong></td><td>${location.max_capacity || 'Unlimited'} ${location.capacity_unit || ''}</td></tr>
+                        <tr><td><strong>Current Usage:</strong></td><td>${location.current_usage}</td></tr>
+                        <tr><td><strong>Available Space:</strong></td><td>${location.max_capacity ? location.max_capacity - location.current_usage : 'Unlimited'}</td></tr>
+                        <tr><td><strong>Utilization:</strong></td><td>${capacityPercent}%</td></tr>
+                    </table>
+                    
+                    ${location.max_capacity ? `
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>Capacity Usage</small>
+                            <small>${capacityPercent}%</small>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar ${getCapacityClass(capacityPercent)}" 
+                                 style="width: ${capacityPercent}%"></div>
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+            
+            <hr>
+            
+            <h6>Recent Items</h6>
+            <div class="table-responsive">
+                <table class="table table-sm">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Current Quantity</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${location.items.map(item => `
+                            <tr>
+                                <td>${item.name}</td>
+                                <td>${item.current_quantity} ${item.unit || ''}</td>
+                                <td><span class="badge bg-${getStatusClass(item.status)}">${item.status}</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+    
+    function getCapacityClass(percent) {
+        if (percent >= 100) return 'bg-purple';
+        if (percent >= 80) return 'bg-danger';
+        if (percent >= 60) return 'bg-warning';
+        return 'bg-success';
+    }
+    
+    function getStatusClass(status) {
+        switch (status) {
+            case 'Available': return 'success';
+            case 'Low Stock': return 'warning';
+            case 'Expired': return 'danger';
+            default: return 'secondary';
+        }
+    }
+    
+    // Initialize
+    initializeLocationTree();
+});
+</script>
+{% endblock %}

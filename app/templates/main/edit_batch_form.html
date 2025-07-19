@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Edit Batch {{ batch.id }}</h1>
-<form method="post" action="{{ url_for('main.edit_batch', batch_id=batch.id) }}">
+<form method="post" action="{{ url_for('cell_storage.edit_batch', batch_id=batch.id) }}">
   {{ form.hidden_tag() }}
   <div class="mb-3">
     {{ form.batch_name.label }} {{ form.batch_name(size=40) }}
@@ -37,6 +37,6 @@
   <p>{{ form.submit(class_='btn btn-primary') }}</p>
 </form>
 <p>
-  <a href="{{ url_for('main.manage_batch', batch_id=batch.id) }}" class="btn btn-secondary">Back to Batch Management</a>
+  <a href="{{ url_for('cell_storage.manage_batch', batch_id=batch.id) }}" class="btn btn-secondary">Back to Batch Management</a>
 </p>
 {% endblock %}

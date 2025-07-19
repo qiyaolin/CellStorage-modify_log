@@ -51,11 +51,11 @@ from datetime import datetime
 import json
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
-from app.main import bp
-from app import db
+from . import bp
+from ... import db
 from sqlalchemy.orm import joinedload
-from app.decorators import admin_required
-from app.forms import (
+from ...shared.decorators import admin_required
+from ..forms import (
     CellLineForm,
     TowerForm,
     DrawerForm,
@@ -71,7 +71,7 @@ from app.forms import (
     BatchLookupForm,
     CSVUploadForm,
 )
-from app.models import (
+from ..models import (
     CellLine,
     User,
     Tower,
@@ -83,9 +83,9 @@ from app.models import (
     Alert,
 )
 
-from app.utils import log_audit, clear_database_except_admin
-from app.utils import get_next_batch_id, get_batch_counter, set_batch_counter
-from app.audit_utils import create_audit_log, format_audit_details
+from ...shared.utils import log_audit, clear_database_except_admin
+from ...shared.utils import get_next_batch_id, get_batch_counter, set_batch_counter
+from ...shared.audit_utils import create_audit_log, format_audit_details
 import io
 import csv
 from io import StringIO
@@ -111,7 +111,7 @@ def index():
     vial_count = CryoVial.query.count()
     
     # 获取预警信息
-    from app.utils import get_active_alerts, generate_all_alerts
+    from app.shared.utils import get_active_alerts, generate_all_alerts
     
     # 为管理员生成和显示预警
     if current_user.is_admin:
@@ -127,7 +127,7 @@ def index():
         recent_alerts = []
     
     # 获取最近活动记录
-    from app.models import AuditLog
+    from app.cell_storage.models import AuditLog
     recent_activities_raw = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(5).all()
     
     # Format the audit details for better readability
@@ -261,10 +261,10 @@ def add_cell_line():
         db.session.commit()
         log_audit(current_user.id, 'CREATE', target_type='CellLine', target_id=cell_line.id, details=f"Cell line '{cell_line.name}' created.")
         
-        add_batch_url = url_for('main.add_cryovial', cell_line_id=cell_line.id)
+        add_batch_url = url_for('cell_storage.add_cryovial', cell_line_id=cell_line.id)
         flash(Markup(f'Cell line has been successfully added! <a href="{add_batch_url}" class="btn btn-sm btn-success ms-2">Add Batch for this Cell Line</a>'), 'success')
 
-        return redirect(url_for('main.list_cell_lines'))
+        return redirect(url_for('cell_storage.list_cell_lines'))
     return render_template('main/cell_line_form.html', form=form, title='Add New Cell Line')
 
 @bp.route('/cell_line/<int:cell_line_id>/edit', methods=['GET', 'POST'])
@@ -336,7 +336,7 @@ def edit_cell_line(cell_line_id):
     #     form.name.data = cell_line.name
     #     # ... populate other fields ...
 
-    return render_template('main/cell_line_form.html', title='Edit Cell Line', form=form, cell_line=cell_line, form_action=url_for('main.edit_cell_line', cell_line_id=cell_line.id))
+    return render_template('main/cell_line_form.html', title='Edit Cell Line', form=form, cell_line=cell_line, form_action=url_for('cell_storage.edit_cell_line', cell_line_id=cell_line.id))
 
 @bp.route('/locations')
 @login_required
@@ -358,8 +358,8 @@ def add_tower():
         db.session.commit()
         log_audit(current_user.id, 'CREATE_TOWER', target_type='Tower', target_id=tower.id, details=f'Tower "{tower.name}" in freezer "{tower.freezer_name}"')
         flash(f'Tower "{tower.name}" added successfully!', 'success')
-        return redirect(url_for('main.locations_overview'))
-    return render_template('main/tower_form.html', title='Add Tower', form=form, form_action=url_for('main.add_tower'))
+        return redirect(url_for('cell_storage.locations_overview'))
+    return render_template('main/tower_form.html', title='Add Tower', form=form, form_action=url_for('cell_storage.add_tower'))
 
 @bp.route('/tower/<int:tower_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -373,8 +373,8 @@ def edit_tower(tower_id):
         tower.description = form.description.data
         db.session.commit()
         flash(f'Tower "{tower.name}" updated successfully!', 'success')
-        return redirect(url_for('main.locations_overview'))
-    return render_template('main/tower_form.html', title='Edit Tower', form=form, tower=tower, form_action=url_for('main.edit_tower', tower_id=tower.id))
+        return redirect(url_for('cell_storage.locations_overview'))
+    return render_template('main/tower_form.html', title='Edit Tower', form=form, tower=tower, form_action=url_for('cell_storage.edit_tower', tower_id=tower.id))
 
 # --- Drawer Routes ---
 @bp.route('/drawer/add', methods=['GET', 'POST'])
@@ -395,8 +395,8 @@ def add_drawer():
         db.session.add(drawer)
         db.session.commit()
         flash(f'Drawer "{drawer.name}" added successfully to tower ID {drawer.tower_id}!', 'success')
-        return redirect(url_for('main.locations_overview'))
-    return render_template('main/drawer_form.html', title='Add Drawer', form=form, form_action=url_for('main.add_drawer'))
+        return redirect(url_for('cell_storage.locations_overview'))
+    return render_template('main/drawer_form.html', title='Add Drawer', form=form, form_action=url_for('cell_storage.add_drawer'))
 
 @bp.route('/drawer/<int:drawer_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -410,10 +410,10 @@ def edit_drawer(drawer_id):
         drawer.tower_id = form.tower_id.data
         db.session.commit()
         flash(f'Drawer "{drawer.name}" updated successfully!', 'success')
-        return redirect(url_for('main.locations_overview'))
+        return redirect(url_for('cell_storage.locations_overview'))
     # Ensure tower_id is set correctly for the form on GET request if not using obj
     # form.tower_id.data = drawer.tower_id # This is handled by obj=drawer
-    return render_template('main/drawer_form.html', title='Edit Drawer', form=form, drawer=drawer, form_action=url_for('main.edit_drawer', drawer_id=drawer.id))
+    return render_template('main/drawer_form.html', title='Edit Drawer', form=form, drawer=drawer, form_action=url_for('cell_storage.edit_drawer', drawer_id=drawer.id))
 
 # --- Box Routes ---
 @bp.route('/box/add', methods=['GET', 'POST'])
@@ -444,11 +444,11 @@ def add_box():
                 f'Box "{box.name}" added successfully to drawer ID {box.drawer_id}!',
                 'success',
             )
-            return redirect(url_for('main.locations_overview'))
+            return redirect(url_for('cell_storage.locations_overview'))
         except IntegrityError:
             db.session.rollback()
             flash('A box with that name already exists in the selected drawer.', 'danger')
-    return render_template('main/box_form.html', title='Add Box', form=form, form_action=url_for('main.add_box'))
+    return render_template('main/box_form.html', title='Add Box', form=form, form_action=url_for('cell_storage.add_box'))
 
 @bp.route('/box/<int:box_id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -465,9 +465,9 @@ def edit_box(box_id):
         box.description = form.description.data
         db.session.commit()
         flash(f'Box "{box.name}" updated successfully!', 'success')
-        return redirect(url_for('main.locations_overview'))
+        return redirect(url_for('cell_storage.locations_overview'))
     # form.drawer_id.data = box.drawer_id # Handled by obj=box
-    return render_template('main/box_form.html', title='Edit Box', form=form, box=box, form_action=url_for('main.edit_box', box_id=box.id))
+    return render_template('main/box_form.html', title='Edit Box', form=form, box=box, form_action=url_for('cell_storage.edit_box', box_id=box.id))
 
 @bp.route('/inventory', methods=['GET', 'POST'])
 @login_required
@@ -531,7 +531,7 @@ def cryovial_inventory():
             # 如果有任何搜索条件或者是查看全部，添加view_all参数
             if search_q or search_creator or search_fluorescence or search_resistance or view_all:
                 redirect_params['view_all'] = 'true'
-            return redirect(url_for('main.cryovial_inventory', **redirect_params))
+            return redirect(url_for('cell_storage.cryovial_inventory', **redirect_params))
         elif 'remove_batches' in request.form:
             remove_ids = request.form.getlist('remove_batches')
             removed = 0
@@ -560,7 +560,7 @@ def cryovial_inventory():
             # 如果有任何搜索条件或者是查看全部，添加view_all参数
             if search_q or search_creator or search_fluorescence or search_resistance or view_all:
                 redirect_params['view_all'] = 'true'
-            return redirect(url_for('main.cryovial_inventory', **redirect_params))
+            return redirect(url_for('cell_storage.cryovial_inventory', **redirect_params))
 
     towers = Tower.query.order_by(Tower.name).all()
     all_creators = User.query.order_by(User.username).all()
@@ -707,7 +707,7 @@ def pickup_selected_vials():
     selected_ids = session.get('pickup_ids', [])
     if not selected_ids:
         flash('No vials selected for pick up.', 'info')
-        return redirect(url_for('main.cryovial_inventory'))
+        return redirect(url_for('cell_storage.cryovial_inventory'))
 
     vials = CryoVial.query.filter(CryoVial.id.in_(selected_ids)).join(Box).join(Drawer).join(Tower).join(VialBatch).join(CellLine).all()
 
@@ -807,7 +807,7 @@ def add_cryovial():
 
         if not placements or not vial_common_data:
             flash('Placement confirmation data lost. Please try again.', 'danger')
-            return redirect(url_for('main.add_cryovial'))
+            return redirect(url_for('cell_storage.add_cryovial'))
 
         batch = VialBatch(
             id=get_next_batch_id(auto_commit=False),
@@ -830,7 +830,7 @@ def add_cryovial():
                 flash(f'Error: Generated vial tag "{unique_tag}" already exists. Please try again.', 'danger')
                 session.pop('proposed_placements', None)
                 session.pop('vial_common_data', None)
-                return redirect(url_for('main.add_cryovial'))
+                return redirect(url_for('cell_storage.add_cryovial'))
 
             vial = CryoVial(
                 unique_vial_id_tag=unique_tag,
@@ -884,12 +884,12 @@ def add_cryovial():
                 + "; ".join(created_vials_info),
                 'success'
             )
-            return redirect(url_for('main.cryovial_inventory'))
+            return redirect(url_for('cell_storage.cryovial_inventory'))
         except Exception as e:
             db.session.rollback()
             # The error message reported by the user indicates the exception 'e' contains the specific Python error.
             flash(f'Error saving vial(s): {e}. Please try again.', 'danger')
-            return redirect(url_for('main.add_cryovial'))
+            return redirect(url_for('cell_storage.add_cryovial'))
 
     if form.validate_on_submit():
         quantity = form.quantity_to_add.data # This will be 1 or more
@@ -1011,7 +1011,7 @@ def add_cryovial():
         session.pop('vial_common_data', None)
 
     return render_template('main/cryovial_form.html', title='Add CryoVial(s)', form=form,
-                           form_action=url_for('main.add_cryovial'))
+                           form_action=url_for('cell_storage.add_cryovial'))
 
 @bp.route('/cryovial/<int:vial_id>/update_status', methods=['GET', 'POST'])
 @login_required # Normal users can update status (declare usage)
@@ -1048,13 +1048,13 @@ def update_cryovial_status(vial_id):
         )
         db.session.commit()
         flash(f'Status of vial "{vial.unique_vial_id_tag}" updated to {vial.status}.', 'success')
-        return redirect(url_for('main.cryovial_inventory')) # Or back to where they were (e.g., box view)
+        return redirect(url_for('cell_storage.cryovial_inventory')) # Or back to where they were (e.g., box view)
 
     # For GET request, it's better to have a dedicated page to confirm this action.
     # This simple example directly uses a form, but a confirmation step is good UX.
     return render_template('main/update_vial_status_form.html', title='Update Vial Status',
                            form=form, vial=vial,
-                           form_action=url_for('main.update_cryovial_status', vial_id=vial.id))
+                           form_action=url_for('cell_storage.update_cryovial_status', vial_id=vial.id))
 
 # Add Edit/View Detail routes for CryoVials (perhaps admin only for edit, all for view)
 @bp.route('/cryovial/<int:vial_id>/edit', methods=['GET', 'POST'])
@@ -1064,7 +1064,7 @@ def edit_cryovial(vial_id):
     # Permission check: e.g., only admin or the user who froze it can edit.
     # if not current_user.is_admin and vial.frozen_by_user_id != current_user.id:
     #     flash('You do not have permission to edit this vial.', 'danger')
-    #     return redirect(url_for('main.cryovial_inventory'))
+    #     return redirect(url_for('cell_storage.cryovial_inventory'))
 
     form = CryoVialEditForm(obj=vial)
     form.cell_line_id.choices = [(cl.id, cl.name) for cl in CellLine.query.order_by(CellLine.name).all()]
@@ -1105,12 +1105,12 @@ def edit_cryovial(vial_id):
             ).first()
             if existing_vial_at_new_pos:
                 flash(f'Error: New position {form.row_in_box.data}-{form.col_in_box.data} in selected box is already occupied by vial {existing_vial_at_new_pos.unique_vial_id_tag}.', 'danger')
-                return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('main.edit_cryovial', vial_id=vial.id))
+                return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
 
         selected_box = Box.query.get(form.box_id.data)
         if not selected_box or not (1 <= form.row_in_box.data <= selected_box.rows and 1 <= form.col_in_box.data <= selected_box.columns):
             flash(f'Error: Row/Column number is outside the dimensions of the selected box ({selected_box.rows}x{selected_box.columns}).', 'danger')
-            return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('main.edit_cryovial', vial_id=vial.id))
+            return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
 
         vial.unique_vial_id_tag = form.unique_vial_id_tag.data
         vial.cell_line_id = form.cell_line_id.data
@@ -1146,9 +1146,9 @@ def edit_cryovial(vial_id):
         )
         db.session.commit()
         flash(f'CryoVial "{vial.unique_vial_id_tag}" updated successfully!', 'success')
-        return redirect(get_smart_redirect_url('main.cryovial_inventory'))
+        return redirect(get_smart_redirect_url('cell_storage.cryovial_inventory'))
 
-    return render_template('main/edit_cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('main.edit_cryovial', vial_id=vial.id))
+    return render_template('main/edit_cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
 
 
 @bp.route('/box/<int:box_id>/add/<int:row>/<int:col>', methods=['GET', 'POST'], endpoint='add_vial_at_position')
@@ -1158,7 +1158,7 @@ def add_vial_at_position(box_id, row, col):
     box = Box.query.get_or_404(box_id)
     if not (1 <= row <= box.rows and 1 <= col <= box.columns):
         flash('Invalid position for this box.', 'danger')
-        return redirect(url_for('main.cryovial_inventory'))
+        return redirect(url_for('cell_storage.cryovial_inventory'))
 
     existing = CryoVial.query.filter_by(
         box_id=box.id,
@@ -1168,7 +1168,7 @@ def add_vial_at_position(box_id, row, col):
     ).first()
     if existing:
         flash('That position is already occupied.', 'danger')
-        return redirect(url_for('main.cryovial_inventory'))
+        return redirect(url_for('cell_storage.cryovial_inventory'))
 
     form = ManualVialForm()
     form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
@@ -1178,7 +1178,7 @@ def add_vial_at_position(box_id, row, col):
             batch = VialBatch.query.get(form.batch_id.data)
             if not batch:
                 flash('Batch ID not found.', 'danger')
-                return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('main.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
+                return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('cell_storage.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
         else:
             batch = VialBatch(
                 id=get_next_batch_id(),
@@ -1215,9 +1215,9 @@ def add_vial_at_position(box_id, row, col):
         db.session.commit()
         log_audit(current_user.id, 'CREATE_CRYOVIAL', target_type='CryoVial', target_id=vial.id, details=f'box {box.id} R{row}C{col}')
         flash('Vial added.', 'success')
-        return redirect(url_for('main.cryovial_inventory'))
+        return redirect(url_for('cell_storage.cryovial_inventory'))
 
-    return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('main.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
+    return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('cell_storage.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
 
 
 @bp.route('/cryovial/<int:vial_id>/delete')
@@ -1229,7 +1229,7 @@ def delete_cryovial(vial_id):
     db.session.commit()
     log_audit(current_user.id, 'DELETE_CRYOVIAL', target_type='CryoVial', target_id=vial_id)
     flash('Vial deleted.', 'success')
-    return redirect(url_for('main.cryovial_inventory'))
+    return redirect(url_for('cell_storage.cryovial_inventory'))
 
 
 @bp.route('/admin/clear_all', methods=['GET', 'POST'])
@@ -1242,7 +1242,7 @@ def clear_all():
             clear_database_except_admin()
             log_audit(current_user.id, 'CLEAR_ALL', target_type='System')
             flash('All records except admin accounts have been removed.', 'success')
-            return redirect(url_for('main.index'))
+            return redirect(url_for('cell_storage.index'))
         flash('Incorrect confirmation phrase.', 'danger')
     return render_template('main/clear_all.html', form=form, title='Clear Database')
 
@@ -1260,7 +1260,7 @@ def update_batch_counter():
         flash('Batch counter updated.', 'success')
     except (TypeError, ValueError):
         flash('Invalid batch counter value.', 'danger')
-    return redirect(url_for('main.cryovial_inventory'))
+    return redirect(url_for('cell_storage.cryovial_inventory'))
 
 
 @bp.route('/admin/backup')
@@ -1290,7 +1290,7 @@ def backup_database():
         except (BotoCoreError, ClientError) as exc:
             current_app.logger.error('RDS snapshot failed: %s', exc)
             flash('RDS backup failed.', 'danger')
-        return redirect(url_for('main.index'))
+        return redirect(url_for('cell_storage.index'))
 
     if scheme == 'sqlite':
         path = uri.replace('sqlite:///', '')
@@ -1307,7 +1307,7 @@ def backup_database():
         except (OSError, subprocess.CalledProcessError) as exc:
             current_app.logger.error('pg_dump failed: %s', exc)
             flash('PostgreSQL backup failed.', 'danger')
-            return redirect(url_for('main.index'))
+            return redirect(url_for('cell_storage.index'))
 
         buf = BytesIO(result.stdout)
         buf.seek(0)
@@ -1315,7 +1315,7 @@ def backup_database():
         return send_file(buf, as_attachment=True, download_name='backup.dump', mimetype='application/octet-stream')
 
     flash('Unsupported database type.', 'danger')
-    return redirect(url_for('main.index'))
+    return redirect(url_for('cell_storage.index'))
 
 
 @bp.route('/admin/restore', methods=['GET', 'POST'])
@@ -1333,7 +1333,7 @@ def restore_database():
         if rds_configured:
             if not snapshot_id:
                 flash('RDS Snapshot Identifier is required.', 'danger')
-                return redirect(url_for('main.restore_database'))
+                return redirect(url_for('cell_storage.restore_database'))
 
             try:
                 client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
@@ -1357,7 +1357,7 @@ def restore_database():
             except (BotoCoreError, ClientError) as exc:
                 current_app.logger.error('RDS restore failed: %s', exc)
                 flash(f'RDS restore failed: {exc}', 'danger')
-            return redirect(url_for('main.index'))
+            return redirect(url_for('cell_storage.index'))
 
         elif file:
             uri = current_app.config['SQLALCHEMY_DATABASE_URI']
@@ -1381,7 +1381,7 @@ def restore_database():
                 except (OSError, subprocess.CalledProcessError) as exc:
                     current_app.logger.error('pg_restore failed: %s', exc)
                     flash('PostgreSQL restore failed.', 'danger')
-                    return redirect(url_for('main.index'))
+                    return redirect(url_for('cell_storage.index'))
                 finally:
                     tmp.close()
                     os.unlink(tmp.name)
@@ -1391,7 +1391,7 @@ def restore_database():
 
             else:
                 flash('Unsupported database type.', 'danger')
-            return redirect(url_for('main.index'))
+            return redirect(url_for('cell_storage.index'))
 
         else:
             flash('No snapshot ID or file provided.', 'danger')
@@ -1442,7 +1442,7 @@ def batch_edit_vials():
         flash(f'Updated {len(vials)} vial(s).', 'success')
         if missing:
             flash(f'Missing tags: {", ".join(missing)}', 'warning')
-        return redirect(url_for('main.batch_edit_vials'))
+        return redirect(url_for('cell_storage.batch_edit_vials'))
 
     return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
 
@@ -1491,7 +1491,7 @@ def edit_batch(batch_id):
             details={'vial_count': len(vials)},
         )
         flash('Batch updated successfully.', 'success')
-        return redirect(url_for('main.inventory_summary'))
+        return redirect(url_for('cell_storage.inventory_summary'))
 
     return render_template('main/edit_batch_form.html', form=form, batch=batch, title='Edit Batch')
 
@@ -1501,7 +1501,7 @@ def edit_batch(batch_id):
 def manage_batch_lookup():
     form = BatchLookupForm()
     if form.validate_on_submit():
-        return redirect(url_for('main.manage_batch', batch_id=form.batch_id.data))
+        return redirect(url_for('cell_storage.manage_batch', batch_id=form.batch_id.data))
     return render_template('main/manage_batch_lookup.html', form=form, title='Manage Batch')
 
 
@@ -1568,7 +1568,7 @@ def manage_batch(batch_id):
         db.session.commit()
         log_audit(current_user.id, 'DELETE_BATCH', target_type='VialBatch', target_id=batch_id, details={'vial_count': count})
         flash(f'Batch {batch_id} deleted.', 'success')
-        return redirect(url_for('main.manage_batch_lookup'))
+        return redirect(url_for('cell_storage.manage_batch_lookup'))
 
     return render_template('main/manage_batch.html', form=form, batch=batch, boxes=boxes, title='Manage Batch')
 
@@ -1784,11 +1784,11 @@ def import_csv():
             
             if file_size > MAX_FILE_SIZE:
                 flash(f'File size ({file_size // (1024*1024)}MB) exceeds the maximum allowed size (10MB).', 'danger')
-                return redirect(url_for('main.import_csv'))
+                return redirect(url_for('cell_storage.import_csv'))
             
             if file_size == 0:
                 flash('The uploaded file is empty.', 'danger')
-                return redirect(url_for('main.import_csv'))
+                return redirect(url_for('cell_storage.import_csv'))
             
             updated_count = 0
             created_count = 0
@@ -1810,7 +1810,7 @@ def import_csv():
                             flash('Warning: Some characters in the file could not be decoded properly.', 'warning')
                 except Exception as e:
                     flash(f'Error reading file: {e}', 'danger')
-                    return redirect(url_for('main.import_csv'))
+                    return redirect(url_for('cell_storage.import_csv'))
                 
                 stream = io.StringIO(content, newline=None)
                 try:
@@ -1818,10 +1818,10 @@ def import_csv():
                     header = next(csv_input)
                 except StopIteration:
                     flash('The CSV file appears to be empty or has no header row.', 'danger')
-                    return redirect(url_for('main.import_csv'))
+                    return redirect(url_for('cell_storage.import_csv'))
                 except csv.Error as e:
                     flash(f'Error parsing CSV file: {e}', 'danger')
-                    return redirect(url_for('main.import_csv'))
+                    return redirect(url_for('cell_storage.import_csv'))
                 
                 # 验证表头
                 expected_headers_admin = [
@@ -1839,7 +1839,7 @@ def import_csv():
                 
                 if header not in [expected_headers_admin, expected_headers_user]:
                     flash('CSV header does not match the expected format. Please use an unmodified export file from Inventory Summary.', 'danger')
-                    return redirect(url_for('main.import_csv'))
+                    return redirect(url_for('cell_storage.import_csv'))
 
                 has_location = 'Location' in header
                 row_count = 0
@@ -2066,7 +2066,7 @@ def import_csv():
                     summary_messages = [f"{count} rows skipped ({reason})" for reason, count in reasons_summary.items()]
                     flash(f'{len(skipped_rows)} total rows were skipped. Reasons: {"; ".join(summary_messages)}', 'warning')
 
-                return redirect(url_for('main.inventory_summary'))
+                return redirect(url_for('cell_storage.inventory_summary'))
 
             except Exception as e:
                 db.session.rollback()
@@ -2268,8 +2268,8 @@ def batch_delete_vials():
 @admin_required
 def alerts_management():
     """预警管理页面"""
-    from app.utils import get_active_alerts
-    from app.models import Alert
+    from app.shared.utils import get_active_alerts
+    from app.cell_storage.models import Alert
     
     # 获取查询参数
     status_filter = request.args.get('status', 'active')  # active, resolved, dismissed, all
@@ -2324,7 +2324,7 @@ def alerts_management():
 @admin_required
 def resolve_alert_api(alert_id):
     """解决预警API"""
-    from app.utils import resolve_alert
+    from app.shared.utils import resolve_alert
     
     try:
         alert = resolve_alert(alert_id, current_user.id)
@@ -2351,7 +2351,7 @@ def resolve_alert_api(alert_id):
 @admin_required
 def dismiss_alert_api(alert_id):
     """忽略预警API"""
-    from app.utils import dismiss_alert
+    from app.shared.utils import dismiss_alert
     
     try:
         alert = dismiss_alert(alert_id, current_user.id)
@@ -2378,7 +2378,7 @@ def dismiss_alert_api(alert_id):
 @admin_required
 def generate_alerts_api():
     """手动生成预警API"""
-    from app.utils import generate_all_alerts
+    from app.shared.utils import generate_all_alerts
     
     try:
         alert_count = generate_all_alerts()
@@ -2829,7 +2829,7 @@ def batch_export_vials():
 @login_required
 def theme_settings():
     """Theme settings page"""
-    from app.utils import get_available_themes, get_user_theme
+    from app.shared.utils import get_available_themes, get_user_theme
     
     available_themes = get_available_themes()
     current_theme = get_user_theme(current_user.id)
@@ -2852,7 +2852,7 @@ def switch_theme():
         if not theme_name:
             return jsonify({'success': False, 'message': 'Theme name cannot be empty'}), 400
         
-        from app.utils import update_user_theme
+        from app.shared.utils import update_user_theme
         success, message = update_user_theme(current_user.id, theme_name)
         
         if success:
@@ -2869,7 +2869,7 @@ def switch_theme():
 def get_current_theme():
     """Get current theme configuration API"""
     try:
-        from app.utils import get_user_theme, get_theme_css_variables
+        from app.shared.utils import get_user_theme, get_theme_css_variables
         theme_config = get_user_theme(current_user.id)
         css_variables = get_theme_css_variables(theme_config)
         

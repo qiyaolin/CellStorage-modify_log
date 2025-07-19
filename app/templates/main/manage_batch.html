@@ -2,7 +2,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Manage Batch: {{ batch.name }} <span class="text-muted fs-5">(ID: {{ batch.id }})</span></h1>
-    <a href="{{ url_for('main.manage_batch_lookup') }}" class="btn btn-secondary">Back to Lookup</a>
+    <a href="{{ url_for('cell_storage.manage_batch_lookup') }}" class="btn btn-secondary">Back to Lookup</a>
 </div>
 
 <div class="row">
@@ -118,7 +118,7 @@
                               <td class="box-cell status-{{ vial.status.lower() if vial else 'empty' }}" 
                                   title="Vial: {{ vial.unique_vial_id_tag if vial else 'N/A' }}\nStatus: {{ vial.status if vial else 'Empty' }}">
                                 {% if vial %}
-                                  <a href="{{ url_for('main.edit_cryovial', vial_id=vial.id, next=request.url) }}" class="vial-link">{{ vial.unique_vial_id_tag }}</a>
+                                  <a href="{{ url_for('cell_storage.edit_cryovial', vial_id=vial.id, next=request.url) }}" class="vial-link">{{ vial.unique_vial_id_tag }}</a>
                                 {% else %}
                                   &nbsp;
                                 {% endif %}

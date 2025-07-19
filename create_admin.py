@@ -2,7 +2,7 @@
 """Script to create an admin user in the database."""
 
 from app import create_app, db
-from app.models import User
+from app.cell_storage.models import User
 
 def create_admin_user():
     app = create_app()

@@ -16,7 +16,7 @@
                     <p class="text-muted mb-0 fade-in-up" style="animation-delay: 0.1s;">Interactive freezer facility layout and management</p>
                 </div>
                 <div class="fade-in-up" style="animation-delay: 0.2s;">
-                    <a href="{{ url_for('main.add_tower') }}" class="btn btn-success">
+                    <a href="{{ url_for('cell_storage.add_tower') }}" class="btn btn-success">
                         <i class="bi bi-plus-lg me-1"></i>Add New Tower
                     </a>
                 </div>
@@ -116,10 +116,10 @@
                                                     <i class="bi bi-gear"></i>
                                                 </button>
                                                 <ul class="dropdown-menu dropdown-menu-end">
-                                                    <li><a class="dropdown-item" href="{{ url_for('main.edit_tower', tower_id=tower.id) }}">
+                                                    <li><a class="dropdown-item" href="{{ url_for('cell_storage.edit_tower', tower_id=tower.id) }}">
                                                         <i class="bi bi-pencil me-2"></i>Edit Tower
                                                     </a></li>
-                                                    <li><a class="dropdown-item" href="{{ url_for('main.add_drawer', tower_id=tower.id) }}">
+                                                    <li><a class="dropdown-item" href="{{ url_for('cell_storage.add_drawer', tower_id=tower.id) }}">
                                                         <i class="bi bi-plus me-2"></i>Add Drawer
                                                     </a></li>
                                                 </ul>
@@ -242,10 +242,10 @@
                                 <div id="collapse{{ tower.id }}" class="accordion-collapse collapse">
                                     <div class="accordion-body">
                                         <div class="d-flex justify-content-end mb-3">
-                                            <a href="{{ url_for('main.edit_tower', tower_id=tower.id) }}" class="btn btn-sm btn-outline-secondary me-2">
+                                            <a href="{{ url_for('cell_storage.edit_tower', tower_id=tower.id) }}" class="btn btn-sm btn-outline-secondary me-2">
                                                 <i class="bi bi-pencil me-1"></i>Edit Tower
                                             </a>
-                                            <a href="{{ url_for('main.add_drawer', tower_id=tower.id) }}" class="btn btn-sm btn-primary">
+                                            <a href="{{ url_for('cell_storage.add_drawer', tower_id=tower.id) }}" class="btn btn-sm btn-primary">
                                                 <i class="bi bi-plus me-1"></i>Add Drawer
                                             </a>
                                         </div>
@@ -266,8 +266,8 @@
                                                                     <i class="bi bi-three-dots"></i>
                                                                 </button>
                                                                 <ul class="dropdown-menu">
-                                                                    <li><a class="dropdown-item" href="{{ url_for('main.edit_drawer', drawer_id=drawer.id) }}">Edit</a></li>
-                                                                    <li><a class="dropdown-item" href="{{ url_for('main.add_box', drawer_id=drawer.id) }}">Add Box</a></li>
+                                                                    <li><a class="dropdown-item" href="{{ url_for('cell_storage.edit_drawer', drawer_id=drawer.id) }}">Edit</a></li>
+                                                                    <li><a class="dropdown-item" href="{{ url_for('cell_storage.add_box', drawer_id=drawer.id) }}">Add Box</a></li>
                                                                 </ul>
                                                             </div>
                                                         </div>
@@ -297,7 +297,7 @@
                                         <div class="text-center py-4">
                                             <i class="bi bi-archive text-muted fs-1"></i>
                                             <p class="text-muted mt-2">No drawers in this tower</p>
-                                            <a href="{{ url_for('main.add_drawer', tower_id=tower.id) }}" class="btn btn-outline-primary btn-sm">
+                                            <a href="{{ url_for('cell_storage.add_drawer', tower_id=tower.id) }}" class="btn btn-outline-primary btn-sm">
                                                 Add First Drawer
                                             </a>
                                         </div>
@@ -324,7 +324,7 @@
                     </div>
                     <h3 class="fw-bold text-dark mb-3">No Freezer Facilities Found</h3>
                     <p class="text-muted mb-4">Start by creating your first freezer tower to organize your storage infrastructure.</p>
-                    <a href="{{ url_for('main.add_tower') }}" class="btn btn-success btn-lg">
+                    <a href="{{ url_for('cell_storage.add_tower') }}" class="btn btn-success btn-lg">
                         <i class="bi bi-plus-lg me-2"></i>Create Your First Tower
                     </a>
                 </div>

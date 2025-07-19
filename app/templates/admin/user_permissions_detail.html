@@ -1,0 +1,706 @@
+{% extends "base.html" %}
+
+{% block title %}User Permissions - {{ user.username }}{% endblock %}
+
+{% block extra_css %}
+<style>
+.user-permissions-detail {
+    padding: 20px 0;
+}
+
+.user-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 30px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+}
+
+.user-avatar-large {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    font-weight: bold;
+    margin-right: 20px;
+}
+
+.permission-section {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.section-header {
+    background: #f8f9fa;
+    padding: 15px 20px;
+    border-bottom: 1px solid #e9ecef;
+    display: flex;
+    justify-content: between;
+    align-items: center;
+}
+
+.section-title {
+    font-weight: 600;
+    color: #495057;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.permission-list {
+    padding: 0;
+    margin: 0;
+}
+
+.permission-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid #f8f9fa;
+    transition: background-color 0.3s;
+}
+
+.permission-row:hover {
+    background: #f8f9fa;
+}
+
+.permission-row:last-child {
+    border-bottom: none;
+}
+
+.permission-info {
+    flex: 1;
+}
+
+.permission-name {
+    font-weight: 500;
+    color: #495057;
+}
+
+.permission-description {
+    font-size: 14px;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+.permission-meta {
+    font-size: 12px;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+.permission-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.permission-switch {
+    position: relative;
+    width: 50px;
+    height: 25px;
+    background: #ddd;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.permission-switch.active {
+    background: #28a745;
+}
+
+.permission-switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 21px;
+    height: 21px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+}
+
+.permission-switch.active::after {
+    transform: translateX(25px);
+}
+
+.expiry-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.expiry-permanent {
+    background: #d4edda;
+    color: #155724;
+}
+
+.expiry-temporary {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.expiry-expired {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.bulk-actions-bar {
+    background: #f8f9fa;
+    padding: 15px 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.quick-assign {
+    display: flex;
+    gap: 10px;
+}
+
+.group-btn {
+    padding: 8px 16px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.group-btn:hover {
+    background: #e9ecef;
+}
+
+.group-btn.viewer {
+    border-color: #007bff;
+    color: #007bff;
+}
+
+.group-btn.user {
+    border-color: #6f42c1;
+    color: #6f42c1;
+}
+
+.group-btn.manager {
+    border-color: #fd7e14;
+    color: #fd7e14;
+}
+
+.group-btn.admin {
+    border-color: #dc3545;
+    color: #dc3545;
+}
+
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.permission-search {
+    margin-bottom: 20px;
+}
+
+.permission-search input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+.permission-search input:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+@media (max-width: 768px) {
+    .user-header {
+        text-align: center;
+    }
+    
+    .user-avatar-large {
+        margin: 0 auto 20px;
+    }
+    
+    .permission-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    
+    .permission-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid user-permissions-detail">
+    <!-- User Header -->
+    <div class="user-header">
+        <div class="d-flex align-items-center">
+            <div class="user-avatar-large">
+                {{ user.username[0].upper() }}
+            </div>
+            <div>
+                <h2 class="mb-2">{{ user.username }}</h2>
+                <p class="mb-1 opacity-75">{{ user.email or 'No email address' }}</p>
+                {% if user.last_seen %}
+                <small class="opacity-75">Last seen: {{ user.last_seen.strftime('%Y-%m-%d %H:%M') }}</small>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_dashboard') }}">Admin</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('admin.permissions') }}">Permissions</a></li>
+            <li class="breadcrumb-item active">{{ user.username }}</li>
+        </ol>
+    </nav>
+
+    <!-- Statistics -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-number text-primary">{{ permissions|length }}</div>
+            <div class="stat-label">Active Permissions</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number text-success">{{ permissions|selectattr('expires_at', 'none')|list|length }}</div>
+            <div class="stat-label">Permanent</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number text-warning">{{ permissions|selectattr('expires_at', 'defined')|list|length }}</div>
+            <div class="stat-label">Temporary</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-number text-info">{{ permission_categories|length }}</div>
+            <div class="stat-label">Categories</div>
+        </div>
+    </div>
+
+    <!-- Bulk Actions -->
+    <div class="bulk-actions-bar">
+        <div>
+            <strong>Quick Assign:</strong>
+            <div class="quick-assign">
+                <button class="group-btn viewer" onclick="assignGroup('viewer')">Viewer</button>
+                <button class="group-btn user" onclick="assignGroup('user')">User</button>
+                <button class="group-btn manager" onclick="assignGroup('manager')">Manager</button>
+                <button class="group-btn admin" onclick="assignGroup('admin')">Admin</button>
+            </div>
+        </div>
+        <div>
+            <button class="btn btn-outline-primary" onclick="exportPermissions()">
+                <i class="fas fa-download me-1"></i>Export
+            </button>
+            <button class="btn btn-outline-danger" onclick="revokeAllPermissions()">
+                <i class="fas fa-times me-1"></i>Revoke All
+            </button>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="permission-search">
+        <input type="text" id="permissionSearch" placeholder="Search permissions...">
+    </div>
+
+    <!-- Permission Sections -->
+    {% for category, category_permissions in permission_categories.items() %}
+    <div class="permission-section">
+        <div class="section-header">
+            <h5 class="section-title">
+                <div class="section-icon" style="background: #e3f2fd; color: #1976d2;">
+                    <i class="fas fa-cog"></i>
+                </div>
+                {{ category.title() }} Permissions
+                <span class="badge bg-secondary ms-2">{{ category_permissions|length }}</span>
+            </h5>
+        </div>
+        <div class="permission-list">
+            {% for perm in category_permissions %}
+            <div class="permission-row" data-permission="{{ perm.permission }}">
+                <div class="permission-info">
+                    <div class="permission-name">{{ perm.permission }}</div>
+                    <div class="permission-description">
+                        {{ all_permissions.get(perm.permission, 'No description') }}
+                    </div>
+                    <div class="permission-meta">
+                        Granted {{ perm.granted_at.strftime('%Y-%m-%d') if perm.granted_at else 'Unknown' }}
+                        by {{ perm.granted_by.username if perm.granted_by else 'System' }}
+                        {% if perm.resource_type %}
+                        • Resource: {{ perm.resource_type }}
+                        {% if perm.resource_id %}#{{ perm.resource_id }}{% endif %}
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="permission-actions">
+                    {% if perm.expires_at %}
+                        {% if perm.expires_at > current_time %}
+                        <span class="expiry-badge expiry-temporary">
+                            Expires {{ perm.expires_at.strftime('%Y-%m-%d') }}
+                        </span>
+                        {% else %}
+                        <span class="expiry-badge expiry-expired">
+                            Expired
+                        </span>
+                        {% endif %}
+                    {% else %}
+                    <span class="expiry-badge expiry-permanent">
+                        Permanent
+                    </span>
+                    {% endif %}
+                    
+                    <div class="permission-switch active" 
+                         data-permission="{{ perm.permission }}"
+                         onclick="togglePermission(this)">
+                    </div>
+                    
+                    <button class="btn btn-sm btn-outline-secondary" 
+                            onclick="editPermission('{{ perm.permission }}')">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Available Permissions (Not Currently Granted) -->
+    <div class="permission-section">
+        <div class="section-header">
+            <h5 class="section-title">
+                <div class="section-icon" style="background: #f8f9fa; color: #6c757d;">
+                    <i class="fas fa-plus"></i>
+                </div>
+                Available Permissions
+            </h5>
+        </div>
+        <div class="permission-list">
+            {% for perm_key, perm_desc in all_permissions.items() %}
+                {% if perm_key not in permissions|map(attribute='permission')|list %}
+                <div class="permission-row" data-permission="{{ perm_key }}">
+                    <div class="permission-info">
+                        <div class="permission-name">{{ perm_key }}</div>
+                        <div class="permission-description">{{ perm_desc }}</div>
+                    </div>
+                    <div class="permission-actions">
+                        <div class="permission-switch" 
+                             data-permission="{{ perm_key }}"
+                             onclick="togglePermission(this)">
+                        </div>
+                        
+                        <button class="btn btn-sm btn-outline-primary" 
+                                onclick="grantPermission('{{ perm_key }}')">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<!-- Permission Edit Modal -->
+<div class="modal fade" id="editPermissionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Permission</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editPermissionForm">
+                    <input type="hidden" id="editPermissionName">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Permission</label>
+                        <input type="text" class="form-control" id="editPermissionDisplay" readonly>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Expiration Date</label>
+                        <input type="datetime-local" class="form-control" id="editExpirationDate">
+                        <small class="text-muted">Leave empty for permanent permission</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Resource Type</label>
+                        <select class="form-select" id="editResourceType">
+                            <option value="">Any Resource</option>
+                            <option value="inventory">Inventory</option>
+                            <option value="location">Location</option>
+                            <option value="supplier">Supplier</option>
+                            <option value="order">Order</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Resource ID</label>
+                        <input type="number" class="form-control" id="editResourceId" 
+                               placeholder="Leave empty for all resources">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="savePermissionEdit()">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const userId = {{ user.id }};
+
+$(document).ready(function() {
+    // Search functionality
+    $('#permissionSearch').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        $('.permission-row').each(function() {
+            const permissionName = $(this).find('.permission-name').text().toLowerCase();
+            const permissionDesc = $(this).find('.permission-description').text().toLowerCase();
+            
+            if (permissionName.includes(searchTerm) || permissionDesc.includes(searchTerm)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+});
+
+function togglePermission(element) {
+    const $toggle = $(element);
+    const permission = $toggle.data('permission');
+    const isActive = $toggle.hasClass('active');
+    
+    const action = isActive ? 'revoke' : 'grant';
+    
+    $.ajax({
+        url: `/admin/api/users/${userId}/permissions/${permission}`,
+        method: isActive ? 'DELETE' : 'POST',
+        success: function() {
+            if (isActive) {
+                $toggle.removeClass('active');
+            } else {
+                $toggle.addClass('active');
+            }
+            showAlert(`Permission ${action}d successfully`, 'success');
+        },
+        error: function() {
+            showAlert(`Failed to ${action} permission`, 'error');
+        }
+    });
+}
+
+function assignGroup(groupName) {
+    if (confirm(`Assign ${groupName} permissions? This will replace all current permissions.`)) {
+        $.ajax({
+            url: `/admin/api/users/${userId}/permission-groups/${groupName}`,
+            method: 'POST',
+            success: function() {
+                showAlert(`${groupName} permissions assigned successfully`, 'success');
+                setTimeout(() => location.reload(), 1500);
+            },
+            error: function() {
+                showAlert('Failed to assign permission group', 'error');
+            }
+        });
+    }
+}
+
+function grantPermission(permission) {
+    $.ajax({
+        url: `/admin/api/users/${userId}/permissions/${permission}`,
+        method: 'POST',
+        success: function() {
+            location.reload();
+        },
+        error: function() {
+            showAlert('Failed to grant permission', 'error');
+        }
+    });
+}
+
+function editPermission(permission) {
+    $('#editPermissionName').val(permission);
+    $('#editPermissionDisplay').val(permission);
+    $('#editPermissionModal').modal('show');
+}
+
+function savePermissionEdit() {
+    const permission = $('#editPermissionName').val();
+    const data = {
+        expires_at: $('#editExpirationDate').val() || null,
+        resource_type: $('#editResourceType').val() || null,
+        resource_id: $('#editResourceId').val() || null
+    };
+    
+    $.ajax({
+        url: `/admin/api/users/${userId}/permissions/${permission}`,
+        method: 'POST',
+        data: JSON.stringify(data),
+        contentType: 'application/json',
+        success: function() {
+            $('#editPermissionModal').modal('hide');
+            showAlert('Permission updated successfully', 'success');
+            setTimeout(() => location.reload(), 1500);
+        },
+        error: function() {
+            showAlert('Failed to update permission', 'error');
+        }
+    });
+}
+
+function revokeAllPermissions() {
+    if (confirm('Are you sure you want to revoke ALL permissions for this user?')) {
+        const activePermissions = $('.permission-switch.active');
+        let promises = [];
+        
+        activePermissions.each(function() {
+            const permission = $(this).data('permission');
+            promises.push(
+                $.ajax({
+                    url: `/admin/api/users/${userId}/permissions/${permission}`,
+                    method: 'DELETE'
+                })
+            );
+        });
+        
+        Promise.all(promises).then(() => {
+            showAlert('All permissions revoked successfully', 'success');
+            setTimeout(() => location.reload(), 1500);
+        }).catch(() => {
+            showAlert('Failed to revoke some permissions', 'error');
+        });
+    }
+}
+
+function exportPermissions() {
+    // Create CSV export of user permissions
+    const rows = [['Permission', 'Description', 'Granted Date', 'Expires', 'Granted By']];
+    
+    $('.permission-row').each(function() {
+        if ($(this).find('.permission-switch').hasClass('active')) {
+            const permission = $(this).find('.permission-name').text();
+            const description = $(this).find('.permission-description').text();
+            const meta = $(this).find('.permission-meta').text();
+            
+            rows.push([permission, description, meta, '', '']);
+        }
+    });
+    
+    const csvContent = rows.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${userId}_permissions.csv`;
+    a.click();
+    
+    window.URL.revokeObjectURL(url);
+}
+
+function showAlert(message, type) {
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const alert = $(`
+        <div class="alert ${alertClass} alert-dismissible fade show position-fixed" 
+             style="top: 20px; right: 20px; z-index: 9999;">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `);
+    
+    $('body').append(alert);
+    
+    setTimeout(() => {
+        alert.alert('close');
+    }, 5000);
+}
+</script>
+
+<!-- Template functions -->
+{% set current_time = moment() %}
+
+<script>
+// Add helper functions for category styling
+function getCategoryColor(category) {
+    const colors = {
+        'inventory': '#e3f2fd',
+        'location': '#f3e5f5', 
+        'supplier': '#fff3e0',
+        'order': '#f1f8e9',
+        'admin': '#ffebee',
+        'data': '#f8f9fa'
+    };
+    return colors[category] || '#f8f9fa';
+}
+
+function getCategoryIcon(category) {
+    const icons = {
+        'inventory': 'fas fa-boxes',
+        'location': 'fas fa-map-marker-alt',
+        'supplier': 'fas fa-truck', 
+        'order': 'fas fa-shopping-cart',
+        'admin': 'fas fa-cog',
+        'data': 'fas fa-database'
+    };
+    return icons[category] || 'fas fa-question';
+}
+</script>
+{% endblock %}

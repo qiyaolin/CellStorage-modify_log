@@ -1,0 +1,469 @@
+{% extends "base.html" %}
+
+{% block title %}{% if form.data %}Edit Location{% else %}Add Location{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+.location-form {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.form-section {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.section-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.section-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.capacity-preview {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 15px;
+    margin-top: 10px;
+}
+
+.capacity-visual {
+    width: 100%;
+    height: 20px;
+    background: #e9ecef;
+    border-radius: 10px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.capacity-fill {
+    height: 100%;
+    transition: width 0.3s;
+    background: linear-gradient(90deg, #28a745 0%, #ffc107 60%, #dc3545 80%);
+}
+
+.form-tips {
+    background: #e3f2fd;
+    border-left: 4px solid #2196f3;
+    padding: 15px;
+    margin-top: 15px;
+    border-radius: 0 6px 6px 0;
+}
+
+.tip-title {
+    font-weight: 600;
+    color: #1976d2;
+    margin-bottom: 8px;
+}
+
+.temperature-presets {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 10px;
+}
+
+.temp-preset {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f8f9fa;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-size: 14px;
+}
+
+.temp-preset:hover {
+    background: #e9ecef;
+    border-color: #007bff;
+}
+
+.temp-preset.selected {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.location-path-preview {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 10px;
+    margin-top: 10px;
+    font-family: monospace;
+    color: #6c757d;
+}
+
+@media (max-width: 768px) {
+    .temperature-presets {
+        gap: 5px;
+    }
+    
+    .temp-preset {
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="location-form">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                {% if form.data %}
+                    <i class="fas fa-edit me-2 text-warning"></i>Edit Location
+                {% else %}
+                    <i class="fas fa-plus me-2 text-success"></i>Add New Location
+                {% endif %}
+            </h1>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('inventory.index') }}">Inventory</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('inventory.locations') }}">Locations</a></li>
+                    <li class="breadcrumb-item active">{% if form.data %}Edit{% else %}Add{% endif %}</li>
+                </ol>
+            </nav>
+        </div>
+
+        <form method="POST" novalidate>
+            {{ form.hidden_tag() }}
+            
+            <!-- Basic Information Section -->
+            <div class="form-section">
+                <div class="section-title">
+                    <div class="section-icon" style="background: #e3f2fd;">
+                        <i class="fas fa-info-circle" style="color: #1976d2;"></i>
+                    </div>
+                    Basic Information
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.name.label(class="form-label") }}
+                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                        {% if form.name.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.name.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        {{ form.location_type.label(class="form-label") }}
+                        {{ form.location_type(class="form-select" + (" is-invalid" if form.location_type.errors else "")) }}
+                        {% if form.location_type.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.location_type.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        {{ form.parent_id.label(class="form-label") }}
+                        {{ form.parent_id(class="form-select" + (" is-invalid" if form.parent_id.errors else "")) }}
+                        {% if form.parent_id.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.parent_id.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                        
+                        {% if request.args.get('parent_id') %}
+                        <div class="location-path-preview" id="locationPathPreview">
+                            <!-- Path preview will be shown here -->
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        {{ form.temperature.label(class="form-label") }}
+                        {{ form.temperature(class="form-control" + (" is-invalid" if form.temperature.errors else ""), placeholder="e.g., -80°C, 4°C, RT") }}
+                        {% if form.temperature.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.temperature.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                        
+                        <div class="temperature-presets">
+                            <span class="temp-preset" data-temp="-80°C">-80°C</span>
+                            <span class="temp-preset" data-temp="-20°C">-20°C</span>
+                            <span class="temp-preset" data-temp="4°C">4°C</span>
+                            <span class="temp-preset" data-temp="RT">RT</span>
+                            <span class="temp-preset" data-temp="37°C">37°C</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    {{ form.description.label(class="form-label") }}
+                    {{ form.description(class="form-control" + (" is-invalid" if form.description.errors else ""), rows="3") }}
+                    {% if form.description.errors %}
+                        <div class="invalid-feedback">
+                            {% for error in form.description.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Capacity Management Section -->
+            <div class="form-section">
+                <div class="section-title">
+                    <div class="section-icon" style="background: #fff3e0;">
+                        <i class="fas fa-chart-pie" style="color: #f57c00;"></i>
+                    </div>
+                    Capacity Management
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        {{ form.max_capacity.label(class="form-label") }}
+                        {{ form.max_capacity(class="form-control" + (" is-invalid" if form.max_capacity.errors else ""), 
+                                            placeholder="Leave empty for unlimited", 
+                                            id="maxCapacityInput") }}
+                        {% if form.max_capacity.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.max_capacity.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        {{ form.capacity_unit.label(class="form-label") }}
+                        {{ form.capacity_unit(class="form-select" + (" is-invalid" if form.capacity_unit.errors else "")) }}
+                        {% if form.capacity_unit.errors %}
+                            <div class="invalid-feedback">
+                                {% for error in form.capacity_unit.errors %}{{ error }}{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">Current Usage</label>
+                        <input type="number" class="form-control" 
+                               id="currentUsageInput" 
+                               value="{{ form.data.current_usage if form.data else 0 }}" 
+                               readonly>
+                        <small class="text-muted">Auto-calculated from inventory items</small>
+                    </div>
+                </div>
+                
+                <div class="capacity-preview" id="capacityPreview" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span><strong>Capacity Visualization</strong></span>
+                        <span id="capacityPercentage">0%</span>
+                    </div>
+                    <div class="capacity-visual">
+                        <div class="capacity-fill" id="capacityFill" style="width: 0%;"></div>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <small class="text-muted">Current: <span id="currentValue">0</span></small>
+                        <small class="text-muted">Maximum: <span id="maxValue">0</span></small>
+                    </div>
+                </div>
+                
+                <div class="form-tips">
+                    <div class="tip-title">💡 Capacity Management Tips</div>
+                    <ul class="mb-0">
+                        <li>Set appropriate capacity limits to prevent overcrowding</li>
+                        <li>System will alert when capacity reaches 80% and 100%</li>
+                        <li>Leave maximum capacity empty for unlimited storage</li>
+                        <li>Choose the appropriate unit (items, mL, kg, etc.)</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="d-flex justify-content-between">
+                <a href="{{ url_for('inventory.locations') }}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left me-1"></i>Cancel
+                </a>
+                
+                <div>
+                    {% if form.data %}
+                    <button type="button" class="btn btn-danger me-2" id="deleteLocationBtn" 
+                            data-location-id="{{ form.data.id if form.data else '' }}">
+                        <i class="fas fa-trash me-1"></i>Delete
+                    </button>
+                    {% endif %}
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i>
+                        {% if form.data %}Update Location{% else %}Create Location{% endif %}
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Temperature preset selection
+    $('.temp-preset').on('click', function() {
+        const temp = $(this).data('temp');
+        $('#temperature').val(temp);
+        $('.temp-preset').removeClass('selected');
+        $(this).addClass('selected');
+    });
+    
+    // Set initial temperature preset selection
+    const currentTemp = $('#temperature').val();
+    if (currentTemp) {
+        $(`.temp-preset[data-temp="${currentTemp}"]`).addClass('selected');
+    }
+    
+    // Capacity preview functionality
+    function updateCapacityPreview() {
+        const maxCapacity = parseInt($('#maxCapacityInput').val()) || 0;
+        const currentUsage = parseInt($('#currentUsageInput').val()) || 0;
+        
+        if (maxCapacity > 0) {
+            $('#capacityPreview').show();
+            const percentage = Math.min((currentUsage / maxCapacity) * 100, 100);
+            
+            $('#capacityFill').css('width', percentage + '%');
+            $('#capacityPercentage').text(percentage.toFixed(1) + '%');
+            $('#currentValue').text(currentUsage);
+            $('#maxValue').text(maxCapacity);
+            
+            // Update color based on percentage
+            let color;
+            if (percentage >= 100) color = '#6f42c1';
+            else if (percentage >= 80) color = '#dc3545';
+            else if (percentage >= 60) color = '#ffc107';
+            else color = '#28a745';
+            
+            $('#capacityFill').css('background', color);
+        } else {
+            $('#capacityPreview').hide();
+        }
+    }
+    
+    // Update preview when values change
+    $('#maxCapacityInput').on('input', updateCapacityPreview);
+    
+    // Initialize preview
+    updateCapacityPreview();
+    
+    // Parent location path preview
+    $('#parent_id').on('change', function() {
+        const parentId = $(this).val();
+        if (parentId) {
+            $.get(`/inventory/api/locations/${parentId}`)
+                .done(function(data) {
+                    const currentName = $('#name').val() || '[New Location]';
+                    $('#locationPathPreview').text(data.full_path + ' > ' + currentName);
+                    $('#locationPathPreview').show();
+                })
+                .fail(function() {
+                    $('#locationPathPreview').hide();
+                });
+        } else {
+            $('#locationPathPreview').hide();
+        }
+    });
+    
+    // Update path preview when name changes
+    $('#name').on('input', function() {
+        const parentId = $('#parent_id').val();
+        if (parentId) {
+            $.get(`/inventory/api/locations/${parentId}`)
+                .done(function(data) {
+                    const currentName = $(this).val() || '[New Location]';
+                    $('#locationPathPreview').text(data.full_path + ' > ' + currentName);
+                });
+        }
+    });
+    
+    // Delete location functionality
+    $('#deleteLocationBtn').on('click', function() {
+        const locationId = $(this).data('location-id');
+        
+        if (confirm('Are you sure you want to delete this location? This action cannot be undone.')) {
+            $.ajax({
+                url: `/inventory/locations/${locationId}`,
+                method: 'DELETE',
+                success: function() {
+                    window.location.href = "{{ url_for('inventory.locations') }}";
+                },
+                error: function(xhr) {
+                    alert('Error deleting location: ' + xhr.responseText);
+                }
+            });
+        }
+    });
+    
+    // Form validation
+    $('form').on('submit', function(e) {
+        let isValid = true;
+        
+        // Check required fields
+        const requiredFields = ['#name'];
+        requiredFields.forEach(field => {
+            if (!$(field).val().trim()) {
+                $(field).addClass('is-invalid');
+                isValid = false;
+            } else {
+                $(field).removeClass('is-invalid');
+            }
+        });
+        
+        // Validate capacity
+        const maxCapacity = parseInt($('#maxCapacityInput').val()) || 0;
+        const currentUsage = parseInt($('#currentUsageInput').val()) || 0;
+        
+        if (maxCapacity > 0 && currentUsage > maxCapacity) {
+            alert('Current usage cannot exceed maximum capacity');
+            isValid = false;
+        }
+        
+        if (!isValid) {
+            e.preventDefault();
+        }
+    });
+    
+    // Auto-generate location name based on type and parent
+    $('#location_type, #parent_id').on('change', function() {
+        if (!$('#name').val()) {
+            const type = $('#location_type').val();
+            const parentId = $('#parent_id').val();
+            
+            if (type && parentId) {
+                $.get(`/inventory/api/locations/${parentId}`)
+                    .done(function(data) {
+                        // Count existing children of same type
+                        const suggestedName = type.charAt(0).toUpperCase() + type.slice(1) + ' 1';
+                        $('#name').val(suggestedName);
+                    });
+            } else if (type) {
+                const suggestedName = type.charAt(0).toUpperCase() + type.slice(1) + ' 1';
+                $('#name').val(suggestedName);
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

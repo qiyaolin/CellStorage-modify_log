@@ -3,16 +3,16 @@ from flask import render_template, redirect, url_for, flash, request, session
 from flask_login import login_user, logout_user, current_user, login_required
 from urllib.parse import urlparse
 
-from app import db                     # Import db from the app package (app/__init__.py)
-from app.auth import bp                # Import bp from the current auth package (app/auth/__init__.py)
-from app.forms import LoginForm, UserCreationForm, ResetPasswordForm, UserEditForm
-from app.models import User
-from app.decorators import admin_required # Import our custom decorator
+from ... import db                     # Import db from the app package (app/__init__.py)
+from . import bp                # Import bp from the current auth package (app/auth/__init__.py)
+from ...cell_storage.forms import LoginForm, UserCreationForm, ResetPasswordForm, UserEditForm
+from ...cell_storage.models import User
+from ..decorators import admin_required # Import our custom decorator
 
 @bp.route('/login', methods=['GET', 'POST'])
 def login():
     if current_user.is_authenticated:
-        return redirect(url_for('main.index')) # Assumes 'main.index' will be created later
+        return redirect(url_for('cell_storage.index')) # Assumes 'main.index' will be created later
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
@@ -23,7 +23,7 @@ def login():
         flash(f'Welcome back, {user.username}!', 'success')
         next_page = request.args.get('next')
         if not next_page or urlparse(next_page).netloc != '':
-            next_page = url_for('main.index') # Assumes 'main.index'
+            next_page = url_for('cell_storage.index') # Assumes 'main.index'
         return redirect(next_page)
     return render_template('auth/login.html', title='Sign In', form=form)
 
@@ -84,5 +84,5 @@ def reset_password():
         current_user.set_password(form.password.data)
         db.session.commit()
         flash('Password updated.', 'success')
-        return redirect(url_for('main.index'))
+        return redirect(url_for('cell_storage.index'))
     return render_template('auth/reset_password.html', title='Reset Password', form=form)

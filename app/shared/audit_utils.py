@@ -70,7 +70,7 @@ def _format_create_cryovial(parsed_details: Optional[Dict], raw_details: str, db
         batch_name = None
         if db_session and batch_id:
             try:
-                from app.models import VialBatch
+                from app.cell_storage.models import VialBatch
                 batch = db_session.query(VialBatch).filter(VialBatch.id == batch_id).first()
                 if batch:
                     batch_name = batch.name
@@ -112,7 +112,7 @@ def _format_delete_vial(parsed_details: Optional[Dict], raw_details: str, db_ses
         batch_name = None
         if db_session and batch_id:
             try:
-                from app.models import VialBatch
+                from app.cell_storage.models import VialBatch
                 batch = db_session.query(VialBatch).filter(VialBatch.id == batch_id).first()
                 if batch:
                     batch_name = batch.name
@@ -326,7 +326,7 @@ def _format_pickup_vials(parsed_details: Optional[Dict], raw_details: str, db_se
         batch_names = []
         if db_session and batch_ids:
             try:
-                from app.models import VialBatch
+                from app.cell_storage.models import VialBatch
                 batches = db_session.query(VialBatch).filter(VialBatch.id.in_(batch_ids)).all()
                 batch_names = [batch.name for batch in batches]
             except Exception:

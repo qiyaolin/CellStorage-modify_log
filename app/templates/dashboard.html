@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Lab Management System{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="jumbotron">
+                <h1 class="display-4">Lab Management System</h1>
+                <p class="lead">Comprehensive laboratory management platform for cell storage and inventory management.</p>
+                <hr class="my-4">
+                <p>Choose a module to get started with your laboratory management tasks.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Cell Storage Module -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-vial"></i> Cell Storage Management
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Manage cell lines, cryovials, storage locations, and tracking. 
+                        Keep detailed records of your cell culture inventory.
+                    </p>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <i class="fas fa-flask fa-2x text-primary mb-2"></i>
+                                <h6>Cell Lines</h6>
+                                <small class="text-muted">Manage cell line information</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <i class="fas fa-snowflake fa-2x text-info mb-2"></i>
+                                <h6>Cryovials</h6>
+                                <small class="text-muted">Track frozen cell samples</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <i class="fas fa-map-marker-alt fa-2x text-success mb-2"></i>
+                                <h6>Storage</h6>
+                                <small class="text-muted">Organize freezer locations</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <i class="fas fa-clipboard-list fa-2x text-warning mb-2"></i>
+                                <h6>Tracking</h6>
+                                <small class="text-muted">Audit logs and history</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('cell_storage.index') }}" class="btn btn-primary btn-block">
+                        <i class="fas fa-arrow-right"></i> Enter Cell Storage
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Inventory Management Module -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-success text-white">
+                    <h4 class="mb-0">
+                        <i class="fas fa-boxes"></i> Inventory Management
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">
+                        Complete laboratory inventory system similar to Quartzy. 
+                        Manage reagents, chemicals, equipment, and supplies.
+                    </p>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <i class="fas fa-cubes fa-2x text-primary mb-2"></i>
+                                <h6>Items</h6>
+                                <small class="text-muted">Track all inventory items</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <i class="fas fa-shopping-cart fa-2x text-info mb-2"></i>
+                                <h6>Orders</h6>
+                                <small class="text-muted">Purchase order management</small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <div class="text-center">
+                                <i class="fas fa-truck fa-2x text-success mb-2"></i>
+                                <h6>Suppliers</h6>
+                                <small class="text-muted">Vendor management</small>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="text-center">
+                                <i class="fas fa-bell fa-2x text-warning mb-2"></i>
+                                <h6>Alerts</h6>
+                                <small class="text-muted">Low stock notifications</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('inventory.index') }}" class="btn btn-success btn-block">
+                        <i class="fas fa-arrow-right"></i> Enter Inventory
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats Row -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <h3>Quick Overview</h3>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-vial fa-3x text-primary mb-3"></i>
+                    <h5>Cell Lines</h5>
+                    <p class="text-muted">Active cell line records</p>
+                    <a href="{{ url_for('cell_storage.list_cell_lines') }}" class="btn btn-outline-primary">View</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-snowflake fa-3x text-info mb-3"></i>
+                    <h5>Cryovials</h5>
+                    <p class="text-muted">Frozen cell samples</p>
+                    <a href="{{ url_for('cell_storage.cryovial_inventory') }}" class="btn btn-outline-info">View</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-cubes fa-3x text-success mb-3"></i>
+                    <h5>Inventory Items</h5>
+                    <p class="text-muted">Laboratory supplies</p>
+                    <a href="{{ url_for('inventory.inventory_items') }}" class="btn btn-outline-success">View</a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-shopping-cart fa-3x text-warning mb-3"></i>
+                    <h5>Active Orders</h5>
+                    <p class="text-muted">Pending purchase orders</p>
+                    <a href="{{ url_for('inventory.orders') }}" class="btn btn-outline-warning">View</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

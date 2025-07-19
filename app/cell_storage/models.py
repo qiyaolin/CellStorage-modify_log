@@ -1,7 +1,7 @@
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
-from . import db  # Import db object from app package's __init__.py
+from .. import db  # Import db object from app package's __init__.py
 import json
 
 

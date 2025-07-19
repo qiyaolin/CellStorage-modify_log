@@ -1,0 +1,849 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Management{% endblock %}
+
+{% block extra_css %}
+<link href="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/datatables.net-buttons-bs5@2.4.2/css/buttons.bootstrap5.min.css" rel="stylesheet">
+<style>
+.inventory-management {
+    padding: 20px 0;
+}
+
+.search-filter-bar {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.global-search {
+    position: relative;
+    margin-bottom: 15px;
+}
+
+.global-search input {
+    width: 100%;
+    padding: 12px 50px 12px 15px;
+    border: 2px solid #e9ecef;
+    border-radius: 6px;
+    font-size: 16px;
+    transition: border-color 0.3s;
+}
+
+.global-search input:focus {
+    border-color: #667eea;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.search-btn {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: #6c757d;
+    font-size: 18px;
+    cursor: pointer;
+}
+
+.filters {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.filters select {
+    min-width: 150px;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+}
+
+.advanced-filters {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 20px;
+    margin-top: 15px;
+}
+
+.filter-row {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.filter-row label {
+    min-width: 120px;
+    font-weight: 500;
+    color: #495057;
+}
+
+.filter-row input, .filter-row select {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    min-width: 150px;
+}
+
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.view-controls {
+    display: flex;
+    gap: 10px;
+}
+
+.view-toggle {
+    padding: 8px 16px;
+    border: 1px solid #ddd;
+    background: white;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.view-toggle.active {
+    background: #667eea;
+    color: white;
+    border-color: #667eea;
+}
+
+.bulk-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.inventory-table {
+    width: 100% !important;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.status-available {
+    background: #d4edda;
+    color: #155724;
+}
+
+.status-low-stock {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.status-expired {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.status-used-up {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
+.quantity-cell {
+    font-weight: 500;
+}
+
+.quantity-low {
+    color: #dc3545;
+}
+
+.quantity-normal {
+    color: #28a745;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 5px;
+}
+
+.btn-action {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s;
+}
+
+.btn-edit {
+    background: #ffc107;
+    color: #212529;
+}
+
+.btn-edit:hover {
+    background: #e0a800;
+}
+
+.btn-delete {
+    background: #dc3545;
+    color: white;
+}
+
+.btn-delete:hover {
+    background: #c82333;
+}
+
+.btn-adjust {
+    background: #17a2b8;
+    color: white;
+}
+
+.btn-adjust:hover {
+    background: #138496;
+}
+
+.cards-view {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+}
+
+.inventory-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.inventory-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.card-header {
+    display: flex;
+    justify-content: between;
+    align-items: start;
+    margin-bottom: 15px;
+}
+
+.card-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #495057;
+    margin: 0;
+}
+
+.card-catalog {
+    font-size: 12px;
+    color: #6c757d;
+    background: #f8f9fa;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+
+.card-details {
+    margin-bottom: 15px;
+}
+
+.card-detail {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+.card-detail-label {
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.card-detail-value {
+    color: #495057;
+}
+
+.hidden {
+    display: none !important;
+}
+
+@media (max-width: 768px) {
+    .filters {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .filters select {
+        min-width: auto;
+    }
+    
+    .toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .view-controls, .bulk-actions {
+        justify-content: center;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid inventory-management">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-boxes me-2 text-primary"></i>Inventory Management</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('inventory.index') }}">Inventory</a></li>
+                <li class="breadcrumb-item active">Items</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Search and Filter Bar -->
+    <div class="search-filter-bar">
+        <div class="global-search">
+            <input type="text" id="globalSearch" placeholder="Search by name, catalog number, CAS number, or description...">
+            <button class="search-btn" type="button">
+                <i class="fas fa-search"></i>
+            </button>
+        </div>
+        
+        <div class="filters">
+            <select id="locationFilter" data-placeholder="All Locations">
+                <option value="">All Locations</option>
+                {% for location in locations %}
+                <option value="{{ location.id }}">{{ location.full_path }}</option>
+                {% endfor %}
+            </select>
+            
+            <select id="supplierFilter" data-placeholder="All Suppliers">
+                <option value="">All Suppliers</option>
+                {% for supplier in suppliers %}
+                <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                {% endfor %}
+            </select>
+            
+            <select id="typeFilter" data-placeholder="All Types">
+                <option value="">All Types</option>
+                {% for type in inventory_types %}
+                <option value="{{ type.id }}">{{ type.name }}</option>
+                {% endfor %}
+            </select>
+            
+            <select id="statusFilter">
+                <option value="">All Status</option>
+                <option value="Available">Available</option>
+                <option value="Low Stock">Low Stock</option>
+                <option value="Expired">Expired</option>
+                <option value="Used Up">Used Up</option>
+            </select>
+            
+            <button class="btn btn-outline-secondary" data-bs-toggle="collapse" data-bs-target="#advancedFilters">
+                <i class="fas fa-filter me-1"></i>Advanced Filters
+            </button>
+        </div>
+        
+        <!-- Advanced Filters Panel -->
+        <div class="collapse advanced-filters" id="advancedFilters">
+            <div class="filter-row">
+                <label>Expiration Date:</label>
+                <input type="date" id="expiryFrom" placeholder="From">
+                <input type="date" id="expiryTo" placeholder="To">
+            </div>
+            
+            <div class="filter-row">
+                <label>Quantity Range:</label>
+                <input type="number" id="quantityMin" placeholder="Min Quantity" step="0.1">
+                <input type="number" id="quantityMax" placeholder="Max Quantity" step="0.1">
+            </div>
+            
+            <div class="filter-row">
+                <label>Responsible Person:</label>
+                <select id="responsibleFilter">
+                    <option value="">Any Person</option>
+                    {% for user in users %}
+                    <option value="{{ user.id }}">{{ user.username }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="filter-actions">
+                <button class="btn btn-primary" id="applyFilters">Apply Filters</button>
+                <button class="btn btn-secondary" id="clearFilters">Clear All</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+        <div class="view-controls">
+            <button class="view-toggle active" data-view="table">
+                <i class="fas fa-table me-1"></i>Table View
+            </button>
+            <button class="view-toggle" data-view="cards">
+                <i class="fas fa-th-large me-1"></i>Card View
+            </button>
+        </div>
+        
+        <div class="bulk-actions">
+            <button class="btn btn-outline-success" id="exportBtn">
+                <i class="fas fa-download me-1"></i>Export
+            </button>
+            <button class="btn btn-outline-info" id="importBtn">
+                <i class="fas fa-upload me-1"></i>Import
+            </button>
+            <a href="{{ url_for('inventory.create_inventory_item') }}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>Add Item
+            </a>
+        </div>
+    </div>
+
+    <!-- Table View -->
+    <div class="table-view" id="tableView">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover inventory-table" id="inventoryTable">
+                <thead class="table-dark">
+                    <tr>
+                        <th><input type="checkbox" id="selectAll"></th>
+                        <th>Name</th>
+                        <th>Catalog #</th>
+                        <th>CAS #</th>
+                        <th>Supplier</th>
+                        <th>Current Stock</th>
+                        <th>Min Stock</th>
+                        <th>Location</th>
+                        <th>Expiry Date</th>
+                        <th>Responsible</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <!-- Data will be loaded via DataTables AJAX -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Card View -->
+    <div class="cards-view hidden" id="cardsView">
+        <div class="inventory-cards" id="inventoryCards">
+            <!-- Cards will be loaded dynamically -->
+        </div>
+    </div>
+</div>
+
+<!-- Quick Edit Modal -->
+<div class="modal fade" id="quickEditModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Quick Edit Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickEditForm">
+                    <input type="hidden" id="editItemId">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Current Quantity</label>
+                            <input type="number" class="form-control" id="editQuantity" step="0.1">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Minimum Quantity</label>
+                            <input type="number" class="form-control" id="editMinQuantity" step="0.1">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Location</label>
+                        <select class="form-select" id="editLocation">
+                            <option value="">Select Location</option>
+                            {% for location in locations %}
+                            <option value="{{ location.id }}">{{ location.full_path }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Expiration Date</label>
+                        <input type="date" class="form-control" id="editExpiryDate">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" id="editNotes" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveQuickEdit">Save Changes</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quantity Adjustment Modal -->
+<div class="modal fade" id="adjustQuantityModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Adjust Quantity</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <strong id="adjustItemName"></strong><br>
+                    Current Quantity: <span id="adjustCurrentQuantity"></span> <span id="adjustUnit"></span>
+                </div>
+                <form id="adjustQuantityForm">
+                    <input type="hidden" id="adjustItemId">
+                    <div class="mb-3">
+                        <label class="form-label">Adjustment Type</label>
+                        <select class="form-select" id="adjustmentType">
+                            <option value="add">Add to Stock</option>
+                            <option value="remove">Remove from Stock</option>
+                            <option value="set">Set Exact Amount</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quantity</label>
+                        <input type="number" class="form-control" id="adjustQuantityValue" step="0.1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Reason</label>
+                        <select class="form-select" id="adjustReason">
+                            <option value="Received">Received New Stock</option>
+                            <option value="Used">Used in Experiment</option>
+                            <option value="Expired">Expired/Disposed</option>
+                            <option value="Lost">Lost/Damaged</option>
+                            <option value="Correction">Inventory Correction</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Notes</label>
+                        <textarea class="form-control" id="adjustNotes" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveAdjustment">Save Adjustment</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/datatables.net@1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/datatables.net-bs5@1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/datatables.net-buttons@2.4.2/js/dataTables.buttons.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/datatables.net-buttons-bs5@2.4.2/js/buttons.bootstrap5.min.js"></script>
+
+<script>
+$(document).ready(function() {
+    let inventoryTable;
+    let currentView = 'table';
+    
+    // Initialize DataTable
+    function initializeDataTable() {
+        inventoryTable = $('#inventoryTable').DataTable({
+            processing: true,
+            serverSide: true,
+            ajax: {
+                url: '{{ url_for("inventory.api_search") }}',
+                type: 'GET',
+                data: function(d) {
+                    // Add custom filter parameters
+                    d.q = $('#globalSearch').val();
+                    d.location = $('#locationFilter').val();
+                    d.supplier = $('#supplierFilter').val();
+                    d.type = $('#typeFilter').val();
+                    d.status = $('#statusFilter').val();
+                    d.expiry_from = $('#expiryFrom').val();
+                    d.expiry_to = $('#expiryTo').val();
+                    d.quantity_min = $('#quantityMin').val();
+                    d.quantity_max = $('#quantityMax').val();
+                    d.responsible = $('#responsibleFilter').val();
+                }
+            },
+            columns: [
+                { 
+                    data: 'id',
+                    orderable: false,
+                    render: function(data) {
+                        return `<input type="checkbox" class="item-checkbox" value="${data}">`;
+                    }
+                },
+                { 
+                    data: 'name',
+                    render: function(data, type, row) {
+                        return `<strong>${data}</strong>`;
+                    }
+                },
+                { data: 'catalog_number' },
+                { data: 'cas_number' },
+                { data: 'supplier_name' },
+                { 
+                    data: 'current_quantity',
+                    render: function(data, type, row) {
+                        const className = row.is_low_stock ? 'quantity-low' : 'quantity-normal';
+                        return `<span class="quantity-cell ${className}">${data} ${row.unit || ''}</span>`;
+                    }
+                },
+                { 
+                    data: 'minimum_quantity',
+                    render: function(data, type, row) {
+                        return `${data} ${row.unit || ''}`;
+                    }
+                },
+                { data: 'location_path' },
+                { 
+                    data: 'expiration_date',
+                    render: function(data) {
+                        if (!data) return '-';
+                        const date = new Date(data);
+                        const today = new Date();
+                        const diffDays = Math.ceil((date - today) / (1000 * 60 * 60 * 24));
+                        
+                        let className = '';
+                        if (diffDays < 0) className = 'text-danger';
+                        else if (diffDays <= 30) className = 'text-warning';
+                        
+                        return `<span class="${className}">${date.toLocaleDateString()}</span>`;
+                    }
+                },
+                { data: 'responsible_person' },
+                { 
+                    data: 'status',
+                    render: function(data, type, row) {
+                        const statusClass = data.toLowerCase().replace(' ', '-');
+                        return `<span class="status-badge status-${statusClass}">${data}</span>`;
+                    }
+                },
+                {
+                    data: 'id',
+                    orderable: false,
+                    render: function(data, type, row) {
+                        return `
+                            <div class="action-buttons">
+                                <button class="btn-action btn-edit" onclick="quickEdit(${data})" title="Quick Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn-action btn-adjust" onclick="adjustQuantity(${data})" title="Adjust Quantity">
+                                    <i class="fas fa-plus-minus"></i>
+                                </button>
+                                <a href="/inventory/items/${data}" class="btn-action" style="background: #6f42c1; color: white;" title="View Details">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                            </div>
+                        `;
+                    }
+                }
+            ],
+            pageLength: 25,
+            responsive: true,
+            order: [[1, 'asc']],
+            language: {
+                processing: 'Loading inventory data...',
+                emptyTable: 'No inventory items found',
+                zeroRecords: 'No matching items found'
+            }
+        });
+    }
+    
+    // Initialize the table
+    initializeDataTable();
+    
+    // Search and filter events
+    $('#globalSearch').on('keyup', debounce(function() {
+        inventoryTable.ajax.reload();
+    }, 300));
+    
+    $('.filters select').on('change', function() {
+        inventoryTable.ajax.reload();
+    });
+    
+    $('#applyFilters').on('click', function() {
+        inventoryTable.ajax.reload();
+    });
+    
+    $('#clearFilters').on('click', function() {
+        $('.filters select, .advanced-filters input').val('');
+        inventoryTable.ajax.reload();
+    });
+    
+    // View toggle
+    $('.view-toggle').on('click', function() {
+        const view = $(this).data('view');
+        $('.view-toggle').removeClass('active');
+        $(this).addClass('active');
+        
+        if (view === 'table') {
+            $('#tableView').removeClass('hidden');
+            $('#cardsView').addClass('hidden');
+            currentView = 'table';
+        } else {
+            $('#tableView').addClass('hidden');
+            $('#cardsView').removeClass('hidden');
+            currentView = 'cards';
+            loadCardsView();
+        }
+    });
+    
+    // Load cards view
+    function loadCardsView() {
+        // Implementation for card view loading
+        // This would fetch data and render cards
+    }
+    
+    // Select all checkbox
+    $('#selectAll').on('change', function() {
+        $('.item-checkbox').prop('checked', this.checked);
+    });
+    
+    // Export functionality
+    $('#exportBtn').on('click', function() {
+        window.location.href = '{{ url_for("inventory.export_items") }}';
+    });
+    
+    // Quick edit functionality
+    window.quickEdit = function(itemId) {
+        // Load item data and show modal
+        $.get(`/inventory/api/items/${itemId}`)
+            .done(function(data) {
+                $('#editItemId').val(data.id);
+                $('#editQuantity').val(data.current_quantity);
+                $('#editMinQuantity').val(data.minimum_quantity);
+                $('#editLocation').val(data.location_id);
+                $('#editExpiryDate').val(data.expiration_date);
+                $('#quickEditModal').modal('show');
+            })
+            .fail(function() {
+                alert('Error loading item data');
+            });
+    };
+    
+    // Save quick edit
+    $('#saveQuickEdit').on('click', function() {
+        const itemId = $('#editItemId').val();
+        const data = {
+            current_quantity: $('#editQuantity').val(),
+            minimum_quantity: $('#editMinQuantity').val(),
+            location_id: $('#editLocation').val(),
+            expiration_date: $('#editExpiryDate').val(),
+            notes: $('#editNotes').val()
+        };
+        
+        $.ajax({
+            url: `/inventory/api/items/${itemId}`,
+            method: 'PUT',
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            success: function() {
+                $('#quickEditModal').modal('hide');
+                inventoryTable.ajax.reload();
+                showAlert('Item updated successfully', 'success');
+            },
+            error: function() {
+                showAlert('Error updating item', 'error');
+            }
+        });
+    });
+    
+    // Quantity adjustment
+    window.adjustQuantity = function(itemId) {
+        $.get(`/inventory/api/items/${itemId}`)
+            .done(function(data) {
+                $('#adjustItemId').val(data.id);
+                $('#adjustItemName').text(data.name);
+                $('#adjustCurrentQuantity').text(data.current_quantity);
+                $('#adjustUnit').text(data.unit || '');
+                $('#adjustQuantityModal').modal('show');
+            })
+            .fail(function() {
+                alert('Error loading item data');
+            });
+    };
+    
+    // Save quantity adjustment
+    $('#saveAdjustment').on('click', function() {
+        const itemId = $('#adjustItemId').val();
+        const type = $('#adjustmentType').val();
+        const quantity = parseFloat($('#adjustQuantityValue').val());
+        const reason = $('#adjustReason').val();
+        const notes = $('#adjustNotes').val();
+        
+        if (!quantity || quantity <= 0) {
+            alert('Please enter a valid quantity');
+            return;
+        }
+        
+        const data = {
+            adjustment_type: type,
+            quantity: quantity,
+            reason: reason,
+            notes: notes
+        };
+        
+        $.ajax({
+            url: `/inventory/api/items/${itemId}/adjust`,
+            method: 'POST',
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            success: function() {
+                $('#adjustQuantityModal').modal('hide');
+                inventoryTable.ajax.reload();
+                showAlert('Quantity adjusted successfully', 'success');
+            },
+            error: function() {
+                showAlert('Error adjusting quantity', 'error');
+            }
+        });
+    });
+    
+    // Utility functions
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+    
+    function showAlert(message, type) {
+        const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+        const alert = $(`
+            <div class="alert ${alertClass} alert-dismissible fade show" role="alert">
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        `);
+        
+        $('.inventory-management').prepend(alert);
+        
+        setTimeout(() => {
+            alert.alert('close');
+        }, 5000);
+    }
+});
+</script>
+{% endblock %}

@@ -22,7 +22,7 @@ from wtforms.validators import (
     NumberRange,
 )
 from flask_wtf import FlaskForm
-from app.models import User, CellLine, Box
+from .models import User, CellLine, Box
 from flask_wtf.file import FileField, FileAllowed
 
 

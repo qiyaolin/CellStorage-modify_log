@@ -223,13 +223,13 @@
         <!-- Confirmation Form -->
         <div class="card">
           <div class="card-body text-center">
-            <form method="POST" action="{{ url_for('main.add_cryovial') }}">
+            <form method="POST" action="{{ url_for('cell_storage.add_cryovial') }}">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <input type="hidden" name="confirm_placement" value="yes">
               <button type="submit" class="btn btn-success btn-lg me-3">
                 <i class="bi bi-check-circle"></i> Confirm and Save These {{ quantity_to_add }} Vial(s)
               </button>
-              <a href="{{ url_for('main.add_cryovial') }}" class="btn btn-secondary btn-lg">
+              <a href="{{ url_for('cell_storage.add_cryovial') }}" class="btn btn-secondary btn-lg">
                 <i class="bi bi-x-circle"></i> Cancel and Modify Details
               </a>
             </form>
@@ -244,7 +244,7 @@
             <li>All boxes are full</li>
             <li>System error occurred during placement planning</li>
           </ul>
-          <a href="{{ url_for('main.add_cryovial') }}" class="btn btn-primary">
+          <a href="{{ url_for('cell_storage.add_cryovial') }}" class="btn btn-primary">
             <i class="bi bi-arrow-left"></i> Go Back and Try Again
           </a>
         </div>

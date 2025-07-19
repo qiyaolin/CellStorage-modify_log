@@ -1,0 +1,629 @@
+{% extends "base.html" %}
+
+{% block title %}Permission Management{% endblock %}
+
+{% block extra_css %}
+<style>
+.permissions-management {
+    padding: 20px 0;
+}
+
+.user-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+    transition: all 0.3s;
+}
+
+.user-card:hover {
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.user-avatar {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    font-size: 18px;
+}
+
+.user-details h5 {
+    margin: 0;
+    color: #495057;
+}
+
+.user-details small {
+    color: #6c757d;
+}
+
+.permission-groups {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+}
+
+.group-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.group-viewer {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.group-user {
+    background: #f3e5f5;
+    color: #7b1fa2;
+}
+
+.group-manager {
+    background: #fff3e0;
+    color: #f57c00;
+}
+
+.group-admin {
+    background: #ffebee;
+    color: #d32f2f;
+}
+
+.group-badge:hover {
+    transform: scale(1.05);
+}
+
+.permissions-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 15px;
+    margin-top: 15px;
+}
+
+.permission-category {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 15px;
+}
+
+.category-title {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.category-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+}
+
+.permission-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #e9ecef;
+}
+
+.permission-item:last-child {
+    border-bottom: none;
+}
+
+.permission-toggle {
+    position: relative;
+    width: 40px;
+    height: 20px;
+    background: #ddd;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.permission-toggle.active {
+    background: #28a745;
+}
+
+.permission-toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 16px;
+    height: 16px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+}
+
+.permission-toggle.active::after {
+    transform: translateX(20px);
+}
+
+.permission-search {
+    margin-bottom: 20px;
+}
+
+.permission-search input {
+    width: 100%;
+    padding: 12px 15px;
+    border: 2px solid #e9ecef;
+    border-radius: 8px;
+    font-size: 16px;
+}
+
+.permission-search input:focus {
+    border-color: #667eea;
+    outline: none;
+}
+
+.bulk-actions {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+}
+
+.permission-summary {
+    background: #e3f2fd;
+    padding: 15px;
+    border-radius: 6px;
+    margin-top: 15px;
+}
+
+.expiry-date {
+    font-size: 12px;
+    color: #6c757d;
+    margin-top: 5px;
+}
+
+.expiry-warning {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+@media (max-width: 768px) {
+    .permissions-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .permission-groups {
+        justify-content: center;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid permissions-management">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-user-shield me-2 text-primary"></i>Permission Management</h1>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('inventory.index') }}">Dashboard</a></li>
+                <li class="breadcrumb-item active">Permissions</li>
+            </ol>
+        </nav>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="permission-search">
+        <input type="text" id="userSearch" placeholder="Search users by name or email...">
+    </div>
+
+    <!-- Bulk Actions -->
+    <div class="bulk-actions">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <strong>Bulk Actions:</strong>
+                <button class="btn btn-sm btn-outline-primary ms-2" onclick="assignGroupToSelected('viewer')">
+                    Make Viewers
+                </button>
+                <button class="btn btn-sm btn-outline-info ms-1" onclick="assignGroupToSelected('user')">
+                    Make Users
+                </button>
+                <button class="btn btn-sm btn-outline-warning ms-1" onclick="assignGroupToSelected('manager')">
+                    Make Managers
+                </button>
+            </div>
+            <div>
+                <button class="btn btn-sm btn-success" onclick="showAddUserModal()">
+                    <i class="fas fa-plus me-1"></i>Add User
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Users List -->
+    <div id="usersList">
+        {% for user in users %}
+        <div class="user-card" data-user-id="{{ user.id }}">
+            <div class="d-flex justify-content-between align-items-start">
+                <div class="user-info">
+                    <input type="checkbox" class="user-select me-2" value="{{ user.id }}">
+                    <div class="user-avatar">
+                        {{ user.username[0].upper() }}
+                    </div>
+                    <div class="user-details">
+                        <h5>{{ user.username }}</h5>
+                        <small>{{ user.email or 'No email' }}</small>
+                        {% if user.last_seen %}
+                        <small class="d-block">Last seen: {{ user.last_seen.strftime('%Y-%m-%d %H:%M') }}</small>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <button class="btn btn-sm btn-outline-primary" onclick="editUserPermissions({{ user.id }})">
+                    <i class="fas fa-edit me-1"></i>Edit Permissions
+                </button>
+            </div>
+            
+            <!-- Permission Groups -->
+            <div class="permission-groups">
+                <span class="group-badge group-viewer" onclick="assignGroup({{ user.id }}, 'viewer')">
+                    Viewer
+                </span>
+                <span class="group-badge group-user" onclick="assignGroup({{ user.id }}, 'user')">
+                    User
+                </span>
+                <span class="group-badge group-manager" onclick="assignGroup({{ user.id }}, 'manager')">
+                    Manager
+                </span>
+                <span class="group-badge group-admin" onclick="assignGroup({{ user.id }}, 'admin')">
+                    Admin
+                </span>
+            </div>
+            
+            <!-- Current Permissions Summary -->
+            <div class="permission-summary">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>Active Permissions: </strong>
+                        <span id="permissionCount{{ user.id }}">{{ user_permissions[user.id]|length }}</span>
+                    </div>
+                    <button class="btn btn-sm btn-link" onclick="toggleUserPermissions({{ user.id }})">
+                        <i class="fas fa-chevron-down" id="chevron{{ user.id }}"></i>
+                    </button>
+                </div>
+                
+                <!-- Detailed Permissions (Hidden by default) -->
+                <div class="permissions-detail" id="permissions{{ user.id }}" style="display: none;">
+                    <div class="permissions-grid">
+                        <!-- Inventory Permissions -->
+                        <div class="permission-category">
+                            <div class="category-title">
+                                <div class="category-icon" style="background: #e3f2fd; color: #1976d2;">
+                                    <i class="fas fa-boxes"></i>
+                                </div>
+                                Inventory
+                            </div>
+                            {% for perm in inventory_permissions %}
+                            <div class="permission-item">
+                                <span>{{ permission_descriptions[perm] }}</span>
+                                <div class="permission-toggle" 
+                                     data-user="{{ user.id }}" 
+                                     data-permission="{{ perm }}"
+                                     onclick="togglePermission(this)">
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Location Permissions -->
+                        <div class="permission-category">
+                            <div class="category-title">
+                                <div class="category-icon" style="background: #f3e5f5; color: #7b1fa2;">
+                                    <i class="fas fa-map-marker-alt"></i>
+                                </div>
+                                Locations
+                            </div>
+                            {% for perm in location_permissions %}
+                            <div class="permission-item">
+                                <span>{{ permission_descriptions[perm] }}</span>
+                                <div class="permission-toggle" 
+                                     data-user="{{ user.id }}" 
+                                     data-permission="{{ perm }}"
+                                     onclick="togglePermission(this)">
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Supplier Permissions -->
+                        <div class="permission-category">
+                            <div class="category-title">
+                                <div class="category-icon" style="background: #fff3e0; color: #f57c00;">
+                                    <i class="fas fa-truck"></i>
+                                </div>
+                                Suppliers
+                            </div>
+                            {% for perm in supplier_permissions %}
+                            <div class="permission-item">
+                                <span>{{ permission_descriptions[perm] }}</span>
+                                <div class="permission-toggle" 
+                                     data-user="{{ user.id }}" 
+                                     data-permission="{{ perm }}"
+                                     onclick="togglePermission(this)">
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <!-- Admin Permissions -->
+                        <div class="permission-category">
+                            <div class="category-title">
+                                <div class="category-icon" style="background: #ffebee; color: #d32f2f;">
+                                    <i class="fas fa-cog"></i>
+                                </div>
+                                Administration
+                            </div>
+                            {% for perm in admin_permissions %}
+                            <div class="permission-item">
+                                <span>{{ permission_descriptions[perm] }}</span>
+                                <div class="permission-toggle" 
+                                     data-user="{{ user.id }}" 
+                                     data-permission="{{ perm }}"
+                                     onclick="togglePermission(this)">
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Add User Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New User</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addUserForm">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input type="text" class="form-control" id="newUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" id="newEmail">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input type="password" class="form-control" id="newPassword" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Initial Permission Group</label>
+                        <select class="form-select" id="initialGroup">
+                            <option value="viewer">Viewer</option>
+                            <option value="user" selected>User</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="saveNewUser()">Create User</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    loadUserPermissions();
+    
+    // Search functionality
+    $('#userSearch').on('input', function() {
+        const searchTerm = $(this).val().toLowerCase();
+        $('.user-card').each(function() {
+            const userName = $(this).find('.user-details h5').text().toLowerCase();
+            const userEmail = $(this).find('.user-details small').text().toLowerCase();
+            
+            if (userName.includes(searchTerm) || userEmail.includes(searchTerm)) {
+                $(this).show();
+            } else {
+                $(this).hide();
+            }
+        });
+    });
+});
+
+function loadUserPermissions() {
+    $('.user-card').each(function() {
+        const userId = $(this).data('user-id');
+        loadPermissionsForUser(userId);
+    });
+}
+
+function loadPermissionsForUser(userId) {
+    $.get(`/admin/api/users/${userId}/permissions`)
+        .done(function(data) {
+            // Update permission toggles
+            $(`.permission-toggle[data-user="${userId}"]`).each(function() {
+                const permission = $(this).data('permission');
+                if (data.permissions.includes(permission)) {
+                    $(this).addClass('active');
+                } else {
+                    $(this).removeClass('active');
+                }
+            });
+            
+            // Update permission count
+            $(`#permissionCount${userId}`).text(data.permissions.length);
+        })
+        .fail(function() {
+            console.error('Failed to load permissions for user:', userId);
+        });
+}
+
+function togglePermission(element) {
+    const $toggle = $(element);
+    const userId = $toggle.data('user');
+    const permission = $toggle.data('permission');
+    const isActive = $toggle.hasClass('active');
+    
+    const action = isActive ? 'revoke' : 'grant';
+    
+    $.ajax({
+        url: `/admin/api/users/${userId}/permissions/${permission}`,
+        method: isActive ? 'DELETE' : 'POST',
+        success: function() {
+            if (isActive) {
+                $toggle.removeClass('active');
+            } else {
+                $toggle.addClass('active');
+            }
+            
+            // Update permission count
+            loadPermissionsForUser(userId);
+            showAlert(`Permission ${action}d successfully`, 'success');
+        },
+        error: function() {
+            showAlert(`Failed to ${action} permission`, 'error');
+        }
+    });
+}
+
+function assignGroup(userId, groupName) {
+    if (confirm(`Assign ${groupName} permissions to this user?`)) {
+        $.ajax({
+            url: `/admin/api/users/${userId}/permission-groups/${groupName}`,
+            method: 'POST',
+            success: function() {
+                loadPermissionsForUser(userId);
+                showAlert(`${groupName} permissions assigned successfully`, 'success');
+            },
+            error: function() {
+                showAlert('Failed to assign permission group', 'error');
+            }
+        });
+    }
+}
+
+function assignGroupToSelected(groupName) {
+    const selectedUsers = $('.user-select:checked').map(function() {
+        return $(this).val();
+    }).get();
+    
+    if (selectedUsers.length === 0) {
+        alert('Please select at least one user');
+        return;
+    }
+    
+    if (confirm(`Assign ${groupName} permissions to ${selectedUsers.length} user(s)?`)) {
+        Promise.all(selectedUsers.map(userId => 
+            $.ajax({
+                url: `/admin/api/users/${userId}/permission-groups/${groupName}`,
+                method: 'POST'
+            })
+        )).then(() => {
+            loadUserPermissions();
+            showAlert(`${groupName} permissions assigned to ${selectedUsers.length} user(s)`, 'success');
+            $('.user-select').prop('checked', false);
+        }).catch(() => {
+            showAlert('Failed to assign permissions to some users', 'error');
+        });
+    }
+}
+
+function toggleUserPermissions(userId) {
+    const $permissions = $(`#permissions${userId}`);
+    const $chevron = $(`#chevron${userId}`);
+    
+    if ($permissions.is(':visible')) {
+        $permissions.slideUp();
+        $chevron.removeClass('fa-chevron-up').addClass('fa-chevron-down');
+    } else {
+        $permissions.slideDown();
+        $chevron.removeClass('fa-chevron-down').addClass('fa-chevron-up');
+    }
+}
+
+function editUserPermissions(userId) {
+    // Navigate to detailed permission editing page
+    window.location.href = `/admin/users/${userId}/permissions`;
+}
+
+function showAddUserModal() {
+    $('#addUserModal').modal('show');
+}
+
+function saveNewUser() {
+    const userData = {
+        username: $('#newUsername').val(),
+        email: $('#newEmail').val(),
+        password: $('#newPassword').val(),
+        permission_group: $('#initialGroup').val()
+    };
+    
+    $.ajax({
+        url: '/admin/api/users',
+        method: 'POST',
+        data: JSON.stringify(userData),
+        contentType: 'application/json',
+        success: function() {
+            $('#addUserModal').modal('hide');
+            showAlert('User created successfully', 'success');
+            setTimeout(() => location.reload(), 1500);
+        },
+        error: function(xhr) {
+            showAlert('Failed to create user: ' + xhr.responseText, 'error');
+        }
+    });
+}
+
+function showAlert(message, type) {
+    const alertClass = type === 'success' ? 'alert-success' : 'alert-danger';
+    const alert = $(`
+        <div class="alert ${alertClass} alert-dismissible fade show position-fixed" 
+             style="top: 20px; right: 20px; z-index: 9999;">
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+    `);
+    
+    $('body').append(alert);
+    
+    setTimeout(() => {
+        alert.alert('close');
+    }, 5000);
+}
+</script>
+{% endblock %}

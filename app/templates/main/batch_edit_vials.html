@@ -7,7 +7,7 @@
       <div class="card-body">
         <h2 class="card-title text-center mb-4" style="color: #212529;">Batch Edit Vials</h2>
         <p class="text-center mb-4" style="color: #495057;">Enter a list of Vial ID Tags (one per line) to update their status and add notes in bulk.</p>
-        <form method="POST" action="{{ url_for('main.batch_edit_vials') }}">
+        <form method="POST" action="{{ url_for('cell_storage.batch_edit_vials') }}">
           {{ form.hidden_tag() }}
           <div class="form-floating mb-3">
             {{ form.vial_tags(class="form-control" + (" is-invalid" if form.vial_tags.errors else ""), rows=6, placeholder="Vial ID Tags", style="color: #212529;") }}

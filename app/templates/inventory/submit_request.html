@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Submit Purchase Request{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mt-4">Submit Purchase Request</h1>
+    <form id="request-form">
+        <div id="cart-items"></div>
+        <button type="submit" class="btn btn-primary">Submit Request</button>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    function loadCart() {
+        $.get('{{ url_for("inventory.shopping_cart_api") }}').done(function(data) {
+            const cartItems = $('#cart-items');
+            cartItems.empty();
+            if (data.length === 0) {
+                cartItems.html('<p>Your shopping cart is empty. Add items to your cart to create a purchase request.</p>');
+                $('#request-form button').hide();
+                return;
+            }
+            const table = $('<table class="table"><thead><tr><th>Item</th><th>Supplier</th><th>Quantity</th><th>Price</th></tr></thead><tbody></tbody></table>');
+            const tbody = table.find('tbody');
+            data.forEach(function(item) {
+                const row = $('<tr>');
+                row.append(`<td>${item.item_name} (${item.catalog_number || 'N/A'})</td>`);
+                row.append(`<td>${item.supplier_name || 'N/A'}</td>`);
+                row.append(`<td>${item.quantity} ${item.unit || ''}</td>`);
+                row.append(`<td>${item.estimated_price || 'N/A'}</td>`);
+                tbody.append(row);
+            });
+            cartItems.append(table);
+        });
+    }
+
+    $('#request-form').on('submit', function(e) {
+        e.preventDefault();
+        $.ajax({
+            url: '{{ url_for("inventory.api_submit_request") }}',
+            method: 'POST',
+            success: function() {
+                window.location.href = '{{ url_for("inventory.orders") }}';
+            }
+        });
+    });
+
+    loadCart();
+});
+</script>
+{% endblock %}

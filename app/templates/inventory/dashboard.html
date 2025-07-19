@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Management - Lab Management System{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="fas fa-boxes"></i> Inventory Management Dashboard
+            </h1>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">Total Items</h5>
+                            <h2>{{ total_items }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-cubes fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('inventory.inventory_items') }}" class="text-white">
+                        View All <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">Low Stock</h5>
+                            <h2>{{ low_stock_items }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-exclamation-triangle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('inventory.inventory_items', low_stock=1) }}" class="text-white">
+                        View Items <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">Expired</h5>
+                            <h2>{{ expired_items }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-times-circle fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('inventory.inventory_items', expired=1) }}" class="text-white">
+                        View Items <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h5 class="card-title">Pending Orders</h5>
+                            <h2>{{ pending_orders }}</h2>
+                        </div>
+                        <div class="align-self-center">
+                            <i class="fas fa-shopping-cart fa-2x"></i>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('inventory.orders', status='Submitted') }}" class="text-white">
+                        View Orders <i class="fas fa-arrow-right"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-2">
+                            <a href="{{ url_for('inventory.create_inventory_item') }}" class="btn btn-primary btn-block">
+                                <i class="fas fa-plus"></i><br>Add Item
+                            </a>
+                        </div>
+                        <div class="col-md-2">
+                            <a href="{{ url_for('inventory.create_order') }}" class="btn btn-success btn-block">
+                                <i class="fas fa-shopping-cart"></i><br>New Order
+                            </a>
+                        </div>
+                        <div class="col-md-2">
+                            <a href="{{ url_for('inventory.inventory_types') }}" class="btn btn-info btn-block">
+                                <i class="fas fa-tags"></i><br>Manage Types
+                            </a>
+                        </div>
+                        <div class="col-md-2">
+                            <a href="{{ url_for('inventory.suppliers') }}" class="btn btn-warning btn-block">
+                                <i class="fas fa-truck"></i><br>Suppliers
+                            </a>
+                        </div>
+                        <div class="col-md-2">
+                            <a href="{{ url_for('inventory.locations') }}" class="btn btn-secondary btn-block">
+                                <i class="fas fa-map-marker-alt"></i><br>Locations
+                            </a>
+                        </div>
+                        <div class="col-md-2">
+                            <a href="{{ url_for('inventory.inventory_items') }}" class="btn btn-dark btn-block">
+                                <i class="fas fa-search"></i><br>Search Items
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Recent Activity -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Recent Usage Activity</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_usage %}
+                        <div class="list-group list-group-flush">
+                            {% for log in recent_usage %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">{{ log.item_info.name }}</h6>
+                                    <small>{{ log.timestamp.strftime('%m/%d %H:%M') }}</small>
+                                </div>
+                                <p class="mb-1">
+                                    {% if log.quantity_change > 0 %}
+                                        <span class="text-success">+{{ log.quantity_change }}</span>
+                                    {% else %}
+                                        <span class="text-danger">{{ log.quantity_change }}</span>
+                                    {% endif %}
+                                    {{ log.item_info.unit }}
+                                </p>
+                                <small>{{ log.reason }}</small>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No recent activity</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Orders -->
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Recent Orders</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_orders %}
+                        <div class="list-group list-group-flush">
+                            {% for order in recent_orders %}
+                            <div class="list-group-item">
+                                <div class="d-flex w-100 justify-content-between">
+                                    <h6 class="mb-1">
+                                        <a href="{{ url_for('inventory.order_detail', id=order.id) }}">
+                                            {{ order.order_number }}
+                                        </a>
+                                    </h6>
+                                    <small>{{ order.requested_date.strftime('%m/%d') }}</small>
+                                </div>
+                                <p class="mb-1">
+                                    <span class="badge badge-{{ 'success' if order.status == 'Approved' else 'warning' if order.status == 'Submitted' else 'secondary' }}">
+                                        {{ order.status }}
+                                    </span>
+                                    {% if order.supplier_info %}
+                                        - {{ order.supplier_info.name }}
+                                    {% endif %}
+                                </p>
+                                <small>{{ order.justification[:50] }}...</small>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-muted">No recent orders</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Alerts -->
+    {% if active_alerts %}
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-bell"></i> Active Alerts</h5>
+                </div>
+                <div class="card-body">
+                    {% for alert in active_alerts %}
+                    <div class="alert alert-{{ 'danger' if alert.severity == 'high' else 'warning' if alert.severity == 'medium' else 'info' }} alert-dismissible" role="alert">
+                        <strong>{{ alert.title }}</strong>
+                        <p class="mb-0">{{ alert.message }}</p>
+                        <button type="button" class="close" onclick="acknowledgeAlert({{ alert.id }})">
+                            <span>&times;</span>
+                        </button>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+function acknowledgeAlert(alertId) {
+    fetch(`/inventory/api/alerts/acknowledge/${alertId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name=csrf-token]').getAttribute('content')
+        }
+    }).then(() => {
+        location.reload();
+    });
+}
+</script>
+{% endblock %}

@@ -3,13 +3,13 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>CryoVial Inventory</h1>
-    <a href="{{ url_for('main.add_cryovial') }}" class="btn btn-primary">Add New CryoVial</a>
+    <a href="{{ url_for('cell_storage.add_cryovial') }}" class="btn btn-primary">Add New CryoVial</a>
 </div>
 
 {% if current_user.is_admin %}
 <div class="card bg-light border-secondary mb-4">
     <div class="card-body">
-        <form method="post" action="{{ url_for('main.update_batch_counter') }}" class="d-flex align-items-center">
+        <form method="post" action="{{ url_for('cell_storage.update_batch_counter') }}" class="d-flex align-items-center">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
             <label for="batch_counter_input" class="form-label me-2 mb-0">Next Batch ID:</label>
             <input type="number" id="batch_counter_input" name="batch_counter" value="{{ batch_counter }}" class="form-control me-2" style="width: 120px;">
@@ -34,7 +34,7 @@
     <div class="tab-pane fade show active" id="search" role="tabpanel" aria-labelledby="search-tab">
         <div class="card border-top-0 rounded-0 rounded-bottom">
             <div class="card-body">
-                <form method="get" action="{{ url_for('main.cryovial_inventory') }}" class="row g-3 align-items-center">
+                <form method="get" action="{{ url_for('cell_storage.cryovial_inventory') }}" class="row g-3 align-items-center">
                     <div class="row g-2">
                       <div class="col-md">
                         <div class="form-floating">
@@ -77,7 +77,7 @@
                       </div>
                       <div class="col-auto d-flex align-items-end">
                         <button type="submit" class="btn btn-primary me-2">Search</button>
-                        <a href="{{ url_for('main.cryovial_inventory', view_all='true') }}" class="btn btn-primary">View All</a>
+                        <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}" class="btn btn-primary">View All</a>
                       </div>
                     </div>
                 </form>
@@ -143,9 +143,9 @@
                                     <tr>
                                       <td colspan="13" class="text-center text-muted p-4">
                                         {% if search_q or search_creator or search_fluorescence or search_resistance %}
-                                          No matching vials found. Try adjusting your search criteria or <a href="{{ url_for('main.cryovial_inventory', view_all='true') }}">view all vials</a>.
+                                          No matching vials found. Try adjusting your search criteria or <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}">view all vials</a>.
                                         {% else %}
-                                          Click "Search CryoVials" to find specific vials or <a href="{{ url_for('main.cryovial_inventory', view_all='true') }}">view all vials</a>.
+                                          Click "Search CryoVials" to find specific vials or <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}">view all vials</a>.
                                         {% endif %}
                                       </td>
                                     </tr>
@@ -205,7 +205,7 @@
                         </div>
                         {% if selected_batches %}
                         <button type="submit" class="btn btn-warning">Remove Selected</button>
-                        <a href="{{ url_for('main.pickup_selected_vials') }}" class="btn btn-success ms-2">Proceed to Pick Up</a>
+                        <a href="{{ url_for('cell_storage.pickup_selected_vials') }}" class="btn btn-success ms-2">Proceed to Pick Up</a>
                         {% endif %}
                     </form>
                 </div>
@@ -273,7 +273,7 @@
                                                      style="display: none; position: absolute; top: 2px; left: 2px; z-index: 10;">
                                               <div class="vial-content">
                                               {% if current_user.is_admin %}
-                                                  <a href="{{ url_for('main.edit_cryovial', vial_id=vial.id, next=request.url) }}" class="vial-link">{{ vial.tag }}</a>
+                                                  <a href="{{ url_for('cell_storage.edit_cryovial', vial_id=vial.id, next=request.url) }}" class="vial-link">{{ vial.tag }}</a>
                                               {% else %}
                                                   {{ vial.tag }}
                                               {% endif %}
@@ -283,7 +283,7 @@
                                             <td class="box-cell status-empty" 
                                                 title="Empty">
                                               {% if current_user.is_admin %}
-                                                  <a href="{{ url_for('main.add_vial_at_position', box_id=box.id, row=r, col=c) }}" class="add-link">+</a>
+                                                  <a href="{{ url_for('cell_storage.add_vial_at_position', box_id=box.id, row=r, col=c) }}" class="add-link">+</a>
                                               {% else %}
                                                   &nbsp;
                                               {% endif %}
@@ -310,7 +310,7 @@
           {% endfor %}
         {% else %}
           <div class="alert alert-info" role="alert">
-            No boxes defined yet. <a href="{{ url_for('main.add_box') }}" class="alert-link">Add one?</a>
+            No boxes defined yet. <a href="{{ url_for('cell_storage.add_box') }}" class="alert-link">Add one?</a>
           </div>
         {% endif %}
         </div>

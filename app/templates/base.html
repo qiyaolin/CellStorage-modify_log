@@ -87,10 +87,10 @@
     <!-- Modern Navigation Bar -->
     <nav class="navbar navbar-expand-lg navbar-light bg-gradient shadow-sm sticky-top" style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);">
         <div class="container-fluid">
-            <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('main.index') }}" style="color: #212529;">
-                <i class="bi bi-snow2 me-2 fs-4" style="color: #667eea;"></i>
-                <span style="color: #212529;">CellStorage</span>
-                <small class="badge bg-light text-dark ms-2" style="color: #343a40; border: 1px solid #dee2e6;">Lab</small>
+            <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('cell_storage.index') }}" style="color: #212529;">
+                <i class="bi bi-building me-2 fs-4" style="color: #667eea;"></i>
+                <span style="color: #212529;">Lab Management</span>
+                <small class="badge bg-light text-dark ms-2" style="color: #343a40; border: 1px solid #dee2e6;">System</small>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
@@ -98,21 +98,52 @@
             <div class="collapse navbar-collapse" id="navbarContent">
                 <ul class="navbar-nav me-auto mb-2 mb-lg-0">
                     {% if current_user.is_authenticated %}
-                        <!-- Basic Functions - Visible to All Users -->
-                        <li class="nav-item">
-                            <a class="nav-link d-flex align-items-center" href="{{ url_for('main.cryovial_inventory') }}" style="color: #212529;">
-                                <i class="bi bi-list-ul me-1" style="color: #667eea;"></i>
+                        <!-- Module Navigation -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" style="color: #212529;" id="cellStorageDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-snow2 me-1" style="color: #667eea;"></i>
+                                Cell Storage
+                            </a>
+                            <ul class="dropdown-menu" aria-labelledby="cellStorageDropdown">
+                                                        <li><a class="dropdown-item" href="{{ url_for('cell_storage.index') }}">Dashboard</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('cell_storage.cryovial_inventory') }}">Cryovial Inventory</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('cell_storage.list_cell_lines') }}">Cell Lines</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('cell_storage.locations_overview') }}">Storage Locations</a></li>
+                            </ul>
+                        </li>
+                        
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle d-flex align-items-center" href="#" style="color: #212529;" id="inventoryDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                <i class="bi bi-boxes me-1" style="color: #28a745;"></i>
                                 Inventory
                             </a>
+                            <ul class="dropdown-menu" aria-labelledby="inventoryDropdown">
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.index') }}">Dashboard</a></li>
+                                {% if can_view_inventory() %}
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.inventory_items') }}">Items</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.inventory_items_enhanced') }}">Enhanced Items</a></li>
+                                {% endif %}
+                                {% if has_permission('order.view') %}
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.orders') }}">Orders</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.shopping_cart') }}">Shopping Cart</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                {% if has_permission('supplier.view') %}
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.suppliers') }}">Suppliers</a></li>
+                                {% endif %}
+                                {% if can_manage_locations() %}
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.locations') }}">Locations</a></li>
+                                {% endif %}
+                                {% if is_admin() %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.review_requests') }}">Review Requests</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('admin.permissions') }}">
+                                    <i class="fas fa-user-shield me-2"></i>Permissions
+                                </a></li>
+                                {% endif %}
+                            </ul>
                         </li>
-                        {% if current_user.is_admin %}
-                            <li class="nav-item">
-                                <a class="nav-link d-flex align-items-center" href="{{ url_for('main.inventory_summary') }}" style="color: #212529;">
-                                    <i class="bi bi-graph-up me-1" style="color: #667eea;"></i>
-                                    Dashboard
-                                </a>
-                            </li>
-                        {% endif %}
                         
                         {% if current_user.is_admin %}
                             <!-- Admin Functions Dropdown - Admin Only -->
@@ -122,20 +153,20 @@
                                     Manage
                                 </a>
                                 <ul class="dropdown-menu shadow border-0" aria-labelledby="inventoryDropdown">
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.list_cell_lines') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.list_cell_lines') }}" style="color: #212529;">
                                         <i class="bi bi-diagram-3 me-2 text-primary"></i>Cell Lines
                                     </a></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.locations_overview') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.locations_overview') }}" style="color: #212529;">
                                         <i class="bi bi-building me-2 text-success"></i>Freezer Locations
                                     </a></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.add_cryovial') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.add_cryovial') }}" style="color: #212529;">
                                         <i class="bi bi-plus-circle me-2 text-info"></i>Add CryoVials
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.batch_edit_vials') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.batch_edit_vials') }}" style="color: #212529;">
                                         <i class="bi bi-pencil-square me-2 text-warning"></i>Batch Edit
                                     </a></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.manage_batch_lookup') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.manage_batch_lookup') }}" style="color: #212529;">
                                         <i class="bi bi-search me-2 text-secondary"></i>Manage Batch
                                     </a></li>
                                 </ul>
@@ -153,25 +184,25 @@
                                     <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('auth.list_users') }}" style="color: #212529;">
                                         <i class="bi bi-people me-2 text-info"></i>Manage Users
                                     </a></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.audit_logs') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.audit_logs') }}" style="color: #212529;">
                                         <i class="bi bi-clock-history me-2 text-secondary"></i>Activity Logs
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.theme_settings') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.theme_settings') }}" style="color: #212529;">
                                         <i class="bi bi-palette me-2 text-warning"></i>Theme Settings
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.backup_database') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.backup_database') }}" style="color: #212529;">
                                         <i class="bi bi-download me-2 text-success"></i>Backup
                                     </a></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.restore_database') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.restore_database') }}" style="color: #212529;">
                                         <i class="bi bi-upload me-2 text-warning"></i>Restore
                                     </a></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('main.import_csv') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.import_csv') }}" style="color: #212529;">
                                         <i class="bi bi-file-earmark-spreadsheet me-2 text-info"></i>Import CSV
                                     </a></li>
                                     <li><hr class="dropdown-divider"></li>
-                                    <li><a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('main.clear_all') }}" style="color: #dc3545;">
+                                    <li><a class="dropdown-item d-flex align-items-center text-danger" href="{{ url_for('cell_storage.clear_all') }}" style="color: #dc3545;">
                                         <i class="bi bi-trash me-2"></i>Clear All
                                     </a></li>
                                 </ul>

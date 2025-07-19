@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+.admin-dashboard {
+    padding: 20px 0;
+}
+
+.stats-overview {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 25px;
+    text-align: center;
+    transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px;
+    font-size: 24px;
+}
+
+.stat-number {
+    font-size: 32px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.stat-label {
+    color: #6c757d;
+    font-size: 14px;
+    margin-bottom: 10px;
+}
+
+.stat-change {
+    font-size: 12px;
+    padding: 4px 8px;
+    border-radius: 12px;
+}
+
+.stat-change.positive {
+    background: #d4edda;
+    color: #155724;
+}
+
+.stat-change.negative {
+    background: #f8d7da;
+    color: #721c24;
+}
+
+.permission-distribution {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 25px;
+    margin-bottom: 30px;
+}
+
+.chart-container {
+    position: relative;
+    height: 300px;
+    margin-top: 20px;
+}
+
+.recent-activity {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 25px;
+}
+
+.activity-item {
+    display: flex;
+    align-items: center;
+    padding: 15px 0;
+    border-bottom: 1px solid #f8f9fa;
+}
+
+.activity-item:last-child {
+    border-bottom: none;
+}
+
+.activity-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 15px;
+    font-size: 16px;
+}
+
+.activity-content {
+    flex: 1;
+}
+
+.activity-title {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 2px;
+}
+
+.activity-description {
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.activity-time {
+    font-size: 12px;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+.quick-actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin-bottom: 30px;
+}
+
+.action-card {
+    background: white;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.3s;
+    cursor: pointer;
+}
+
+.action-card:hover {
+    background: #f8f9fa;
+    transform: translateY(-1px);
+}
+
+.action-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 15px;
+    font-size: 20px;
+}
+
+.action-title {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 5px;
+}
+
+.action-description {
+    font-size: 14px;
+    color: #6c757d;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid admin-dashboard">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="fas fa-tachometer-alt me-2 text-primary"></i>Admin Dashboard</h1>
+        <div>
+            <button class="btn btn-outline-primary me-2" onclick="refreshData()">
+                <i class="fas fa-sync-alt me-1"></i>Refresh
+            </button>
+            <a href="{{ url_for('admin.permissions') }}" class="btn btn-primary">
+                <i class="fas fa-user-shield me-1"></i>Manage Permissions
+            </a>
+        </div>
+    </div>
+
+    <!-- Statistics Overview -->
+    <div class="stats-overview">
+        <div class="stat-card">
+            <div class="stat-icon" style="background: #e3f2fd; color: #1976d2;">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-number text-primary">{{ total_users }}</div>
+            <div class="stat-label">Total Users</div>
+            <div class="stat-change positive">
+                <i class="fas fa-arrow-up me-1"></i>+2 this month
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon" style="background: #f3e5f5; color: #7b1fa2;">
+                <i class="fas fa-shield-alt"></i>
+            </div>
+            <div class="stat-number text-purple">{{ active_permissions }}</div>
+            <div class="stat-label">Active Permissions</div>
+            <div class="stat-change positive">
+                <i class="fas fa-arrow-up me-1"></i>+{{ active_permissions }} active
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon" style="background: #fff3e0; color: #f57c00;">
+                <i class="fas fa-user-cog"></i>
+            </div>
+            <div class="stat-number text-warning">{{ permission_stats.get('admin', 0) }}</div>
+            <div class="stat-label">Admin Users</div>
+            <div class="stat-change">
+                <i class="fas fa-minus me-1"></i>No change
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon" style="background: #e8f5e8; color: #2e7d32;">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-number text-success">{{ recent_permissions|length }}</div>
+            <div class="stat-label">Recent Activity</div>
+            <div class="stat-change positive">
+                <i class="fas fa-arrow-up me-1"></i>{{ recent_permissions|length }} today
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <div class="action-card" onclick="location.href='{{ url_for('admin.permissions') }}'">
+            <div class="action-icon" style="background: #e3f2fd; color: #1976d2;">
+                <i class="fas fa-user-shield"></i>
+            </div>
+            <div class="action-title">Manage Permissions</div>
+            <div class="action-description">Grant or revoke user permissions</div>
+        </div>
+
+        <div class="action-card" onclick="location.href='{{ url_for('admin.permission_audit') }}'">
+            <div class="action-icon" style="background: #f3e5f5; color: #7b1fa2;">
+                <i class="fas fa-history"></i>
+            </div>
+            <div class="action-title">Audit Log</div>
+            <div class="action-description">View permission changes</div>
+        </div>
+
+        <div class="action-card" onclick="addUser()">
+            <div class="action-icon" style="background: #e8f5e8; color: #2e7d32;">
+                <i class="fas fa-user-plus"></i>
+            </div>
+            <div class="action-title">Add User</div>
+            <div class="action-description">Create new user account</div>
+        </div>
+
+        <div class="action-card" onclick="exportData()">
+            <div class="action-icon" style="background: #fff3e0; color: #f57c00;">
+                <i class="fas fa-download"></i>
+            </div>
+            <div class="action-title">Export Data</div>
+            <div class="action-description">Download system reports</div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Permission Distribution -->
+        <div class="col-lg-8">
+            <div class="permission-distribution">
+                <h5 class="mb-3">
+                    <i class="fas fa-chart-pie me-2 text-primary"></i>
+                    Permission Distribution
+                </h5>
+                <div class="row">
+                    {% for group, count in permission_stats.items() %}
+                    <div class="col-sm-6 col-lg-3 mb-3">
+                        <div class="text-center">
+                            <div class="stat-number text-{{ 'danger' if group == 'admin' else 'warning' if group == 'manager' else 'info' if group == 'user' else 'secondary' }}">
+                                {{ count }}
+                            </div>
+                            <div class="stat-label">{{ group.title() }} Users</div>
+                            <div class="progress mt-2" style="height: 8px;">
+                                <div class="progress-bar bg-{{ 'danger' if group == 'admin' else 'warning' if group == 'manager' else 'info' if group == 'user' else 'secondary' }}" 
+                                     style="width: {{ (count / total_users * 100) if total_users > 0 else 0 }}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="col-lg-4">
+            <div class="recent-activity">
+                <h5 class="mb-3">
+                    <i class="fas fa-clock me-2 text-primary"></i>
+                    Recent Permission Changes
+                </h5>
+                {% if recent_permissions %}
+                    {% for perm in recent_permissions %}
+                    <div class="activity-item">
+                        <div class="activity-icon" style="background: #e3f2fd; color: #1976d2;">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <div class="activity-content">
+                            <div class="activity-title">{{ perm.permission }}</div>
+                            <div class="activity-description">
+                                Granted to {{ perm.user.username if perm.user else 'Unknown' }}
+                                {% if perm.granted_by %}
+                                by {{ perm.granted_by.username }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="activity-time">
+                            {% if perm.granted_at %}
+                            {{ perm.granted_at.strftime('%m/%d %H:%M') }}
+                            {% else %}
+                            Unknown
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="fas fa-info-circle fs-3 mb-3 d-block"></i>
+                    No recent permission changes
+                </div>
+                {% endif %}
+                
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('admin.permission_audit') }}" class="btn btn-sm btn-outline-primary">
+                        View Full Audit Log
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function refreshData() {
+    location.reload();
+}
+
+function addUser() {
+    location.href = '{{ url_for("admin.permissions") }}';
+}
+
+function exportData() {
+    // Implementation for data export
+    alert('Export functionality coming soon!');
+}
+</script>
+{% endblock %}

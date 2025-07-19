@@ -86,7 +86,7 @@
           </div>
 
           <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
-            {% set cancel_url = request.args.get('next') or request.headers.get('Referer') or url_for('main.list_cell_lines') %}
+            {% set cancel_url = request.args.get('next') or request.headers.get('Referer') or url_for('cell_storage.list_cell_lines') %}
             <a href="{{ cancel_url }}" class="btn btn-secondary me-md-2">Cancel</a>
             {{ form.submit(class="btn btn-primary") }}
           </div>

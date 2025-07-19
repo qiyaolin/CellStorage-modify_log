@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Shopping Cart{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mt-4">Shopping Cart</h1>
+    <div id="cart-items"></div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    function loadCart() {
+        $.get('{{ url_for("inventory.shopping_cart_api") }}').done(function(data) {
+            const cartItems = $('#cart-items');
+            cartItems.empty();
+            if (data.length === 0) {
+                cartItems.html('<p>Your shopping cart is empty.</p>');
+                return;
+            }
+            const table = $('<table class="table"><thead><tr><th>Item</th><th>Supplier</th><th>Quantity</th><th>Price</th><th></th></tr></thead><tbody></tbody></table>');
+            const tbody = table.find('tbody');
+            data.forEach(function(item) {
+                const row = $('<tr>');
+                row.append(`<td>${item.item_name} (${item.catalog_number || 'N/A'})</td>`);
+                row.append(`<td>${item.supplier_name || 'N/A'}</td>`);
+                row.append(`<td>${item.quantity} ${item.unit || ''}</td>`);
+                row.append(`<td>${item.estimated_price || 'N/A'}</td>`);
+                row.append(`<td><button class="btn btn-danger btn-sm delete-item" data-id="${item.id}">Remove</button></td>`);
+                tbody.append(row);
+            });
+            cartItems.append(table);
+        });
+    }
+
+    $('#cart-items').on('click', '.delete-item', function() {
+        const itemId = $(this).data('id');
+        $.ajax({
+            url: `/inventory/api/cart/${itemId}`,
+            method: 'DELETE',
+            success: function() {
+                loadCart();
+            }
+        });
+    });
+
+    loadCart();
+});
+</script>
+{% endblock %}

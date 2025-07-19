@@ -349,6 +349,54 @@ def create_supplier():
     
     return render_template('inventory/supplier_form.html', form=form)
 
+@bp.route('/cart')
+@login_required
+def shopping_cart():
+    """Display the user's shopping cart"""
+    return render_template('inventory/shopping_cart.html')
+
+# Shopping Cart API
+@bp.route('/api/cart', methods=['GET', 'POST'])
+@login_required
+def shopping_cart_api():
+    if request.method == 'GET':
+        cart_items = ShoppingCart.query.filter_by(user_id=current_user.id).all()
+        return jsonify([{
+            'id': item.id,
+            'item_name': item.item_name,
+            'catalog_number': item.catalog_number,
+            'supplier_name': item.supplier.name if item.supplier else '',
+            'quantity': item.quantity,
+            'unit': item.unit,
+            'estimated_price': item.estimated_price
+        } for item in cart_items])
+    
+    if request.method == 'POST':
+        data = request.get_json()
+        cart_item = ShoppingCart(
+            user_id=current_user.id,
+            item_name=data['item_name'],
+            catalog_number=data.get('catalog_number'),
+            supplier_id=data.get('supplier_id'),
+            quantity=data['quantity'],
+            unit=data.get('unit'),
+            estimated_price=data.get('estimated_price')
+        )
+        db.session.add(cart_item)
+        db.session.commit()
+        return jsonify({'success': True, 'id': cart_item.id})
+
+@bp.route('/api/cart/<int:item_id>', methods=['DELETE'])
+@login_required
+def delete_cart_item(item_id):
+    item = ShoppingCart.query.get_or_404(item_id)
+    if item.user_id != current_user.id:
+        return jsonify({'success': False, 'error': 'Unauthorized'}), 403
+    db.session.delete(item)
+    db.session.commit()
+    return jsonify({'success': True})
+
+
 # Order Management
 @bp.route('/orders')
 @login_required

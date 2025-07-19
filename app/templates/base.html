@@ -126,6 +126,7 @@
                                 {% endif %}
                                 {% if has_permission('order.view') %}
                                 <li><a class="dropdown-item" href="{{ url_for('inventory.orders') }}">Orders</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('inventory.shopping_cart') }}">Shopping Cart</a></li>
                                 {% endif %}
                                 <li><hr class="dropdown-divider"></li>
                                 {% if has_permission('supplier.view') %}

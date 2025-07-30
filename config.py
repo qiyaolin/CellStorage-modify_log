@@ -12,10 +12,35 @@ class Config:
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'your-very-secret-and-hard-to-guess-key'  # 请务必修改这个默认值
 
     # 数据库配置
-    # 对于 SQLite，是一个文件路径。
-    # os.path.join(basedir, 'app.db') 会在项目根目录下创建一个 app.db 文件作为数据库。
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-                              'sqlite:///' + os.path.join(basedir, 'app.db')
+    # 优先从环境变量获取，用于连接Google Cloud SQL
+    if os.environ.get("INSTANCE_CONNECTION_NAME"):
+        from google.cloud.sql.connector import Connector
+        
+        connector = Connector()
+        
+        def getconn():
+            conn = connector.connect(
+                os.environ["INSTANCE_CONNECTION_NAME"],
+                "pg8000",
+                user=os.environ["DB_USER"],
+                password=os.environ["DB_PASS"],
+                db=os.environ["DB_NAME"]
+            )
+            return conn
+
+        SQLALCHEMY_DATABASE_URI = "postgresql+pg8000://"
+        SQLALCHEMY_ENGINE_OPTIONS = {
+            "creator": getconn,
+            # 增加连接池配置，以适应无服务器环境
+            "pool_size": 5,
+            "max_overflow": 2,
+            "pool_timeout": 30,
+            "pool_recycle": 1800,
+        }
+    else:
+        # 本地开发时回退到SQLite
+        SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
+                                  'sqlite:///' + os.path.join(basedir, 'app.db')
 
     # SQLAlchemy 配置项，可以关闭一些不必要的通知，提升性能
     SQLALCHEMY_TRACK_MODIFICATIONS = False

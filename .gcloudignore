@@ -1,0 +1,10 @@
+.git
+.gitignore
+.vscode/
+__pycache__/
+*.pyc
+*.db
+*.db.backup*
+VIRTUAL_ENV_SETUP.md
+activate_env.bat
+.claude/

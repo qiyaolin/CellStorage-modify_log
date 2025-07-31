@@ -4,67 +4,77 @@
 <div class="location-node" 
      data-location-id="{{ location.id }}" 
      data-location-type="{{ location.location_type or '' }}"
-     data-capacity-usage="{{ capacity_percent }}">
+     data-capacity-usage="{{ capacity_percent }}"
+     data-location-name="{{ location.name }}"
+     data-full-path="{{ location.full_path }}">
     
     <div class="location-info">
-        <div class="location-details">
-            <span class="location-toggle">
-                <i class="fas fa-chevron-right"></i>
-            </span>
-            
-            <span class="location-name">{{ location.name }}</span>
-            
-            {% if location.location_type %}
-            <span class="location-type badge badge-secondary">{{ location.location_type }}</span>
-            {% endif %}
-            
-            {% if location.temperature %}
-            <span class="location-type badge badge-info">{{ location.temperature }}</span>
+        <div class="location-toggle">
+            {% if location.children %}
+                <i class="bi bi-chevron-right"></i>
+            {% else %}
+                <i class="bi bi-circle-fill" style="font-size: 6px; opacity: 0.3;"></i>
             {% endif %}
         </div>
         
-        <div class="location-stats">
+        <div class="location-details">
+            <div class="location-name">{{ location.name }}</div>
+            
+            <div class="location-meta">
+                {% if location.location_type %}
+                <span class="location-type-badge">{{ location.location_type }}</span>
+                {% endif %}
+                
+                {% if location.temperature %}
+                <span class="location-temp-badge">{{ location.temperature }}</span>
+                {% endif %}
+            </div>
+            
             {% if location.max_capacity %}
-            <div class="capacity-indicator">
-                <small class="text-muted">{{ location.current_usage }}/{{ location.max_capacity }}</small>
-                <div class="capacity-bar">
-                    <div class="capacity-fill {{ capacity_class }}" 
-                         style="width: {{ capacity_percent|min(100) }}%"></div>
+            <div class="location-capacity">
+                <div class="capacity-bar-container">
+                    <span class="capacity-text">{{ location.current_usage }}/{{ location.max_capacity }}</span>
+                    <div class="capacity-bar">
+                        <div class="capacity-fill {{ capacity_class }}" 
+                             style="width: {{ capacity_percent|min(100) }}%"></div>
+                    </div>
+                    <span class="capacity-percentage">{{ capacity_percent|round(1) }}%</span>
                 </div>
-                <small class="text-muted">{{ capacity_percent|round(1) }}%</small>
             </div>
             {% else %}
-            <div class="capacity-indicator">
-                <small class="text-muted">{{ location.current_usage }} items</small>
-                <small class="text-muted">Unlimited</small>
+            <div class="location-capacity">
+                <div class="capacity-bar-container">
+                    <span class="capacity-text">{{ location.current_usage }} items</span>
+                    <span class="capacity-percentage">Unlimited</span>
+                </div>
             </div>
             {% endif %}
+        </div>
+        
+        <div class="location-actions">
+            <button class="btn-location btn-view" 
+                    data-location-id="{{ location.id }}" 
+                    title="View Details">
+                <i class="bi bi-eye"></i>
+            </button>
             
-            <div class="location-actions">
-                <button class="btn-location btn-view-details" 
-                        data-location-id="{{ location.id }}" 
-                        title="View Details">
-                    <i class="fas fa-eye"></i>
-                </button>
-                
-                <a href="{{ url_for('inventory.locations') }}?parent_id={{ location.id }}" 
-                   class="btn-location btn-add" 
-                   title="Add Child Location">
-                    <i class="fas fa-plus"></i>
-                </a>
-                
-                <a href="{{ url_for('inventory.locations') }}" 
-                   class="btn-location btn-edit" 
-                   title="Edit Location">
-                    <i class="fas fa-edit"></i>
-                </a>
-                
-                <button class="btn-location btn-delete" 
-                        data-location-id="{{ location.id }}" 
-                        title="Delete Location">
-                    <i class="fas fa-trash"></i>
-                </button>
-            </div>
+            <button class="btn-location btn-add" 
+                    data-location-id="{{ location.id }}" 
+                    title="Add Child Location">
+                <i class="bi bi-plus"></i>
+            </button>
+            
+            <button class="btn-location btn-edit" 
+                    data-location-id="{{ location.id }}" 
+                    title="Edit Location">
+                <i class="bi bi-pencil"></i>
+            </button>
+            
+            <button class="btn-location btn-delete" 
+                    data-location-id="{{ location.id }}" 
+                    title="Delete Location">
+                <i class="bi bi-trash"></i>
+            </button>
         </div>
     </div>
     

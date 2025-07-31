@@ -179,8 +179,8 @@
                                     <small class="text-muted">Available</small>
                                 </div>
                                 <div class="col-sm-3 text-center">
-                                    <div class="h2 fw-bold text-info mb-0" id="cell-lines-count">-</div>
-                                    <small class="text-muted">Cell Lines</small>
+                                    <div class="h2 fw-bold text-info mb-0" id="low-stock-count">-</div>
+                                    <small class="text-muted">Low Stock Batches</small>
                                 </div>
                                 <div class="col-sm-3 text-center">
                                     <div class="h2 fw-bold text-warning mb-0" id="capacity-percent">-</div>
@@ -510,7 +510,7 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script>
 // Add animation effects
 document.addEventListener('DOMContentLoaded', function() {
@@ -726,32 +726,79 @@ function performQuickSearch() {
 }
 
 // Load dashboard statistics
-function loadDashboardStats() {
-    // For now, we'll use simple counts. Later these can be loaded via AJAX
+async function loadDashboardStats() {
+    try {
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        
+        const response = await fetch('{{ url_for("cell_storage.get_dashboard_stats") }}', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const stats = data.stats;
+            
+            // Update available vials count
+            const availableElement = document.getElementById('available-vials-count');
+            if (availableElement) {
+                availableElement.textContent = stats.available_vials || 0;
+            }
+            
+            // Update low stock count
+            const lowStockElement = document.getElementById('low-stock-count');
+            if (lowStockElement) {
+                lowStockElement.textContent = stats.low_stock_batches || 0;
+            }
+            
+            // Update capacity percentage
+            const capacityElement = document.getElementById('capacity-percent');
+            if (capacityElement) {
+                capacityElement.textContent = stats.capacity_used_percent + '%';
+            }
+            
+            // Update total vials (make sure it's current)
+            const totalVialsElement = document.getElementById('total-vials-count');
+            if (totalVialsElement) {
+                totalVialsElement.textContent = stats.total_vials || 0;
+            }
+        } else {
+            console.error('Failed to load dashboard stats:', data.message);
+            // Fallback to static values
+            loadStaticStats();
+        }
+    } catch (error) {
+        console.error('Error loading dashboard stats:', error);
+        // Fallback to static values
+        loadStaticStats();
+    }
+}
+
+// Fallback function for static stats
+function loadStaticStats() {
     const totalVials = {{ vial_count or 0 }};
     
-    // Update total vials (already correct)
-    // Update available vials with a simple calculation (placeholder)
     const availableElement = document.getElementById('available-vials-count');
     if (availableElement) {
-        // This is a placeholder - in a real implementation, you'd fetch this from the backend
-        const estimatedAvailable = Math.floor(totalVials * 0.7); // Assume 70% are available
+        const estimatedAvailable = Math.floor(totalVials * 0.7);
         availableElement.textContent = estimatedAvailable;
     }
     
-    // Update cell lines count (placeholder)
-    const cellLinesElement = document.getElementById('cell-lines-count');
-    if (cellLinesElement) {
-        // This is a placeholder - in a real implementation, you'd fetch this from the backend
-        const estimatedCellLines = Math.max(1, Math.floor(totalVials / 10)); // Rough estimate
-        cellLinesElement.textContent = estimatedCellLines;
+    const lowStockElement = document.getElementById('low-stock-count');
+    if (lowStockElement) {
+        const estimatedLowStock = Math.max(0, Math.floor(totalVials / 20)); // 估算低库存batch数量
+        lowStockElement.textContent = estimatedLowStock;
     }
     
-    // Update capacity (placeholder)
     const capacityElement = document.getElementById('capacity-percent');
     if (capacityElement) {
-        // This is a placeholder - in a real implementation, you'd calculate based on actual storage
-        const estimatedCapacity = Math.min(95, Math.floor((totalVials / 1000) * 100)); // Assume 1000 total capacity
+        // 假设有约12个box，每个box 81个位置，总共约972个位置
+        const estimatedCapacity = Math.min(95, Math.floor((totalVials / 972) * 100));
         capacityElement.textContent = estimatedCapacity + '%';
     }
 }

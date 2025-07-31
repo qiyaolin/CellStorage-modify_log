@@ -1,0 +1,111 @@
+<div class="tree-node" data-location-id="{{ tower.id }}" data-location-type="tower">
+    <div class="node-content">
+        <div class="node-toggle" onclick="toggleNode(this)">
+            {% if tower.drawers %}
+                <i class="bi bi-chevron-down"></i>
+            {% else %}
+                <i class="bi bi-dot"></i>
+            {% endif %}
+        </div>
+        
+        <div class="node-icon">
+            <i class="bi bi-building text-primary"></i>
+        </div>
+        
+        <div class="node-info" onclick="selectLocation('{{ tower.id }}', 'tower')">
+            <div class="node-name">{{ tower.name }}</div>
+        </div>
+        
+        <div class="node-actions">
+            <button class="action-btn add-btn" onclick="addLocation('{{ tower.id }}', 'drawer')" title="Add Drawer">
+                <i class="bi bi-plus"></i>
+            </button>
+            
+            <button class="action-btn edit-btn" onclick="editLocation('{{ tower.id }}', 'tower')" title="Edit">
+                <i class="bi bi-pencil"></i>
+            </button>
+            
+            <button class="action-btn delete-btn" onclick="deleteLocation('{{ tower.id }}', '{{ tower.name }}', 'tower')" title="Delete">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    </div>
+    
+    {% if tower.drawers %}
+        <div class="node-children">
+            {% for drawer in tower.drawers %}
+                <div class="tree-node" data-location-id="{{ drawer.id }}" data-location-type="drawer">
+                    <div class="node-content">
+                        <div class="node-toggle" onclick="toggleNode(this)">
+                            {% if drawer.boxes %}
+                                <i class="bi bi-chevron-down"></i>
+                            {% else %}
+                                <i class="bi bi-dot"></i>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="node-icon">
+                            <i class="bi bi-inbox text-success"></i>
+                        </div>
+                        
+                        <div class="node-info" onclick="selectLocation('{{ drawer.id }}', 'drawer')">
+                            <div class="node-name">{{ drawer.name }}</div>
+                        </div>
+                        
+                        <div class="node-actions">
+                            <button class="action-btn add-btn" onclick="addLocation('{{ drawer.id }}', 'box')" title="Add Box">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                            
+                            <button class="action-btn edit-btn" onclick="editLocation('{{ drawer.id }}', 'drawer')" title="Edit">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            
+                            <button class="action-btn delete-btn" onclick="deleteLocation('{{ drawer.id }}', '{{ drawer.name }}', 'drawer')" title="Delete">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {% if drawer.boxes %}
+                        <div class="node-children">
+                            {% for box in drawer.boxes %}
+                                <div class="tree-node" data-location-id="{{ box.id }}" data-location-type="box">
+                                    <div class="node-content">
+                                        <div class="node-toggle" onclick="toggleNode(this)">
+                                            <i class="bi bi-dot"></i>
+                                        </div>
+                                        
+                                        <div class="node-icon">
+                                            <i class="bi bi-box text-warning"></i>
+                                        </div>
+                                        
+                                        <div class="node-info" onclick="selectLocation('{{ box.id }}', 'box')">
+                                            <div class="node-name">{{ box.name }}</div>
+                                            <div class="node-capacity">
+                        <span class="capacity-text">{{ box.cryovials.count() }}/{{ box.rows * box.columns }}</span>
+                                                <div class="capacity-bar">
+                                                    <div class="capacity-fill" style="width: {{ ((box.cryovials.count()) / (box.rows * box.columns) * 100) if (box.rows * box.columns) > 0 else 0 }}%"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="node-actions">
+                                            <button class="action-btn edit-btn" onclick="editLocation('{{ box.id }}', 'box')" title="Edit">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            
+                                            <button class="action-btn delete-btn" onclick="deleteLocation('{{ box.id }}', '{{ box.name }}', 'box')" title="Delete">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>

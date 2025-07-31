@@ -409,4 +409,4 @@ def locations():
     """List all locations."""
     all_locations = Location.query.all()
     root_locations = Location.query.filter_by(parent_id=None).all()
-    return render_template('inventory/locations.html', locations=all_locations, root_locations=root_locations, total_items=InventoryItem.query.count(), avg_utilization=0, nearly_full_count=0) 
+    return render_template('inventory/locations_simplified.html', locations=all_locations, root_locations=root_locations, total_items=InventoryItem.query.count(), avg_utilization=0, nearly_full_count=0)

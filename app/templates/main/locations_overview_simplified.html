@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+
+{% block title %}Storage Location Management{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/locations-simplified.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="storage-management">
+    <!-- Simplified Header -->
+    <div class="storage-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1 class="page-title">
+                    <i class="bi bi-building"></i>
+                    Storage Location Management
+                </h1>
+                <nav class="breadcrumb-nav">
+                    <a href="{{ url_for('cell_storage.index') }}" class="breadcrumb-link">
+                        <i class="bi bi-house"></i> Dashboard
+                    </a>
+                    <span class="breadcrumb-separator">/</span>
+                    <span class="breadcrumb-current">Storage Locations</span>
+                </nav>
+            </div>
+            <div class="header-right">
+                <button class="btn-primary" id="addTowerBtn">
+                    <i class="bi bi-plus-lg"></i>
+                    Add Tower
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="storage-content">
+        <!-- Left Panel: Tree Structure -->
+        <div class="tree-panel">
+            <div class="tree-header">
+                <h3>Storage Structure</h3>
+                <div class="tree-legend">
+                    <div class="legend-item">
+                        <i class="bi bi-building text-primary"></i>
+                        <span>Tower</span>
+                    </div>
+                    <div class="legend-item">
+                        <i class="bi bi-inbox text-success"></i>
+                        <span>Drawer</span>
+                    </div>
+                    <div class="legend-item">
+                        <i class="bi bi-box text-warning"></i>
+                        <span>Box</span>
+                    </div>
+                </div>
+            </div>
+            <div class="tree-content">
+                <div class="storage-tree" id="storageTree">
+                    {% for tower in towers %}
+                        {% include 'main/partials/location_node_simplified.html' %}
+                    {% endfor %}
+                </div>
+                <div class="tree-empty-state" id="treeEmptyState" style="display: {% if not towers %}block{% else %}none{% endif %};">
+                    <div class="empty-icon">
+                        <i class="bi bi-building"></i>
+                    </div>
+                    <div class="empty-title">No Storage Locations</div>
+                    <div class="empty-description">
+                        Start by adding your first tower to organize your storage structure.
+                    </div>
+                    <button class="btn-primary" onclick="document.getElementById('addTowerBtn').click()">
+                        <i class="bi bi-plus-lg"></i>
+                        Add First Tower
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Details/Edit -->
+        <div class="details-panel">
+            <div class="details-header">
+                <h3 id="detailsTitle">
+                    <i class="bi bi-info-circle"></i>
+                    Select a Location
+                </h3>
+            </div>
+            <div class="details-content">
+                <div class="details-empty-state" id="detailsEmptyState">
+                    <div class="empty-icon">
+                        <i class="bi bi-cursor"></i>
+                    </div>
+                    <div class="empty-title">No Location Selected</div>
+                    <div class="empty-description">
+                        Click on any location in the tree to view and edit its details.
+                    </div>
+                </div>
+                <div class="details-form" id="detailsForm" style="display: none;">
+                    <!-- Content will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Location Modal -->
+<div class="modal fade" id="locationModal" tabindex="-1" aria-labelledby="locationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="locationModalLabel">Add Location</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="locationForm">
+                    <input type="hidden" id="locationId" name="id">
+                    <input type="hidden" id="parentId" name="parent_id">
+                    <input type="hidden" id="locationType" name="type">
+                    
+                    <div class="mb-3">
+                        <label for="locationName" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="locationName" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="locationDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="locationDescription" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3" id="capacityField">
+                        <label for="locationCapacity" class="form-label">Capacity</label>
+                        <input type="number" class="form-control" id="locationCapacity" name="capacity" min="1">
+                        <div class="form-text">Maximum number of items this location can hold</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveLocationBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Warning:</strong> This action cannot be undone.
+                </div>
+                <p>Are you sure you want to delete <strong id="deleteLocationName"></strong>?</p>
+                <p class="text-muted" id="deleteWarning"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/locations-simplified.js') }}"></script>
+{% endblock %}

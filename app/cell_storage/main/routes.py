@@ -344,7 +344,7 @@ def edit_cell_line(cell_line_id):
 def locations_overview():
     towers = Tower.query.order_by(Tower.name).all()
     # You might want to pass drawers and boxes too, or fetch them in the template via tower.drawers, drawer.boxes
-    return render_template('main/locations_overview.html', title='Freezer Locations', towers=towers)
+    return render_template('main/locations_overview_simplified.html', title='Storage Location Management', towers=towers)
 
 # --- Tower Routes ---
 @bp.route('/tower/add', methods=['GET', 'POST'])
@@ -479,6 +479,10 @@ def cryovial_inventory():
         search_creator = request.form.get('creator', '').strip()
         search_fluorescence = request.form.get('fluorescence', '').strip()
         search_resistance = request.form.get('resistance', '').strip()
+        # 快速搜索的额外参数
+        search_status = request.form.get('status', '').strip()
+        max_passage = request.form.get('max_passage', '').strip()
+        date_from = request.form.get('date_from', '').strip()
         view_all = False
         # 如果用户进行了新的搜索，清除view_all状态
         if search_q or search_creator or search_fluorescence or search_resistance:
@@ -491,6 +495,10 @@ def cryovial_inventory():
         search_creator = request.args.get('creator', '').strip()
         search_fluorescence = request.args.get('fluorescence', '').strip()
         search_resistance = request.args.get('resistance', '').strip()
+        # 快速搜索的额外参数
+        search_status = request.args.get('status', '').strip()
+        max_passage = request.args.get('max_passage', '').strip()
+        date_from = request.args.get('date_from', '').strip()
         view_all = request.args.get('view_all', '').lower() == 'true'
         page = request.args.get('page', 1, type=int)
         
@@ -602,7 +610,7 @@ def cryovial_inventory():
         inventory[tower.name] = tower_dict
 
     search_results = None
-    if search_q or search_creator or search_fluorescence or search_resistance or view_all:
+    if search_q or search_creator or search_fluorescence or search_resistance or search_status or max_passage or date_from or view_all:
         query = CryoVial.query.join(VialBatch).join(CellLine).join(User, VialBatch.created_by_user_id == User.id)
         query = query.join(Box).join(Drawer).join(Tower)
         if search_q:
@@ -621,6 +629,22 @@ def cryovial_inventory():
             query = query.filter(CryoVial.fluorescence_tag.ilike(f"%{search_fluorescence}%"))
         if search_resistance:
             query = query.filter(CryoVial.resistance.ilike(f"%{search_resistance}%"))
+        # 快速搜索的额外过滤条件
+        if search_status:
+            query = query.filter(CryoVial.status == search_status)
+        if max_passage:
+            try:
+                max_pass_val = int(max_passage)
+                query = query.filter(CryoVial.passage <= max_pass_val)
+            except ValueError:
+                pass
+        if date_from:
+            try:
+                from datetime import datetime
+                from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+                query = query.filter(CryoVial.date_added >= from_date)
+            except ValueError:
+                pass
         query = query.order_by(VialBatch.id, CryoVial.unique_vial_id_tag)
         vials = query.all()
         grouped = {}
@@ -690,6 +714,9 @@ def cryovial_inventory():
         search_creator=search_creator,
         search_fluorescence=search_fluorescence,
         search_resistance=search_resistance,
+        search_status=search_status,
+        max_passage=max_passage,
+        date_from=date_from,
         selected_batches=selected_batches,
         selected_ids=selected_ids,
         all_creators=all_creators,
@@ -2881,3 +2908,54 @@ def get_current_theme():
     except Exception as e:
         current_app.logger.error(f'Get theme error: {e}')
         return jsonify({'success': False, 'message': 'Failed to get theme configuration'}), 500
+
+@bp.route('/api/dashboard/stats')
+@login_required
+def get_dashboard_stats():
+    """Get dashboard statistics API"""
+    try:
+        # 总体统计
+        total_vials = CryoVial.query.count()
+        available_vials = CryoVial.query.filter_by(status='Available').count()
+        used_vials = CryoVial.query.filter_by(status='Used').count()
+        
+        # 存储容量统计（基于实际box尺寸）
+        total_boxes = Box.query.count()
+        occupied_positions = CryoVial.query.filter_by(status='Available').count()
+        
+        # 计算实际总容量（每个box的rows * columns）
+        boxes = Box.query.all()
+        actual_total_capacity = sum(box.rows * box.columns for box in boxes)
+        capacity_used_percent = (occupied_positions / actual_total_capacity * 100) if actual_total_capacity > 0 else 0
+        
+        # Low stock统计 - 基于batch的vials数量
+        # 只统计有vials的batch，计算其中可用vials数量少于阈值的batch数量
+        from sqlalchemy import func
+        batch_vial_counts = db.session.query(
+            VialBatch.id,
+            func.count(CryoVial.id).label('total_count'),
+            func.sum(func.case([(CryoVial.status == 'Available', 1)], else_=0)).label('available_count')
+        ).join(
+            CryoVial, CryoVial.batch_id == VialBatch.id
+        ).group_by(VialBatch.id).all()
+        
+        # 定义低库存阈值为可用vials少于2个（且batch中有vials存在）
+        low_stock_threshold = 2
+        low_stock_batches = sum(1 for _, total_count, available_count in batch_vial_counts 
+                              if total_count > 0 and (available_count or 0) < low_stock_threshold)
+        
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_vials': total_vials,
+                'available_vials': available_vials,
+                'used_vials': used_vials,
+                'capacity_used_percent': round(capacity_used_percent, 1),
+                'low_stock_batches': low_stock_batches,
+                'actual_total_capacity': actual_total_capacity,
+                'total_boxes': total_boxes
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f'Dashboard stats error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get dashboard statistics'}), 500

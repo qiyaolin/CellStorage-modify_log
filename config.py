@@ -1,10 +1,24 @@
 import os
 from dotenv import load_dotenv
+from google.cloud.sql.connector import Connector
 
 # 加载 .env 文件中的环境变量 (如果存在)
 basedir = os.path.abspath(os.path.dirname(__file__))
 load_dotenv(os.path.join(basedir, '.env'))
 
+# 仅当在 GAE 环境中时才初始化 connector 和 getconn
+if os.environ.get("INSTANCE_CONNECTION_NAME"):
+    connector = Connector()
+    
+    def getconn():
+        conn = connector.connect(
+            os.environ["INSTANCE_CONNECTION_NAME"],
+            "pg8000",
+            user=os.environ["DB_USER"],
+            password=os.environ["DB_PASS"],
+            db=os.environ["DB_NAME"]
+        )
+        return conn
 
 class Config:
     # 密钥，非常重要，用于保护会话和CSRF令牌等。
@@ -14,20 +28,6 @@ class Config:
     # 数据库配置
     # 优先从环境变量获取，用于连接Google Cloud SQL
     if os.environ.get("INSTANCE_CONNECTION_NAME"):
-        from google.cloud.sql.connector import Connector
-        
-        connector = Connector()
-        
-        def getconn():
-            conn = connector.connect(
-                os.environ["INSTANCE_CONNECTION_NAME"],
-                "pg8000",
-                user=os.environ["DB_USER"],
-                password=os.environ["DB_PASS"],
-                db=os.environ["DB_NAME"]
-            )
-            return conn
-
         SQLALCHEMY_DATABASE_URI = "postgresql+pg8000://"
         SQLALCHEMY_ENGINE_OPTIONS = {
             "creator": getconn,

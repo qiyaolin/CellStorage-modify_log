@@ -10,5 +10,5 @@ env_variables:
   INSTANCE_CONNECTION_NAME: "ambient-decoder-467517-h8:northamerica-northeast1:cell-storage-instance"
   DB_USER: "postgres"
   DB_PASS: "Lqy960311!"
-  DB_NAME: "cell-storage-instance"
+  DB_NAME: "postgres"
   SECRET_KEY: "^S3!bR7bk4i^#yYnly9f4LwPJ!K1FlUk" # 例如，使用 `openssl rand -hex 32` 生成

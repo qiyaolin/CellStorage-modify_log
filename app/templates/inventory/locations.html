@@ -3,7 +3,7 @@
 {% block title %}Storage Location Management{% endblock %}
 
 {% block extra_css %}
-<link href="{{ url_for('static', filename='css/locations-enhanced.css') }}" rel="stylesheet">
+<link href="{{ url_for('static', filename='css/locations-enhanced.css') }}?v=20241201002" rel="stylesheet">
 <!-- Chart.js for capacity visualization -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.min.js"></script>
 {% endblock %}
@@ -202,7 +202,7 @@
                 <div class="tree-panel-body">
                     <div class="location-tree" id="locationTree">
                         {% for location in root_locations %}
-                            {% include 'inventory/partials/location_node_enhanced.html' %}
+                            {% include 'inventory/partials/location_node.html' %}
                         {% endfor %}
                     </div>
                 </div>

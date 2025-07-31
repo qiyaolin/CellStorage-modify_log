@@ -2873,9 +2873,24 @@ def theme_settings():
 def switch_theme():
     """Switch theme API"""
     try:
-        data = request.get_json()
-        theme_name = data.get('theme_name')
+        # CSRF token validation
+        csrf_token = request.headers.get('X-CSRFToken')
+        if not csrf_token:
+            current_app.logger.error('Theme switch error: Missing CSRF token')
+            return jsonify({'success': False, 'message': 'Missing CSRF token'}), 400
         
+        try:
+            from flask_wtf.csrf import validate_csrf
+            validate_csrf(csrf_token)
+        except Exception as csrf_error:
+            current_app.logger.error(f'Theme switch CSRF validation error: {csrf_error}')
+            return jsonify({'success': False, 'message': 'Invalid CSRF token'}), 400
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+            
+        theme_name = data.get('theme_name')
         if not theme_name:
             return jsonify({'success': False, 'message': 'Theme name cannot be empty'}), 400
         
@@ -2883,13 +2898,15 @@ def switch_theme():
         success, message = update_user_theme(current_user.id, theme_name)
         
         if success:
+            current_app.logger.info(f'Theme switched successfully for user {current_user.id} to {theme_name}')
             return jsonify({'success': True, 'message': message})
         else:
+            current_app.logger.error(f'Theme switch failed for user {current_user.id}: {message}')
             return jsonify({'success': False, 'message': message}), 400
             
     except Exception as e:
         current_app.logger.error(f'Theme switch error: {e}')
-        return jsonify({'success': False, 'message': 'Theme switch failed'}), 500
+        return jsonify({'success': False, 'message': f'Theme switch failed: {str(e)}'}), 500
 
 @bp.route('/api/theme/current')
 @login_required

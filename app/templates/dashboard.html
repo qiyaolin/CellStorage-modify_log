@@ -11,20 +11,32 @@
                 <p class="lead">Comprehensive laboratory management platform for cell storage and inventory management.</p>
                 <hr class="my-4">
                 <p>Choose a module to get started with your laboratory management tasks.</p>
+                
+                <!-- Enhanced Design Banner -->
+                <div class="alert alert-enhanced alert-info alert-dismissible fade show bounce-in" role="alert">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-stars fs-2 me-3"></i>
+                        <div class="flex-grow-1">
+                            <h5 class="alert-heading mb-1">✨ Enhanced Visual Design Now Live!</h5>
+                            <p class="mb-2">Experience our new modern interface with improved colors, typography, and animations.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="row">
+    <div class="row stagger-fade-in">
         <!-- Cell Storage Module -->
         <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">
-                        <i class="fas fa-vial"></i> Cell Storage Management
+            <div class="card-enhanced h-100 hover-lift">
+                <div class="card-header-enhanced">
+                    <h4 class="mb-0 d-flex align-items-center">
+                        <i class="bi bi-snow2 me-2 text-primary"></i> Cell Storage Management
                     </h4>
                 </div>
-                <div class="card-body">
+                <div class="card-body-enhanced">
                     <p class="card-text">
                         Manage cell lines, cryovials, storage locations, and tracking. 
                         Keep detailed records of your cell culture inventory.
@@ -32,41 +44,41 @@
                     
                     <div class="row mb-3">
                         <div class="col-6">
-                            <div class="text-center">
-                                <i class="fas fa-flask fa-2x text-primary mb-2"></i>
-                                <h6>Cell Lines</h6>
-                                <small class="text-muted">Manage cell line information</small>
+                            <div class="text-center hover-scale">
+                                <i class="bi bi-diagram-3 fs-1 text-primary mb-2"></i>
+                                <h6 class="fw-semibold">Cell Lines</h6>
+                                <small class="text-caption">Manage cell line information</small>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="text-center">
-                                <i class="fas fa-snowflake fa-2x text-info mb-2"></i>
-                                <h6>Cryovials</h6>
-                                <small class="text-muted">Track frozen cell samples</small>
+                            <div class="text-center hover-scale">
+                                <i class="bi bi-snow2 fs-1 text-info mb-2"></i>
+                                <h6 class="fw-semibold">Cryovials</h6>
+                                <small class="text-caption">Track frozen cell samples</small>
                             </div>
                         </div>
                     </div>
                     
                     <div class="row mb-3">
                         <div class="col-6">
-                            <div class="text-center">
-                                <i class="fas fa-map-marker-alt fa-2x text-success mb-2"></i>
-                                <h6>Storage</h6>
-                                <small class="text-muted">Organize freezer locations</small>
+                            <div class="text-center hover-scale">
+                                <i class="bi bi-building fs-1 text-success mb-2"></i>
+                                <h6 class="fw-semibold">Storage</h6>
+                                <small class="text-caption">Organize freezer locations</small>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="text-center">
-                                <i class="fas fa-clipboard-list fa-2x text-warning mb-2"></i>
-                                <h6>Tracking</h6>
-                                <small class="text-muted">Audit logs and history</small>
+                            <div class="text-center hover-scale">
+                                <i class="bi bi-clock-history fs-1 text-warning mb-2"></i>
+                                <h6 class="fw-semibold">Tracking</h6>
+                                <small class="text-caption">Audit logs and history</small>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="card-footer">
-                    <a href="{{ url_for('cell_storage.index') }}" class="btn btn-primary btn-block">
-                        <i class="fas fa-arrow-right"></i> Enter Cell Storage
+                <div class="card-footer-enhanced">
+                    <a href="{{ url_for('cell_storage.index') }}" class="btn-gradient-primary w-100">
+                        <i class="bi bi-arrow-right me-2"></i>Enter Cell Storage
                     </a>
                 </div>
             </div>
@@ -74,13 +86,13 @@
 
         <!-- Inventory Management Module -->
         <div class="col-md-6 mb-4">
-            <div class="card h-100">
-                <div class="card-header bg-success text-white">
-                    <h4 class="mb-0">
-                        <i class="fas fa-boxes"></i> Inventory Management
+            <div class="card-enhanced h-100 hover-lift">
+                <div class="card-header-enhanced">
+                    <h4 class="mb-0 d-flex align-items-center">
+                        <i class="bi bi-boxes me-2 text-success"></i> Inventory Management
                     </h4>
                 </div>
-                <div class="card-body">
+                <div class="card-body-enhanced">
                     <p class="card-text">
                         Complete laboratory inventory system similar to Quartzy. 
                         Manage reagents, chemicals, equipment, and supplies.
@@ -88,41 +100,41 @@
                     
                     <div class="row mb-3">
                         <div class="col-6">
-                            <div class="text-center">
-                                <i class="fas fa-cubes fa-2x text-primary mb-2"></i>
-                                <h6>Items</h6>
-                                <small class="text-muted">Track all inventory items</small>
+                            <div class="text-center hover-scale">
+                                <i class="bi bi-grid-3x3-gap fs-1 text-primary mb-2"></i>
+                                <h6 class="fw-semibold">Items</h6>
+                                <small class="text-caption">Track all inventory items</small>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="text-center">
-                                <i class="fas fa-shopping-cart fa-2x text-info mb-2"></i>
-                                <h6>Orders</h6>
-                                <small class="text-muted">Purchase order management</small>
+                            <div class="text-center hover-scale">
+                                <i class="bi bi-cart3 fs-1 text-info mb-2"></i>
+                                <h6 class="fw-semibold">Orders</h6>
+                                <small class="text-caption">Purchase order management</small>
                             </div>
                         </div>
                     </div>
                     
                     <div class="row mb-3">
                         <div class="col-6">
-                            <div class="text-center">
-                                <i class="fas fa-truck fa-2x text-success mb-2"></i>
-                                <h6>Suppliers</h6>
-                                <small class="text-muted">Vendor management</small>
+                            <div class="text-center hover-scale">
+                                <i class="bi bi-truck fs-1 text-success mb-2"></i>
+                                <h6 class="fw-semibold">Suppliers</h6>
+                                <small class="text-caption">Vendor management</small>
                             </div>
                         </div>
                         <div class="col-6">
-                            <div class="text-center">
-                                <i class="fas fa-bell fa-2x text-warning mb-2"></i>
-                                <h6>Alerts</h6>
-                                <small class="text-muted">Low stock notifications</small>
+                            <div class="text-center hover-scale">
+                                <i class="bi bi-bell fs-1 text-warning mb-2"></i>
+                                <h6 class="fw-semibold">Alerts</h6>
+                                <small class="text-caption">Low stock notifications</small>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="card-footer">
-                    <a href="{{ url_for('inventory.index') }}" class="btn btn-success btn-block">
-                        <i class="fas fa-arrow-right"></i> Enter Inventory
+                <div class="card-footer-enhanced">
+                    <a href="{{ url_for('inventory.index') }}" class="btn-gradient-success w-100">
+                        <i class="bi bi-arrow-right me-2"></i>Enter Inventory
                     </a>
                 </div>
             </div>
@@ -136,50 +148,74 @@
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="fas fa-vial fa-3x text-primary mb-3"></i>
-                    <h5>Cell Lines</h5>
-                    <p class="text-muted">Active cell line records</p>
-                    <a href="{{ url_for('cell_storage.list_cell_lines') }}" class="btn btn-outline-primary">View</a>
+    <div class="row stagger-fade-in">
+        <div class="col-md-3 mb-4">
+            <div class="card-enhanced text-center hover-lift">
+                <div class="card-body-enhanced">
+                    <i class="bi bi-diagram-3 display-4 text-primary mb-3"></i>
+                    <h5 class="text-heading-2">Cell Lines</h5>
+                    <p class="text-caption">Active cell line records</p>
+                    <a href="{{ url_for('cell_storage.list_cell_lines') }}" class="btn-gradient-primary">View Details</a>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="fas fa-snowflake fa-3x text-info mb-3"></i>
-                    <h5>Cryovials</h5>
-                    <p class="text-muted">Frozen cell samples</p>
-                    <a href="{{ url_for('cell_storage.cryovial_inventory') }}" class="btn btn-outline-info">View</a>
+        <div class="col-md-3 mb-4">
+            <div class="card-enhanced text-center hover-lift">
+                <div class="card-body-enhanced">
+                    <i class="bi bi-snow2 display-4 text-info mb-3"></i>
+                    <h5 class="text-heading-2">Cryovials</h5>
+                    <p class="text-caption">Frozen cell samples</p>
+                    <a href="{{ url_for('cell_storage.cryovial_inventory') }}" class="btn-gradient-primary">View Details</a>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="fas fa-cubes fa-3x text-success mb-3"></i>
-                    <h5>Inventory Items</h5>
-                    <p class="text-muted">Laboratory supplies</p>
-                    <a href="{{ url_for('inventory.inventory_items') }}" class="btn btn-outline-success">View</a>
+        <div class="col-md-3 mb-4">
+            <div class="card-enhanced text-center hover-lift">
+                <div class="card-body-enhanced">
+                    <i class="bi bi-grid-3x3-gap display-4 text-success mb-3"></i>
+                    <h5 class="text-heading-2">Inventory Items</h5>
+                    <p class="text-caption">Laboratory supplies</p>
+                    <a href="{{ url_for('inventory.inventory_items') }}" class="btn-gradient-success">View Details</a>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-3">
-            <div class="card text-center">
-                <div class="card-body">
-                    <i class="fas fa-shopping-cart fa-3x text-warning mb-3"></i>
-                    <h5>Active Orders</h5>
-                    <p class="text-muted">Pending purchase orders</p>
-                    <a href="{{ url_for('inventory.orders') }}" class="btn btn-outline-warning">View</a>
+        <div class="col-md-3 mb-4">
+            <div class="card-enhanced text-center hover-lift">
+                <div class="card-body-enhanced">  
+                    <i class="bi bi-cart3 display-4 text-warning mb-3"></i>
+                    <h5 class="text-heading-2">Active Orders</h5>
+                    <p class="text-caption">Pending purchase orders</p>
+                    <a href="{{ url_for('inventory.orders') }}" class="btn-gradient-warning">View Details</a>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+// Enhanced Dashboard JavaScript
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize scroll reveal animations
+    const observerOptions = {
+        threshold: 0.1,
+        rootMargin: '0px 0px -50px 0px'
+    };
+    
+    const observer = new IntersectionObserver(function(entries) {
+        entries.forEach(function(entry) {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('revealed');
+            }
+        });
+    }, observerOptions);
+    
+    // Observe all elements with scroll-reveal class
+    document.querySelectorAll('.scroll-reveal').forEach(function(element) {
+        observer.observe(element);
+    });
+});
+</script>
 {% endblock %}

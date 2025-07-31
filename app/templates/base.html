@@ -16,6 +16,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <!-- Custom CSS -->
     <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <!-- Enhanced Design System -->
+    <link href="{{ url_for('static', filename='css/enhanced-design.css') }}" rel="stylesheet">
+    
+    <!-- Enhanced UI Script -->
+    <script src="{{ url_for('static', filename='js/enhanced-ui.js') }}"></script>
     
     <!-- Theme CSS Variables -->
     <style id="theme-variables">
@@ -85,7 +90,7 @@
 </head>
 <body class="bg-light">
     <!-- Modern Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-light bg-gradient shadow-sm sticky-top" style="background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);">
+    <nav class="navbar navbar-expand-lg navbar-light navbar-enhanced shadow-sm sticky-top">
         <div class="container-fluid">
             <a class="navbar-brand fw-bold d-flex align-items-center" href="{{ url_for('cell_storage.index') }}" style="color: #212529;">
                 <i class="bi bi-building me-2 fs-4" style="color: #667eea;"></i>
@@ -167,6 +172,7 @@
                                     <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.theme_settings') }}" style="color: #212529;">
                                         <i class="bi bi-palette me-2 text-warning"></i>Theme Settings
                                     </a></li>
+                                    <li><hr class="dropdown-divider"></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.backup_database') }}" style="color: #212529;">
                                         <i class="bi bi-download me-2 text-success"></i>Backup
@@ -260,7 +266,7 @@
         document.addEventListener('DOMContentLoaded', function() {
             if (document.querySelector('body').classList.contains('bg-light')) {
                 // User logged in, get theme configuration
-                fetch('/api/theme/current')
+                fetch('/cell-storage/api/theme/current')
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {

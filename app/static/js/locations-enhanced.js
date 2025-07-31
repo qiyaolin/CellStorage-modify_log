@@ -515,8 +515,25 @@ class LocationManager {
         const locationId = $(e.currentTarget).data('location-id');
         
         if (confirm('Are you sure you want to delete this location? This action cannot be undone.')) {
-            // Implement delete functionality
-            console.log('Delete location:', locationId);
+            // Create form and submit via POST
+            const form = $('<form>', {
+                method: 'POST',
+                action: `/inventory/locations/${locationId}/delete`
+            });
+            
+            // Add CSRF token if available
+            const csrfToken = $('meta[name="csrf-token"]').attr('content');
+            if (csrfToken) {
+                form.append($('<input>', {
+                    type: 'hidden',
+                    name: 'csrf_token',
+                    value: csrfToken
+                }));
+            }
+            
+            // Submit form
+            $('body').append(form);
+            form.submit();
         }
     }
     
@@ -539,7 +556,25 @@ class LocationManager {
     handleDeleteFromDetails() {
         if (this.selectedLocation) {
             if (confirm('Are you sure you want to delete this location? This action cannot be undone.')) {
-                console.log('Delete location:', this.selectedLocation);
+                // Create form and submit via POST
+                const form = $('<form>', {
+                    method: 'POST',
+                    action: `/inventory/locations/${this.selectedLocation}/delete`
+                });
+                
+                // Add CSRF token if available
+                const csrfToken = $('meta[name="csrf-token"]').attr('content');
+                if (csrfToken) {
+                    form.append($('<input>', {
+                        type: 'hidden',
+                        name: 'csrf_token',
+                        value: csrfToken
+                    }));
+                }
+                
+                // Submit form
+                $('body').append(form);
+                form.submit();
             }
         }
     }

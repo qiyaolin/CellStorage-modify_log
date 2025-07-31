@@ -182,32 +182,52 @@ let currentPreviewTheme = null;
 function switchTheme(themeName) {
     if (confirm('Are you sure you want to switch to "' + themeName + '" theme?')) {
         // Get CSRF token from meta tag
-        const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+        if (!csrfToken) {
+            showToast('error', 'CSRF token not found. Please refresh the page and try again.');
+            return;
+        }
+        
+        const csrfTokenValue = csrfToken.getAttribute('content');
+        if (!csrfTokenValue) {
+            showToast('error', 'Invalid CSRF token. Please refresh the page and try again.');
+            return;
+        }
+        
+        // Show loading state
+        showToast('info', 'Switching theme...');
         
         fetch('/cell-storage/api/theme/switch', {
-            method: 'POST',
+            method: 'POST',         
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
+                'X-CSRFToken': csrfTokenValue
             },
             body: JSON.stringify({
                 theme_name: themeName
             })
         })
-        .then(response => response.json())
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log('Response data:', data);
             if (data.success) {
                 showToast('success', 'Theme switched successfully! Page will refresh in 3 seconds...');
                 setTimeout(() => {
                     window.location.reload();
                 }, 3000);
             } else {
-                showToast('error', 'Theme switch failed: ' + data.message);
+                showToast('error', 'Theme switch failed: ' + (data.message || 'Unknown error'));
             }
         })
         .catch(error => {
-            console.error('Error:', error);
-            showToast('error', 'Theme switch failed, please try again');
+            console.error('Theme switch error:', error);
+            showToast('error', 'Theme switch failed: ' + error.message + '. Please try again or refresh the page.');
         });
     }
 }

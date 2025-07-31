@@ -83,9 +83,9 @@
                                         <div class="node-info" onclick="selectLocation('{{ box.id }}', 'box')">
                                             <div class="node-name">{{ box.name }}</div>
                                             <div class="node-capacity">
-                        <span class="capacity-text">{{ box.cryovials.count() }}/{{ box.rows * box.columns }}</span>
+                        <span class="capacity-text">{{ box.cryovials.filter_by(status='Available').count() }}/{{ box.rows * box.columns }}</span>
                                                 <div class="capacity-bar">
-                                                    <div class="capacity-fill" style="width: {{ ((box.cryovials.count()) / (box.rows * box.columns) * 100) if (box.rows * box.columns) > 0 else 0 }}%"></div>
+                                                    <div class="capacity-fill" style="width: {{ ((box.cryovials.filter_by(status='Available').count()) / (box.rows * box.columns) * 100) if (box.rows * box.columns) > 0 else 0 }}%"></div>
                                                 </div>
                                             </div>
                                         </div>

@@ -200,7 +200,7 @@
                                                         {% set total_vials = 0 %}
                                                         {% for drawer in tower.drawers %}
                                                             {% for box in drawer.boxes %}
-                                                                {% set total_vials = total_vials + box.cryovials.count() %}
+                                                                {% set total_vials = total_vials + box.cryovials.filter_by(status='Available').count() %}
                                                             {% endfor %}
                                                         {% endfor %}
                                                         {{ total_vials }}
@@ -277,9 +277,9 @@
                                                             {% for box in drawer.boxes.order_by('name') %}
                                                             <div class="box-mini" 
                                                                  data-bs-toggle="tooltip" 
-                                                                 title="{{ box.name }} ({{ box.rows }}x{{ box.columns }}) - {{ box.cryovials.count() }} vials">
-                                                                <div class="box-mini-content bg-{{ 'success' if box.cryovials.count() > 0 else 'light' }} 
-                                                                                               text-{{ 'white' if box.cryovials.count() > 0 else 'muted' }}">
+                                                                 title="{{ box.name }} ({{ box.rows }}x{{ box.columns }}) - {{ box.cryovials.filter_by(status='Available').count() }} available vials">
+                                                                <div class="box-mini-content bg-{{ 'success' if box.cryovials.filter_by(status='Available').count() > 0 else 'light' }} 
+                                                                                               text-{{ 'white' if box.cryovials.filter_by(status='Available').count() > 0 else 'muted' }}"
                                                                     {{ box.name[:3] }}
                                                                 </div>
                                                             </div>

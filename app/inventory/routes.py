@@ -409,4 +409,128 @@ def locations():
     """List all locations."""
     all_locations = Location.query.all()
     root_locations = Location.query.filter_by(parent_id=None).all()
-    return render_template('inventory/locations_simplified.html', locations=all_locations, root_locations=root_locations, total_items=InventoryItem.query.count(), avg_utilization=0, nearly_full_count=0)
+    return render_template('inventory/locations_enhanced.html', locations=all_locations, root_locations=root_locations, total_items=InventoryItem.query.count(), avg_utilization=0, nearly_full_count=0)
+
+# API Routes for Storage Location Management
+@bp.route('/api/locations/<int:location_id>')
+@login_required
+@require_permission('location.view')
+def location_details_api(location_id):
+    """Get detailed information about a specific location."""
+    location = Location.query.get_or_404(location_id)
+    
+    # Calculate usage metrics
+    items_count = InventoryItem.query.filter_by(location_id=location_id).count()
+    items = InventoryItem.query.filter_by(location_id=location_id).limit(10).all()
+    
+    # Build full path
+    path_parts = []
+    current = location
+    while current:
+        path_parts.insert(0, current.name)
+        current = current.parent
+    full_path = ' > '.join(path_parts)
+    
+    return jsonify({
+        'id': location.id,
+        'name': location.name,
+        'location_type': location.location_type,
+        'temperature': location.temperature,
+        'description': location.description,
+        'max_capacity': location.max_capacity,
+        'current_usage': items_count,
+        'capacity_unit': location.capacity_unit,
+        'full_path': full_path,
+        'items': [{
+            'name': item.name,
+            'current_quantity': item.current_quantity,
+            'unit': item.unit,
+            'status': item.status,
+            'updated_at': item.created_at.isoformat() if item.created_at else None
+        } for item in items]
+    })
+
+@bp.route('/locations/<int:location_id>/edit', methods=['GET', 'POST'])
+@login_required
+@require_permission('location.edit')
+def edit_location(location_id):
+    """Edit an existing location."""
+    location = Location.query.get_or_404(location_id)
+    form = LocationForm(obj=location)
+    
+    # Set up parent choices (excluding self and children to prevent circular references)
+    form.parent_id.choices = [(0, 'No Parent')] + [
+        (l.id, l.name) for l in Location.query.filter(Location.id != location_id).all()
+    ]
+    
+    if form.validate_on_submit():
+        location.name = form.name.data
+        location.location_type = form.location_type.data
+        location.temperature = form.temperature.data
+        location.description = form.description.data
+        location.max_capacity = form.max_capacity.data
+        location.capacity_unit = form.capacity_unit.data
+        location.parent_id = form.parent_id.data if form.parent_id.data != 0 else None
+        
+        db.session.commit()
+        flash('Location updated successfully!', 'success')
+        return redirect(url_for('inventory.locations'))
+    
+    return render_template('inventory/location_form.html', form=form, location=location)
+
+@bp.route('/locations/<int:location_id>/delete', methods=['POST'])
+@login_required
+@require_permission('location.delete')
+def delete_location(location_id):
+    """Delete a location."""
+    location = Location.query.get_or_404(location_id)
+    
+    # Check if location has items
+    items_count = InventoryItem.query.filter_by(location_id=location_id).count()
+    if items_count > 0:
+        flash(f'Cannot delete location "{location.name}" - it contains {items_count} items.', 'error')
+        return redirect(url_for('inventory.locations'))
+    
+    # Check if location has children
+    children_count = Location.query.filter_by(parent_id=location_id).count()
+    if children_count > 0:
+        flash(f'Cannot delete location "{location.name}" - it contains {children_count} child locations.', 'error')
+        return redirect(url_for('inventory.locations'))
+    
+    db.session.delete(location)
+    db.session.commit()
+    flash(f'Location "{location.name}" deleted successfully!', 'success')
+    return redirect(url_for('inventory.locations'))
+
+@bp.route('/locations/create', methods=['GET', 'POST'])
+@login_required
+@require_permission('location.create')
+def create_location():
+    """Create a new location."""
+    form = LocationForm()
+    form.parent_id.choices = [(0, 'No Parent')] + [
+        (l.id, l.name) for l in Location.query.all()
+    ]
+    
+    # Pre-select parent if provided in URL
+    parent_id = request.args.get('parent_id', type=int)
+    if parent_id and request.method == 'GET':
+        form.parent_id.data = parent_id
+    
+    if form.validate_on_submit():
+        location = Location(
+            name=form.name.data,
+            location_type=form.location_type.data,
+            temperature=form.temperature.data,
+            description=form.description.data,
+            max_capacity=form.max_capacity.data,
+            capacity_unit=form.capacity_unit.data,
+            parent_id=form.parent_id.data if form.parent_id.data != 0 else None,
+            current_usage=0
+        )
+        db.session.add(location)
+        db.session.commit()
+        flash('Location created successfully!', 'success')
+        return redirect(url_for('inventory.locations'))
+    
+    return render_template('inventory/location_form.html', form=form)

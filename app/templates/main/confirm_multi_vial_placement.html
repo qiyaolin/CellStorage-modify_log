@@ -223,10 +223,10 @@
         <!-- Confirmation Form -->
         <div class="card">
           <div class="card-body text-center">
-            <form method="POST" action="{{ url_for('cell_storage.add_cryovial') }}">
+            <form method="POST" action="{{ url_for('cell_storage.add_cryovial') }}" id="confirmationForm">
               <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
               <input type="hidden" name="confirm_placement" value="yes">
-              <button type="submit" class="btn btn-success btn-lg me-3">
+              <button type="button" class="btn btn-success btn-lg me-3" onclick="showConfirmAndPrintDialog()">
                 <i class="bi bi-check-circle"></i> Confirm and Save These {{ quantity_to_add }} Vial(s)
               </button>
               <a href="{{ url_for('cell_storage.add_cryovial') }}" class="btn btn-secondary btn-lg">
@@ -252,4 +252,118 @@
     </div>
   </div>
 </div>
+
+<!-- Include Print Label Modal -->
+{% include 'modals/print_label_modal.html' %}
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1" aria-labelledby="confirmationModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title" id="confirmationModalLabel">
+          <i class="bi bi-check-circle"></i> Confirm Vial Placement
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-success">
+          <h6><i class="bi bi-info-circle"></i> Ready to Save</h6>
+          <p>You are about to save <strong>{{ quantity_to_add }} vials</strong> for batch <strong>"{{ common_data.batch_name }}"</strong>.</p>
+        </div>
+        <div class="form-check mb-3">
+          <input class="form-check-input" type="checkbox" id="printLabelsAfterSave">
+          <label class="form-check-label" for="printLabelsAfterSave">
+            <i class="bi bi-printer"></i> Print vial labels after saving
+          </label>
+          <small class="form-text text-muted d-block">Each vial will get its own label with Batch ID and location info.</small>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-success" onclick="proceedWithSave()">
+          <i class="bi bi-save"></i> Save Vials
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Vial placement data for printing
+const vialPlacementData = {
+  batchName: "{{ common_data.batch_name }}",
+  batchId: null, // Will be set after save
+  vialPositions: [
+    {% for placement in placements %}
+    {
+      row: {{ placement.row }},
+      col: {{ placement.col }},
+      box_name: "{{ placement.box_name }}",
+      tower_name: "{{ placement.tower_name }}",
+      drawer_name: "{{ placement.drawer_name }}"
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+};
+
+/**
+ * Show confirmation dialog before saving
+ */
+function showConfirmAndPrintDialog() {
+  const modal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+  modal.show();
+}
+
+/**
+ * Proceed with saving the vials
+ */
+function proceedWithSave() {
+  const printAfterSave = document.getElementById('printLabelsAfterSave').checked;
+  
+  // Close confirmation modal
+  const confirmModal = bootstrap.Modal.getInstance(document.getElementById('confirmationModal'));
+  confirmModal.hide();
+  
+  // Submit the form
+  const form = document.getElementById('confirmationForm');
+  
+  if (printAfterSave) {
+    // Add a flag to indicate we want to print after save
+    const printInput = document.createElement('input');
+    printInput.type = 'hidden';
+    printInput.name = 'print_labels_after_save';
+    printInput.value = 'yes';
+    form.appendChild(printInput);
+  }
+  
+  form.submit();
+}
+
+/**
+ * Show print modal with saved batch data
+ * This function is called after successful save if printing was requested
+ */
+function showPrintModalAfterSave(batchId) {
+  vialPlacementData.batchId = batchId;
+  showPrintLabelModal(
+    vialPlacementData.batchName,
+    batchId,
+    vialPlacementData.vialPositions
+  );
+}
+
+// Auto-show print modal if redirected back with print flag
+{% if request.args.get('show_print_modal') and request.args.get('batch_id') %}
+document.addEventListener('DOMContentLoaded', function() {
+  const batchId = {{ request.args.get('batch_id', 'null') }};
+  if (batchId) {
+    setTimeout(() => {
+      showPrintModalAfterSave(batchId);
+    }, 500);
+  }
+});
+{% endif %}
+</script>
+
 {% endblock %}

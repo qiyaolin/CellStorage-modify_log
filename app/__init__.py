@@ -57,6 +57,10 @@ def create_app(config_class=Config):
     from .inventory import routes as inventory_routes
     app.register_blueprint(inventory_routes.bp, url_prefix='/inventory')
     
+    # Register API blueprints
+    from .api.printing import printing_api
+    app.register_blueprint(printing_api)
+    
     # Initialize Flask-Admin first
     from .admin_interface import init_admin
     init_admin(app)

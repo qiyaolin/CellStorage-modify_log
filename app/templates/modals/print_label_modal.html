@@ -1,0 +1,398 @@
+<!-- Print Label Modal -->
+<div class="modal fade" id="printLabelModal" tabindex="-1" aria-labelledby="printLabelModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title" id="printLabelModalLabel">
+          <i class="bi bi-printer"></i> Print Vial Labels
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      
+      <div class="modal-body">
+        <!-- Batch Information -->
+        <div class="card mb-4">
+          <div class="card-header bg-light">
+            <h6 class="mb-0">Batch Information</h6>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                <dl class="row mb-0">
+                  <dt class="col-sm-5">Batch Name:</dt>
+                  <dd class="col-sm-7" id="modal-batch-name">-</dd>
+                  <dt class="col-sm-5">Batch ID:</dt>
+                  <dd class="col-sm-7" id="modal-batch-id">-</dd>
+                </dl>
+              </div>
+              <div class="col-md-6">
+                <dl class="row mb-0">
+                  <dt class="col-sm-5">Total Vials:</dt>
+                  <dd class="col-sm-7" id="modal-vial-count">-</dd>
+                  <dt class="col-sm-5">Date:</dt>
+                  <dd class="col-sm-7" id="modal-print-date">-</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Print Service Status -->
+        <div class="alert alert-info" id="print-service-status">
+          <div class="d-flex align-items-center">
+            <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+            <span>Checking print service availability...</span>
+          </div>
+        </div>
+
+        <!-- Print Jobs List -->
+        <div id="print-jobs-container" style="display: none;">
+          <div class="card">
+            <div class="card-header">
+              <h6 class="mb-0">Individual Vial Labels</h6>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Vial #</th>
+                      <th>Location</th>
+                      <th>Position</th>
+                      <th>Print Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="print-jobs-table-body">
+                    <!-- Content will be populated by JavaScript -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Print Progress -->
+        <div id="print-progress-container" style="display: none;">
+          <div class="mt-3">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span class="fw-bold">Print Progress</span>
+              <span id="progress-text">0 of 0 jobs queued</span>
+            </div>
+            <div class="progress">
+              <div id="print-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                   role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Error Messages -->
+        <div id="print-error-container" style="display: none;">
+          <div class="alert alert-danger mt-3">
+            <h6><i class="bi bi-exclamation-triangle"></i> Print Service Error</h6>
+            <p id="print-error-message">An error occurred while accessing the print service.</p>
+            <div class="mt-2">
+              <button type="button" class="btn btn-outline-danger btn-sm" onclick="retryPrintService()">
+                <i class="bi bi-arrow-clockwise"></i> Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="modal-footer">
+        <div class="me-auto">
+          <small class="text-muted">
+            <i class="bi bi-info-circle"></i> 
+            Each vial label will be printed as a separate job on the centralized printer.
+          </small>
+        </div>
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="print-all-labels-btn" onclick="printAllLabels()" disabled>
+          <i class="bi bi-printer"></i> Print All Labels
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Global variables for print modal
+let modalPrintData = {
+  batchName: '',
+  batchId: '',
+  vialPositions: [],
+  printJobs: []
+};
+
+let printServiceAvailable = false;
+
+/**
+ * Show the print label modal with batch and vial data
+ * @param {string} batchName - Name of the batch
+ * @param {number} batchId - ID of the batch  
+ * @param {Array} vialPositions - Array of vial position objects
+ */
+function showPrintLabelModal(batchName, batchId, vialPositions) {
+  modalPrintData.batchName = batchName;
+  modalPrintData.batchId = batchId;
+  modalPrintData.vialPositions = vialPositions;
+  modalPrintData.printJobs = [];
+
+  // Populate modal data
+  document.getElementById('modal-batch-name').textContent = batchName;
+  document.getElementById('modal-batch-id').textContent = `B${batchId}`;
+  document.getElementById('modal-vial-count').textContent = vialPositions.length;
+  document.getElementById('modal-print-date').textContent = new Date().toLocaleDateString();
+
+  // Reset modal state
+  hideAllContainers();
+  document.getElementById('print-service-status').style.display = 'block';
+  
+  // Show modal
+  const modal = new bootstrap.Modal(document.getElementById('printLabelModal'));
+  modal.show();
+
+  // Check print service availability
+  checkPrintServiceAvailability();
+}
+
+/**
+ * Hide all container divs in modal
+ */
+function hideAllContainers() {
+  document.getElementById('print-jobs-container').style.display = 'none';
+  document.getElementById('print-progress-container').style.display = 'none';  
+  document.getElementById('print-error-container').style.display = 'none';
+  document.getElementById('print-all-labels-btn').disabled = true;
+}
+
+/**
+ * Check if the print service is available
+ */
+async function checkPrintServiceAvailability() {
+  try {
+    const response = await fetch('/api/print/status', {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      printServiceAvailable = data.available;
+      
+      if (printServiceAvailable) {
+        showPrintJobsTable();
+      } else {
+        showServiceUnavailable();
+      }
+    } else {
+      throw new Error('Service check failed');
+    }
+  } catch (error) {
+    console.error('Error checking print service:', error);
+    showServiceError('Failed to connect to print service. Please check if the print server is running.');
+  }
+}
+
+/**
+ * Show the print jobs table when service is available
+ */
+function showPrintJobsTable() {
+  document.getElementById('print-service-status').innerHTML = `
+    <div class="d-flex align-items-center text-success">
+      <i class="bi bi-check-circle me-2"></i>
+      <span>Print service is available and ready!</span>
+    </div>
+  `;
+  
+  document.getElementById('print-jobs-container').style.display = 'block';
+  document.getElementById('print-all-labels-btn').disabled = false;
+  
+  // Populate the table
+  populatePrintJobsTable();
+}
+
+/**
+ * Show service unavailable message
+ */
+function showServiceUnavailable() {
+  document.getElementById('print-service-status').innerHTML = `
+    <div class="d-flex align-items-center text-warning">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <span>Print service is currently unavailable. Labels cannot be printed at this time.</span>
+    </div>
+  `;
+}
+
+/**
+ * Show service error
+ */
+function showServiceError(message) {
+  document.getElementById('print-service-status').style.display = 'none';
+  document.getElementById('print-error-container').style.display = 'block';
+  document.getElementById('print-error-message').textContent = message;
+}
+
+/**
+ * Populate the print jobs table with vial data
+ */
+function populatePrintJobsTable() {
+  const tbody = document.getElementById('print-jobs-table-body');
+  tbody.innerHTML = '';
+
+  modalPrintData.vialPositions.forEach((position, index) => {
+    const vialNumber = index + 1;
+    const location = `${position.tower_name}/${position.drawer_name}/${position.box_name}`;
+    const positionStr = `R${position.row}C${position.col}`;
+    
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td><span class="badge bg-secondary">Vial ${vialNumber}</span></td>
+      <td>${location}</td>
+      <td><span class="badge bg-info">${positionStr}</span></td>
+      <td id="status-${index}"><span class="badge bg-light text-dark">Ready</span></td>
+      <td>
+        <button class="btn btn-sm btn-outline-primary" onclick="printSingleLabel(${index})" id="print-btn-${index}">
+          <i class="bi bi-printer"></i> Print
+        </button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+/**
+ * Print all labels
+ */
+async function printAllLabels() {
+  if (!printServiceAvailable) {
+    alert('Print service is not available');
+    return;
+  }
+
+  document.getElementById('print-progress-container').style.display = 'block';
+  document.getElementById('print-all-labels-btn').disabled = true;
+  
+  const total = modalPrintData.vialPositions.length;
+  let completed = 0;
+
+  for (let i = 0; i < modalPrintData.vialPositions.length; i++) {
+    await printSingleLabel(i);
+    completed++;
+    updateProgress(completed, total);
+  }
+
+  // Re-enable button after completion
+  setTimeout(() => {
+    document.getElementById('print-all-labels-btn').disabled = false;
+  }, 1000);
+}
+
+/**
+ * Print a single vial label
+ * @param {number} index - Index of the vial position in the array
+ */
+async function printSingleLabel(index) {
+  const position = modalPrintData.vialPositions[index];
+  const vialNumber = index + 1;
+  
+  // Update status to printing
+  updateVialStatus(index, 'printing', 'Printing...');
+  document.getElementById(`print-btn-${index}`).disabled = true;
+
+  try {
+    const labelData = {
+      batch_name: modalPrintData.batchName,
+      batch_id: modalPrintData.batchId,
+      vial_number: vialNumber,
+      location: `${position.tower_name}/${position.drawer_name}/${position.box_name}`,
+      position: `R${position.row}C${position.col}`,
+      date_created: new Date().toISOString().split('T')[0]
+    };
+
+    const response = await fetch('/api/print/queue-job', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        label_data: labelData,
+        priority: 'normal'
+      })
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      modalPrintData.printJobs[index] = result;
+      updateVialStatus(index, 'queued', `Job #${result.job_id} queued`);
+    } else {
+      throw new Error(`HTTP ${response.status}`);
+    }
+  } catch (error) {
+    console.error(`Error printing vial ${vialNumber}:`, error);
+    updateVialStatus(index, 'error', 'Print failed');
+  } finally {
+    document.getElementById(`print-btn-${index}`).disabled = false;
+  }
+}
+
+/**
+ * Update the status of a vial in the table
+ */
+function updateVialStatus(index, status, message) {
+  const statusElement = document.getElementById(`status-${index}`);
+  let badgeClass = 'bg-light text-dark';
+  
+  switch (status) {
+    case 'printing':
+      badgeClass = 'bg-warning';
+      break;
+    case 'queued':
+      badgeClass = 'bg-success';
+      break;
+    case 'error':
+      badgeClass = 'bg-danger';
+      break;
+  }
+  
+  statusElement.innerHTML = `<span class="badge ${badgeClass}">${message}</span>`;
+}
+
+/**
+ * Update the progress bar
+ */
+function updateProgress(completed, total) {
+  const percentage = Math.round((completed / total) * 100);
+  const progressBar = document.getElementById('print-progress-bar');
+  const progressText = document.getElementById('progress-text');
+  
+  progressBar.style.width = `${percentage}%`;
+  progressBar.setAttribute('aria-valuenow', percentage);
+  progressText.textContent = `${completed} of ${total} jobs queued`;
+  
+  if (completed === total) {
+    progressBar.classList.remove('progress-bar-animated');
+    progressText.textContent = `All ${total} print jobs completed!`;
+  }
+}
+
+/**
+ * Retry print service connection
+ */
+function retryPrintService() {
+  hideAllContainers();
+  document.getElementById('print-service-status').style.display = 'block';
+  document.getElementById('print-service-status').innerHTML = `
+    <div class="d-flex align-items-center">
+      <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+      <span>Retrying connection to print service...</span>
+    </div>
+  `;
+  
+  checkPrintServiceAvailability();
+}
+</script>

@@ -12,3 +12,6 @@ env_variables:
   DB_PASS: "Lqy960311!"
   DB_NAME: "postgres"
   SECRET_KEY: "^S3!bR7bk4i^#yYnly9f4LwPJ!K1FlUk" # 例如，使用 `openssl rand -hex 32` 生成
+  
+  # Centralized Printing Configuration
+  CENTRALIZED_PRINTING_ENABLED: "true"

@@ -305,3 +305,139 @@ class ThemeConfig(db.Model):
             'text_color': self.text_color,
             'navbar_style': self.navbar_style
         }
+
+
+# Printing System Models
+class PrintJob(db.Model):
+    """Print job model for centralized printing system"""
+    __tablename__ = 'print_jobs'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    label_data = db.Column(db.Text, nullable=False)  # JSON string containing label data
+    priority = db.Column(db.String(20), nullable=False, default='normal')  # low, normal, high, urgent
+    status = db.Column(db.String(20), nullable=False, default='pending')  # pending, processing, completed, failed
+    
+    # User who requested the print job
+    requested_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    started_at = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    
+    # Error handling
+    error_message = db.Column(db.Text, nullable=True)
+    retry_count = db.Column(db.Integer, default=0, nullable=False)
+    max_retries = db.Column(db.Integer, default=3, nullable=False)
+    
+    # Print server info
+    print_server_id = db.Column(db.String(100), nullable=True)  # Which server processed this job
+    
+    # Relationships
+    user = db.relationship('User', backref='print_jobs')
+    
+    @property
+    def can_retry(self):
+        """Check if job can be retried"""
+        return self.status == 'failed' and self.retry_count < self.max_retries
+    
+    @property
+    def label_data_json(self):
+        """Get label data as parsed JSON"""
+        try:
+            return json.loads(self.label_data) if self.label_data else {}
+        except json.JSONDecodeError:
+            return {}
+    
+    @label_data_json.setter
+    def label_data_json(self, value):
+        """Set label data from dictionary"""
+        self.label_data = json.dumps(value) if value else '{}'
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'label_data': self.label_data_json,
+            'priority': self.priority,
+            'status': self.status,
+            'requested_by': self.requested_by,
+            'requested_by_username': self.user.username if self.user else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'started_at': self.started_at.isoformat() if self.started_at else None,
+            'completed_at': self.completed_at.isoformat() if self.completed_at else None,
+            'error_message': self.error_message,
+            'retry_count': self.retry_count,
+            'max_retries': self.max_retries,
+            'can_retry': self.can_retry,
+            'print_server_id': self.print_server_id
+        }
+    
+    def __repr__(self):
+        return f'<PrintJob {self.id}: {self.status}>'
+
+
+class PrintServer(db.Model):
+    """Print server registration model"""
+    __tablename__ = 'print_servers'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    server_id = db.Column(db.String(100), unique=True, nullable=False)  # Unique server identifier
+    name = db.Column(db.String(200), nullable=False)
+    location = db.Column(db.String(200), nullable=True)
+    
+    # Status tracking
+    status = db.Column(db.String(20), nullable=False, default='offline')  # online, offline, error
+    last_heartbeat = db.Column(db.DateTime, nullable=True)
+    
+    # Capabilities
+    printer_types = db.Column(db.Text, nullable=True)  # JSON array of supported printer types
+    max_concurrent_jobs = db.Column(db.Integer, default=1, nullable=False)
+    
+    # Statistics
+    total_jobs_processed = db.Column(db.Integer, default=0, nullable=False)
+    successful_jobs = db.Column(db.Integer, default=0, nullable=False)
+    failed_jobs = db.Column(db.Integer, default=0, nullable=False)
+    
+    # Timestamps
+    registered_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    @property
+    def is_online(self):
+        """Check if server is considered online based on last heartbeat"""
+        if not self.last_heartbeat or self.status != 'online':
+            return False
+        
+        # Consider offline if no heartbeat in last 5 minutes
+        time_diff = datetime.utcnow() - self.last_heartbeat
+        return time_diff.total_seconds() < 300  # 5 minutes
+    
+    @property
+    def success_rate(self):
+        """Calculate success rate percentage"""
+        if self.total_jobs_processed == 0:
+            return 0
+        return round((self.successful_jobs / self.total_jobs_processed) * 100, 2)
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'server_id': self.server_id,
+            'name': self.name,
+            'location': self.location,
+            'status': self.status,
+            'is_online': self.is_online,
+            'last_heartbeat': self.last_heartbeat.isoformat() if self.last_heartbeat else None,
+            'printer_types': json.loads(self.printer_types) if self.printer_types else [],
+            'max_concurrent_jobs': self.max_concurrent_jobs,
+            'total_jobs_processed': self.total_jobs_processed,
+            'successful_jobs': self.successful_jobs,
+            'failed_jobs': self.failed_jobs,
+            'success_rate': self.success_rate,
+            'registered_at': self.registered_at.isoformat() if self.registered_at else None
+        }
+    
+    def __repr__(self):
+        return f'<PrintServer {self.server_id}: {self.status}>'

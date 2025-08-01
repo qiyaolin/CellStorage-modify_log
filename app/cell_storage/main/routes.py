@@ -1013,12 +1013,42 @@ def add_cryovial():
                 details=readable_details
             )
             db.session.commit()
+            
+            # Check if user requested to print labels after save
+            print_labels_after_save = request.form.get('print_labels_after_save') == 'yes'
+            
             flash(
                 f"Batch #{batch.id} '{batch.name}' added with base ID {base_tag} and {len(placements)} vial(s): "
                 + "; ".join(created_vials_info),
                 'success'
             )
-            return redirect(url_for('cell_storage.cryovial_inventory'))
+            
+            if print_labels_after_save:
+                # Enhance placement data with location names for printing
+                enhanced_placements = []
+                for p in placements:
+                    box = Box.query.get(p['box_id'])
+                    enhanced_placement = {
+                        'row': p['row'],
+                        'col': p['col'],
+                        'box_name': box.name if box else '',
+                        'tower_name': box.drawer_info.tower_info.name if box and box.drawer_info and box.drawer_info.tower_info else '',
+                        'drawer_name': box.drawer_info.name if box and box.drawer_info else ''
+                    }
+                    enhanced_placements.append(enhanced_placement)
+                
+                # Store vial placement data in session for the success page
+                session['print_vial_data'] = {
+                    'batch_id': batch.id,
+                    'batch_name': batch.name,
+                    'vial_positions': enhanced_placements,
+                    'vial_count': len(placements),
+                    'vial_locations': created_vials_info,
+                    'cell_line_id': vial_common_data['cell_line_id']
+                }
+                return redirect(url_for('cell_storage.vials_saved_success', auto_print='true'))
+            else:
+                return redirect(url_for('cell_storage.cryovial_inventory'))
         except Exception as e:
             db.session.rollback()
             # Log the full error for debugging
@@ -1150,6 +1180,39 @@ def add_cryovial():
 
     return render_template('main/cryovial_form.html', title='Add CryoVial(s)', form=form,
                            form_action=url_for('cell_storage.add_cryovial'))
+
+
+@bp.route('/vials-saved-success')
+@login_required
+def vials_saved_success():
+    """Show success page after vials are saved with optional print modal"""
+    print_data = session.pop('print_vial_data', None)
+    
+    if not print_data:
+        flash('No vial data found. Please add vials first.', 'info')
+        return redirect(url_for('cell_storage.add_cryovial'))
+    
+    # Get cell line name for display
+    cell_line_name = None
+    if print_data.get('cell_line_id'):
+        cell_line = CellLine.query.get(print_data['cell_line_id'])
+        cell_line_name = cell_line.name if cell_line else None
+    
+    # Convert placement data to JSON for JavaScript
+    vial_positions_json = json.dumps(print_data['vial_positions'])
+    
+    auto_show_print_modal = request.args.get('auto_print') == 'true'
+    
+    return render_template('main/vials_saved_success.html',
+                         title='Vials Successfully Saved',
+                         batch_id=print_data['batch_id'],
+                         batch_name=print_data['batch_name'],
+                         vial_count=print_data['vial_count'],
+                         vial_locations=print_data['vial_locations'],
+                         vial_positions_json=vial_positions_json,
+                         cell_line_id=print_data.get('cell_line_id'),
+                         cell_line_name=cell_line_name,
+                         auto_show_print_modal=auto_show_print_modal)
 
 @bp.route('/cryovial/<int:vial_id>/update_status', methods=['GET', 'POST'])
 @login_required # Normal users can update status (declare usage)

@@ -951,40 +951,57 @@ input, textarea, select {
     transition: transform 0.2s ease;
 }
 
-/* Search Results table height limitation */
-.search-results-table-container {
-    max-height: 500px;
-    overflow-y: auto;
-    overflow-x: hidden; /* Prevent horizontal overflow */
+/* ==========================================================================
+   Sticky Table Header Implementation
+   ========================================================================== */
+
+/* 1. Set up the scroll container */
+.search-results-table-container,
+.selected-items-table-container {
+    max-height: 500px; /* Define a maximum height for the scrollable area */
+    overflow-y: auto;  /* Enable vertical scrolling */
+    position: relative; /* Required for sticky positioning context */
     border: 1px solid #dee2e6;
     border-radius: 0.375rem;
-    position: relative; /* Ensure proper stacking context */
+    padding: 1rem; /* Add padding to the container itself */
 }
 
-.search-results-table-container .table {
-    margin-bottom: 0;
+/* Remove padding from the parent card-body to fix sticky top offset */
+.card-body:has(.search-results-table-container),
+.card-body:has(.selected-items-table-container) {
+    padding: 0;
 }
 
-/* Sticky table header */
-.search-results-table-container thead th {
+/* Adjust the height for the selected items table */
+.selected-items-table-container {
+    max-height: 300px;
+}
+
+/* 2. Style the sticky header cells (th) */
+.search-results-table-container thead th,
+.selected-items-table-container thead th {
+    position: -webkit-sticky; /* For Safari */
     position: sticky;
-    top: 0;
-    background-color: #f8f9fa;
-    z-index: 10;
-    border-bottom: 2px solid #dee2e6;
+    top: -1px; /* Compensate for the container's 1px top border */
+    z-index: 10; /* Ensure the header stays above the table content */
+    
+    /* Inherit the existing header background and color */
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+    color: white;
+
+    /* Add a subtle shadow to visually separate the header from the content */
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* Improve table row hover in scrollable container */
-.search-results-table-container .table-hover tbody tr:hover {
-    background-color: rgba(0, 0, 0, 0.075);
-}
-
-/* Prevent any transform effects on table content that might cause overflow */
-.inventory-table tbody tr:hover,
-.search-results-table-container tbody tr:hover,
-.selected-items-table-container tbody tr:hover {
-    transform: none !important; /* Override any transform animations */
-    transition: background-color 0.2s ease; /* Keep only background transition */
+/* 3. Ensure table layout is consistent and fix sticky context */
+.search-results-table-container .table,
+.selected-items-table-container .table {
+    margin-bottom: 0; /* Remove default bottom margin inside the container */
+    width: 100%;
+    border-collapse: separate; /* Use 'separate' for sticky to work reliably with borders */
+    border-spacing: 0;
+    /* CRITICAL: Override the general .table's overflow:hidden to allow sticky positioning */
+    overflow: visible; 
 }
 
 /* Selected items table container styling */

@@ -724,8 +724,9 @@ document.addEventListener('DOMContentLoaded', function () {
   console.log('🚀 Page loaded, initializing batch delete');
   initializeBatchDelete();
   
-  // Also initialize when Browse by Location tab is clicked
+  // Also initialize when tabs are switched
   var browseTab = document.getElementById('browse-tab');
+  
   if (browseTab) {
     browseTab.addEventListener('click', function() {
       // Wait for tab content to be shown

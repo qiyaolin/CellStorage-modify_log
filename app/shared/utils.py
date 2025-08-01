@@ -33,36 +33,230 @@ def log_audit(user_id, action, target_type=None, target_id=None, details=None, *
 
 
 def clear_database_except_admin():
-    """Delete all records except users with the admin role.
+    """Delete all records except ALL user accounts using robust transaction management.
 
-    The deletion order respects foreign key constraints so we remove
-    dependent records before their parents."""
-
-    from app.cell_storage.models import (
-        User,
-        CellLine,
-        Tower,
-        Drawer,
-        Box,
-        CryoVial,
-        VialBatch,
-        AuditLog,
-    )
-
-    # Remove dependent records first to avoid foreign key violations
-    for model in (
-        AuditLog,
-        CryoVial,
-        VialBatch,
-        Box,
-        Drawer,
-        Tower,
-        CellLine,
-    ):
-        db.session.query(model).delete()
-
-    db.session.query(User).filter(User.role != 'admin').delete()
-    db.session.commit()
+    Uses raw SQL with proper foreign key handling and individual transactions
+    to avoid PostgreSQL transaction abort issues.
+    
+    Clears ALL business data but preserves ALL user accounts including:
+    - Cell Storage: CryoVials, Batches, Cell Lines, Storage Locations
+    - Inventory: Items, Orders, Usage Logs, Alerts
+    - Configuration: Themes, App Settings, Alerts
+    - All audit logs and notifications
+    
+    PRESERVES: All user accounts (admin and regular users)
+    """
+    from sqlalchemy import text
+    
+    # Define deletion order - most dependent tables first
+    # Each group will be processed in a separate transaction for reliability
+    deletion_groups = [
+        {
+            'name': 'Usage and Transaction Records',
+            'tables': [
+                'usage_logs',
+                'order_items', 
+                'item_price_history',
+                'supplier_ratings',
+                'audit_logs'
+            ]
+        },
+        {
+            'name': 'Orders and Requests',
+            'tables': [
+                'orders',
+                'purchase_requests',
+                'shopping_cart'
+            ]
+        },
+        {
+            'name': 'Cell Storage Data',
+            'tables': [
+                'cryovials',
+                'alerts'
+            ]
+        },
+        {
+            'name': 'Batch and Items Data',
+            'tables': [
+                'vial_batches',
+                'inventory_items',
+                'stock_alerts',
+                'notifications'
+            ]
+        },
+        {
+            'name': 'Location Hierarchy', 
+            'tables': [
+                'boxes',
+                'drawers',
+                'towers',
+                'locations'  # inventory locations
+            ]
+        },
+        {
+            'name': 'Base Reference Data',
+            'tables': [
+                'cell_lines',
+                'supplier_contacts',
+                'suppliers',
+                'inventory_types'
+            ]
+        },
+        {
+            'name': 'Configuration Data',
+            'tables': [
+                'user_permissions',
+                'theme_config', 
+                'alert_configs',
+                'app_config'
+            ]
+        }
+    ]
+    
+    success_count = 0
+    total_deleted = 0
+    errors = []
+    
+    # Process each group in a separate transaction
+    for group in deletion_groups:
+        group_name = group['name']
+        tables = group['tables']
+        group_deleted = 0
+        
+        try:
+            print(f"🔄 Processing {group_name}...")
+            
+            for table in tables:
+                try:
+                    # Check if table exists before trying to delete
+                    result = db.session.execute(text(
+                        f"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table}')"
+                    ))
+                    table_exists = result.fetchone()[0]
+                    
+                    if table_exists:
+                        # Delete all records from table
+                        result = db.session.execute(text(f"DELETE FROM {table}"))
+                        deleted = result.rowcount
+                        group_deleted += deleted
+                        print(f"  ✅ Cleared {deleted} records from {table}")
+                    else:
+                        print(f"  ⏭️  Table {table} does not exist, skipping")
+                        
+                except Exception as e:
+                    print(f"  ❌ Error clearing {table}: {e}")
+                    errors.append(f"{table}: {str(e)}")
+                    # Continue with next table in group
+            
+            # Commit this group's changes
+            db.session.commit()
+            total_deleted += group_deleted
+            success_count += 1
+            print(f"✅ {group_name} completed - {group_deleted} total records deleted")
+            
+        except Exception as e:
+            # Rollback this group's transaction and clean up session
+            try:
+                db.session.rollback()
+            except Exception:
+                # If rollback fails, remove the session entirely
+                db.session.remove()
+            print(f"❌ {group_name} failed: {e}")
+            errors.append(f"{group_name}: {str(e)}")
+            
+    # PRESERVE ALL USERS - Do not delete any user accounts
+    print("✅ All user accounts preserved (no users deleted)")
+    
+    # Verify key tables are actually empty
+    key_tables_to_verify = ['cryovials', 'vial_batches', 'cell_lines', 'inventory_items']
+    verification_results = {}
+    
+    for table in key_tables_to_verify:
+        try:
+            result = db.session.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            count = result.fetchone()[0]
+            db.session.commit()  # Ensure clean transaction state
+            verification_results[table] = count
+        except Exception as e:
+            verification_results[table] = f"Error: {e}"
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+    
+    # Final summary
+    if success_count == len(deletion_groups):
+        print(f"✅ Database cleared successfully!")
+        print(f"   📊 {success_count}/{len(deletion_groups)} groups processed")
+        print(f"   📊 {total_deleted} total records deleted")
+        print(f"   🛡️  All user accounts preserved")
+    else:
+        print(f"⚠️  Database clearing completed with some errors:")
+        print(f"   📊 {success_count}/{len(deletion_groups)} groups successful")
+        print(f"   📊 {total_deleted} total records deleted")
+        print(f"   🛡️  All user accounts preserved")
+        if errors:
+            print("   ❌ Errors encountered:")
+            for error in errors:
+                print(f"      - {error}")
+    
+    # Print verification results
+    print(f"\n🔍 Table verification (record counts):")
+    for table, count in verification_results.items():
+        if isinstance(count, int):
+            status = "✅ Empty" if count == 0 else f"⚠️  {count} records remaining"
+            print(f"   {table}: {status}")
+        else:
+            print(f"   {table}: {count}")
+    
+    # Reset sequences for key tables to start from 1
+    sequences_to_reset = [
+        ('cryovials', 'cryovials_id_seq'),
+        ('vial_batches', 'vial_batches_id_seq'), 
+        ('cell_lines', 'cell_lines_id_seq'),
+        ('inventory_items', 'inventory_items_id_seq'),
+        ('boxes', 'boxes_id_seq'),
+        ('drawers', 'drawers_id_seq'),
+        ('towers', 'towers_id_seq')
+    ]
+    
+    print(f"\n🔄 Resetting ID sequences...")
+    reset_count = 0
+    for table, sequence in sequences_to_reset:
+        try:
+            # Check if table exists first
+            result = db.session.execute(text(
+                f"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table}')"
+            ))
+            if result.fetchone()[0]:
+                db.session.execute(text(f"ALTER SEQUENCE {sequence} RESTART WITH 1"))
+                db.session.commit()  # Commit each sequence reset individually
+                print(f"   ✅ Reset {sequence} to start from 1")
+                reset_count += 1
+            else:
+                print(f"   ⏭️  Table {table} does not exist, skipping sequence reset")
+        except Exception as e:
+            print(f"   ⚠️  Could not reset {sequence}: {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+    
+    if reset_count > 0:
+        print(f"✅ {reset_count} sequences reset successfully")
+    else:
+        print("ℹ️  No sequences to reset")
+    
+    # CRITICAL: Clean up the session completely to avoid transaction state issues
+    # This ensures subsequent operations (like user authentication) start fresh
+    try:
+        db.session.remove()
+        print("🧹 Database session cleaned up successfully")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not clean up database session: {e}")
+    
+    return success_count == len(deletion_groups)
 
 
 def get_vial_counter():

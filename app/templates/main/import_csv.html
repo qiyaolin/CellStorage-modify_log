@@ -5,7 +5,7 @@
   <div class="col-md-8 col-lg-7">
     <div class="card shadow-sm">
       <div class="card-header">
-        <h2 class="card-title text-center mb-0">Import Vials from CSV</h2>
+        <h2 class="card-title text-center mb-0">Import Vials from Multiple CSV Files</h2>
       </div>
       <div class="card-body">
         <div class="alert alert-info">
@@ -13,20 +13,26 @@
           <ol>
             <li>Download the template CSV file.</li>
             <li>Fill in your data following the template format.</li>
-            <li>Upload the completed CSV file using the form below.</li>
+            <li><strong>Select multiple CSV files</strong> using the form below - they will be processed in alphabetical order.</li>
+            <li>Files are processed sequentially to prevent server overload.</li>
             <li>After import, check the <a href="{{ url_for('cell_storage.inventory_summary') }}" class="alert-link">Inventory Summary</a> page to verify your data.</li>
           </ol>
         </div>
         <form method="POST" enctype="multipart/form-data" novalidate id="csvUploadForm">
           {{ form.hidden_tag() }}
           <div class="mb-3">
-            {{ form.csv_file.label(class="form-label") }}
-            {{ form.csv_file(class="form-control" + (" is-invalid" if form.csv_file.errors else "")) }}
-            {% if form.csv_file.errors %}
+            {{ form.csv_files.label(class="form-label") }}
+            {{ form.csv_files(class="form-control" + (" is-invalid" if form.csv_files.errors else ""), multiple=true) }}
+            {% if form.csv_files.errors %}
               <div class="invalid-feedback">
-                {{ form.csv_file.errors[0] }}
+                {{ form.csv_files.errors[0] }}
               </div>
             {% endif %}
+            <div class="form-text">
+              <i class="bi bi-info-circle me-1"></i>
+              You can select multiple CSV files at once. Hold Ctrl (Windows) or Cmd (Mac) to select multiple files.
+            </div>
+            <div id="fileList" class="mt-2"></div>
           </div>
           <div class="d-grid">
             {{ form.submit(class="btn btn-primary btn-lg", id="submitBtn") }}
@@ -37,7 +43,10 @@
             <div class="spinner-border text-primary" role="status">
               <span class="visually-hidden">Loading...</span>
             </div>
-            <p class="mt-2 text-muted">Processing CSV file... This may take a moment.</p>
+            <p class="mt-2 text-muted">Processing CSV files sequentially... This may take several moments.</p>
+            <div id="progressInfo" class="text-center mt-2" style="display: none;">
+              <small class="text-muted">Processing files in alphabetical order to prevent server overload...</small>
+            </div>
           </div>
           
           <!-- Success message with quick action buttons -->
@@ -55,7 +64,7 @@
                     <i class="bi bi-list-ul me-1"></i>View Inventory
                   </a>
                   <button type="button" class="btn btn-sm btn-outline-primary" onclick="clearForm()">
-                    <i class="bi bi-plus-circle me-1"></i>Import Another File
+                    <i class="bi bi-plus-circle me-1"></i>Import More Files
                   </button>
                 </div>
               </div>
@@ -72,47 +81,117 @@ document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('csvUploadForm');
     const submitBtn = document.getElementById('submitBtn');
     const loadingIndicator = document.getElementById('loadingIndicator');
+    const progressInfo = document.getElementById('progressInfo');
     const fileInput = document.querySelector('input[type="file"]');
+    const fileList = document.getElementById('fileList');
     
     form.addEventListener('submit', function(e) {
-        // Check if a file is selected
+        // Check if files are selected
         if (!fileInput.files.length) {
             e.preventDefault();
-            alert('Please select a CSV file to upload.');
+            alert('Please select at least one CSV file to upload.');
             return;
+        }
+        
+        // Validate all files are CSV
+        for (let i = 0; i < fileInput.files.length; i++) {
+            const file = fileInput.files[i];
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                e.preventDefault();
+                alert(`File "${file.name}" is not a CSV file. Please select only CSV files.`);
+                return;
+            }
         }
         
         // Show loading state
         submitBtn.disabled = true;
-        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Uploading...';
+        submitBtn.innerHTML = `<span class="spinner-border spinner-border-sm me-2" role="status"></span>Processing ${fileInput.files.length} file(s)...`;
         loadingIndicator.style.display = 'block';
+        progressInfo.style.display = 'block';
         
         // Scroll to loading indicator
         loadingIndicator.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
     
-    // File input validation
+    // File input validation for multiple files
     fileInput.addEventListener('change', function() {
-        const file = this.files[0];
-        if (file) {
-            // Check file size (10MB limit)
-            const maxSize = 10 * 1024 * 1024; // 10MB
+        const files = this.files;
+        fileList.innerHTML = ''; // Clear previous list
+        
+        if (files.length === 0) {
+            return;
+        }
+        
+        let totalSize = 0;
+        let hasErrors = false;
+        const maxSize = 10 * 1024 * 1024; // 10MB per file
+        
+        // Create file list display
+        const listContainer = document.createElement('div');
+        listContainer.className = 'border rounded p-2 bg-light';
+        
+        const header = document.createElement('div');
+        header.className = 'fw-bold mb-2';
+        header.textContent = `Selected Files (${files.length}):`;
+        listContainer.appendChild(header);
+        
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const fileItem = document.createElement('div');
+            fileItem.className = 'd-flex justify-content-between align-items-center py-1';
+            
+            // Check file size
             if (file.size > maxSize) {
-                alert('File size exceeds 10MB limit. Please choose a smaller file.');
-                this.value = '';
-                return;
+                fileItem.innerHTML = `
+                    <span class="text-danger">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        ${file.name}
+                    </span>
+                    <small class="text-danger">Too large (${(file.size / 1024 / 1024).toFixed(2)} MB > 10MB)</small>
+                `;
+                hasErrors = true;
+            } else if (!file.name.toLowerCase().endsWith('.csv')) {
+                fileItem.innerHTML = `
+                    <span class="text-danger">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        ${file.name}
+                    </span>
+                    <small class="text-danger">Not a CSV file</small>
+                `;
+                hasErrors = true;
+            } else {
+                fileItem.innerHTML = `
+                    <span class="text-success">
+                        <i class="bi bi-check-circle me-1"></i>
+                        ${file.name}
+                    </span>
+                    <small class="text-muted">${(file.size / 1024 / 1024).toFixed(2)} MB</small>
+                `;
+                totalSize += file.size;
             }
             
-            // Check file type
-            if (!file.name.toLowerCase().endsWith('.csv')) {
-                alert('Please select a CSV file.');
-                this.value = '';
-                return;
-            }
-            
-            // Show file info
-            const fileSize = (file.size / 1024 / 1024).toFixed(2);
-            console.log(`Selected file: ${file.name} (${fileSize} MB)`);
+            listContainer.appendChild(fileItem);
+        }
+        
+        // Add total size info
+        if (!hasErrors && files.length > 1) {
+            const totalInfo = document.createElement('div');
+            totalInfo.className = 'border-top pt-2 mt-2 text-muted';
+            totalInfo.innerHTML = `<small>Total size: ${(totalSize / 1024 / 1024).toFixed(2)} MB</small>`;
+            listContainer.appendChild(totalInfo);
+        }
+        
+        fileList.appendChild(listContainer);
+        
+        // Show error if any
+        if (hasErrors) {
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Fix file errors first';
+            submitBtn.className = 'btn btn-danger btn-lg';
+        } else {
+            submitBtn.disabled = false;
+            submitBtn.textContent = `Upload and Import ${files.length} File(s)`;
+            submitBtn.className = 'btn btn-primary btn-lg';
         }
     });
     
@@ -120,6 +199,14 @@ document.addEventListener('DOMContentLoaded', function() {
     window.clearForm = function() {
         // Reset form
         form.reset();
+        
+        // Clear file list display
+        fileList.innerHTML = '';
+        
+        // Reset submit button
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Upload and Import All Files';
+        submitBtn.className = 'btn btn-primary btn-lg';
         
         // Remove validation classes
         fileInput.classList.remove('is-valid', 'is-invalid');

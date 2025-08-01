@@ -9,7 +9,7 @@ from ..shared.decorators import admin_required
 from ..shared.permissions import require_permission
 from .models import (InventoryType, InventoryItem, Location, Supplier,
                     Order, OrderItem, UsageLog, StockAlert, ShoppingCart, PurchaseRequest, Notification)
-from ..cell_storage.models import User
+from ..cell_storage.models import User, CryoVial
 from .forms import (InventoryItemForm, LocationForm,
                    SupplierForm, OrderForm, OrderItemForm, UsageForm)
 
@@ -534,3 +534,5 @@ def create_location():
         return redirect(url_for('inventory.locations'))
     
     return render_template('inventory/location_form.html', form=form)
+
+# Batch delete functionality has been moved to cell_storage.main.routes.py to avoid conflicts

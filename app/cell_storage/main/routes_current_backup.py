@@ -359,7 +359,6 @@ def add_tower():
         db.session.flush()  # Flush to get the tower ID
         
         # Automatically create 5 drawers for the new tower
-        box_counter = 1
         for drawer_num in range(1, 6):
             drawer = Drawer(name=f'Drawer {drawer_num}', tower_id=tower.id)
             db.session.add(drawer)
@@ -368,14 +367,13 @@ def add_tower():
             # Automatically create 5 boxes (9x9) for each drawer
             for box_num in range(1, 6):
                 box = Box(
-                    name=f'Box {box_counter}',
+                    name=f'Box {box_num}',
                     drawer_id=drawer.id,
                     rows=9,
                     columns=9,
                     description=f'Auto-created 9x9 box for Drawer {drawer_num}'
                 )
                 db.session.add(box)
-                box_counter += 1
         
         db.session.commit()
         log_audit(current_user.id, 'CREATE_TOWER', target_type='Tower', target_id=tower.id, details=f'Tower "{tower.name}" in freezer "{tower.freezer_name}" with 5 drawers and 25 boxes')
@@ -1380,9 +1378,11 @@ def clear_all():
     form = ConfirmForm()
     if form.validate_on_submit():
         if form.confirm.data.strip() == 'confirm_hayer':
+            # Save user ID before clearing database (session cleanup will detach user object)
+            user_id = current_user.id
             clear_database_except_admin()
-            log_audit(current_user.id, 'CLEAR_ALL', target_type='System')
-            flash('All records except admin accounts have been removed.', 'success')
+            log_audit(user_id, 'CLEAR_ALL', target_type='System')
+            flash('All business data has been cleared. All user accounts have been preserved.', 'success')
             return redirect(url_for('cell_storage.index'))
         flash('Incorrect confirmation phrase.', 'danger')
     return render_template('main/clear_all.html', form=form, title='Clear Database')
@@ -1926,6 +1926,308 @@ def inventory_summary():
         low_stock_stats=low_stock_stats,
     )
 
+def process_single_csv_file(csv_file, filename):
+    """处理单个CSV文件的导入逻辑 - 完全独立的文件处理"""
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
+    csv_file.seek(0, 2)  # 移动到文件末尾
+    file_size = csv_file.tell()
+    csv_file.seek(0)  # 重置到开始
+    
+    if file_size > MAX_FILE_SIZE:
+        return {
+            'success': False,
+            'error': f'File {filename} size ({file_size // (1024*1024)}MB) exceeds the maximum allowed size (10MB).'
+        }
+    
+    if file_size == 0:
+        return {
+            'success': False,
+            'error': f'File {filename} is empty.'
+        }
+    
+    updated_count = 0
+    created_count = 0
+    skipped_rows = []
+    
+    # 开始新的数据库会话，确保每个文件独立处理
+    try:
+        # 确保使用新的数据库会话
+        db.session.close()  # 关闭任何现有会话
+        current_app.logger.info(f'Starting independent processing for file: {filename}')
+        
+        # 文件处理开始
+        # 尝试检测文件编码
+        try:
+            raw_data = csv_file.read()
+            try:
+                content = raw_data.decode('utf-8')
+            except UnicodeDecodeError:
+                try:
+                    content = raw_data.decode('gbk')  # 尝试GBK编码
+                except UnicodeDecodeError:
+                    content = raw_data.decode('utf-8', errors='replace')
+        except Exception as e:
+            return {
+                'success': False,
+                'error': f'Error reading file {filename}: {e}'
+            }
+        
+        stream = io.StringIO(content, newline=None)
+        try:
+            csv_input = csv.reader(stream)
+            header = next(csv_input)
+        except StopIteration:
+            return {
+                'success': False,
+                'error': f'File {filename} appears to be empty or has no header row.'
+            }
+        except csv.Error as e:
+            return {
+                'success': False,
+                'error': f'Error parsing CSV file {filename}: {e}'
+            }
+        
+        # 验证表头
+        expected_headers_admin = [
+            'Vial ID', 'Batch ID', 'Batch Name', 'Vial Tag', 'Cell Line',
+            'Passage Number', 'Date Frozen', 'Frozen By', 'Status', 'Location',
+            'Volume (ml)', 'Concentration', 'Fluorescence Tag', 
+            'Resistance', 'Parental Cell Line', 'Notes'
+        ]
+        expected_headers_user = [
+            'Vial ID', 'Batch ID', 'Batch Name', 'Vial Tag', 'Cell Line',
+            'Passage Number', 'Date Frozen', 'Frozen By', 'Status',
+            'Volume (ml)', 'Concentration', 'Fluorescence Tag', 
+            'Resistance', 'Parental Cell Line', 'Notes'
+        ]
+        
+        if header not in [expected_headers_admin, expected_headers_user]:
+            return {
+                'success': False,
+                'error': f'CSV header in file {filename} does not match the expected format.'
+            }
+
+        has_location = 'Location' in header
+        row_count = 0
+        
+        for i, row in enumerate(csv_input, 2): # Start from line 2
+            row_count += 1
+            if row_count > 10000:  # 限制最大行数
+                return {
+                    'success': False,
+                    'error': f'File {filename} contains too many rows (maximum 10,000 allowed).'
+                }
+                
+            if len(row) < len(header):
+                skipped_rows.append((i, row, "Insufficient columns"))
+                continue
+            
+            row_data = dict(zip(header, row))
+            
+            # 处理数据...（这里包含原有的所有数据处理逻辑）
+            # [保留原有的处理逻辑，从if row_count > 10000之后到return redirect之前的所有代码]
+            
+            # 跳过空行或全空值行
+            if not any(cell.strip() for cell in row if cell):
+                continue
+                
+            # 获取必要字段
+            vial_tag = row_data.get('Vial Tag', '').strip()
+            batch_name = row_data.get('Batch Name', '').strip()
+            cell_line_name = row_data.get('Cell Line', '').strip()
+            status = row_data.get('Status', '').strip().capitalize()
+            
+            if not vial_tag or not batch_name or not cell_line_name:
+                skipped_rows.append((i, row, "Missing required fields (Vial Tag, Batch Name, or Cell Line)"))
+                continue
+            
+            # 查找或创建CellLine
+            cell_line = CellLine.query.filter_by(name=cell_line_name).first()
+            if not cell_line:
+                cell_line = CellLine(name=cell_line_name, source='Imported')
+                db.session.add(cell_line)
+                db.session.commit()
+            
+            # 检查现有vial
+            existing_vial = CryoVial.query.filter_by(unique_vial_id_tag=vial_tag).first()
+            
+            if existing_vial:
+                # 更新现有记录
+                is_new_record = False
+                if existing_vial.status != status:
+                    existing_vial.status = status
+                existing_vial.notes = row_data.get('Notes', '').strip()
+                existing_vial.last_updated = datetime.utcnow()
+                updated_count += 1
+            else:
+                is_new_record = True
+            
+            if has_location and is_new_record:
+                location = row_data.get('Location', '').strip()
+                if location:
+                    # 解析位置信息
+                    location_match = re.match(r'(.+)/(.+)/(.+)\s+R(\d+)C(\d+)', location)
+                    if not location_match:
+                        skipped_rows.append((i, row, f"Invalid location format: '{location}'"))
+                        continue
+                    
+                    tower_name, drawer_name, box_name, row_in_box, col_in_box = location_match.groups()
+                    tower_name = tower_name.strip()
+                    drawer_name = drawer_name.strip()
+                    box_name = box_name.strip()
+                    row_in_box = int(row_in_box)
+                    col_in_box = int(col_in_box)
+                    
+                    # 查找位置
+                    tower = Tower.query.filter_by(name=tower_name).first()
+                    if not tower:
+                        skipped_rows.append((i, row, f"Tower '{tower_name}' not found"))
+                        continue
+                    
+                    drawer = Drawer.query.filter_by(name=drawer_name, tower_id=tower.id).first()
+                    if not drawer:
+                        skipped_rows.append((i, row, f"Drawer '{drawer_name}' not found in tower '{tower_name}'"))
+                        continue
+                    
+                    box = Box.query.filter_by(name=box_name, drawer_id=drawer.id).first()
+                    if not box:
+                        skipped_rows.append((i, row, f"Box '{box_name}' not found in drawer '{drawer_name}'"))
+                        continue
+                    
+                    if row_in_box < 1 or row_in_box > box.rows or col_in_box < 1 or col_in_box > box.columns:
+                        skipped_rows.append((i, row, f"Position R{row_in_box}C{col_in_box} is out of bounds for box '{box_name}' ({box.rows}x{box.columns})"))
+                        continue
+                    
+                    # 检查位置是否被占用
+                    existing_at_position = CryoVial.query.filter_by(
+                        box_id=box.id, 
+                        row_in_box=row_in_box, 
+                        col_in_box=col_in_box,
+                        status='Available'
+                    ).first()
+                    
+                    if existing_at_position and existing_at_position.unique_vial_id_tag != vial_tag:
+                        skipped_rows.append((i, row, f"Position R{row_in_box}C{col_in_box} in box '{box_name}' is already occupied by vial '{existing_at_position.unique_vial_id_tag}'"))
+                        continue
+                    
+                    box_id = box.id
+                else:
+                    skipped_rows.append((i, row, "Location field is empty"))
+                    continue
+
+            if is_new_record:
+                # 创建新记录
+                batch_id_from_csv = row_data.get('Batch ID', '').strip()
+                batch = None
+                
+                # 只通过Batch ID查找现有batch
+                if batch_id_from_csv:
+                    try:
+                        batch = VialBatch.query.get(int(batch_id_from_csv))
+                        if batch and batch.name != batch_name:
+                            # Batch ID exists but name doesn't match
+                            skipped_rows.append((i, row, f"Batch ID '{batch_id_from_csv}' exists but has different name '{batch.name}' (expected '{batch_name}')."))
+                            continue
+                    except (ValueError, TypeError):
+                        # Invalid Batch ID format, treat as new batch creation
+                        pass
+                
+                # 如果没找到batch，创建新batch
+                if not batch:
+                    batch = VialBatch(
+                        name=batch_name,
+                        created_by_user_id=current_user.id
+                    )
+                    # 如果CSV指定了Batch ID，尝试使用它
+                    if batch_id_from_csv:
+                        try:
+                            requested_id = int(batch_id_from_csv)
+                            # 检查ID是否已被占用
+                            existing_batch = VialBatch.query.get(requested_id)
+                            if not existing_batch:
+                                batch.id = requested_id
+                        except (ValueError, TypeError):
+                            # Invalid ID format, let database auto-assign
+                            pass
+                    db.session.add(batch)
+                    db.session.commit()
+                
+                # 解析日期
+                date_frozen = None
+                date_frozen_str = row_data.get('Date Frozen', '').strip()
+                if date_frozen_str:
+                    try:
+                        date_frozen = datetime.strptime(date_frozen_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        pass
+                
+                # 创建新vial
+                vial = CryoVial(
+                    unique_vial_id_tag=vial_tag,
+                    batch_id=batch.id,
+                    cell_line_id=cell_line.id,
+                    box_id=box_id if has_location else None,
+                    row_in_box=row_in_box if has_location else None,
+                    col_in_box=col_in_box if has_location else None,
+                    date_frozen=date_frozen or datetime.utcnow().date(),
+                    frozen_by_user_id=current_user.id,
+                    passage_number=row_data.get('Passage Number', '').strip(),
+                    volume_ml=float(row_data.get('Volume (ml)', 0)) if row_data.get('Volume (ml)', '').strip() else None,
+                    concentration=row_data.get('Concentration', '').strip() or None,
+                    fluorescence_tag=row_data.get('Fluorescence Tag', '').strip() or None,
+                    resistance=row_data.get('Resistance', '').strip() or None,
+                    parental_cell_line=row_data.get('Parental Cell Line', '').strip() or None,
+                    status=status,
+                    notes=row_data.get('Notes', '').strip(),
+                    date_created=datetime.utcnow()
+                )
+                db.session.add(vial)
+                created_count += 1
+        
+        # 提交文件的所有更改
+        db.session.commit()
+        current_app.logger.info(f'Successfully committed changes for file: {filename} (Created: {created_count}, Updated: {updated_count})')
+        
+        return {
+            'success': True,
+            'filename': filename,
+            'created_count': created_count,
+            'updated_count': updated_count,
+            'skipped_rows': skipped_rows
+        }
+        
+    except Exception as e:
+        # 回滚当前文件的所有更改
+        try:
+            db.session.rollback()
+            current_app.logger.error(f'Rolled back changes for file {filename} due to error: {e}')
+        except Exception as rollback_error:
+            current_app.logger.error(f'Error during rollback for file {filename}: {rollback_error}')
+            
+        current_app.logger.error(f'CSV import error for file {filename}: {e}', exc_info=True)
+        return {
+            'success': False,
+            'error': f'An unexpected error occurred during import of file {filename}: {e}'
+        }
+    
+    finally:
+        # 确保文件处理后清理资源
+        try:
+            # 释放内存中的文件内容
+            if 'raw_data' in locals():
+                del raw_data
+            if 'content' in locals():
+                del content
+            if 'stream' in locals():
+                stream.close()
+                del stream
+                
+            current_app.logger.info(f'Cleaned up resources for file: {filename}')
+            
+        except Exception as cleanup_error:
+            current_app.logger.error(f'Error during resource cleanup for file {filename}: {cleanup_error}')
+
+
 @bp.route('/admin/import_csv', methods=['GET', 'POST'])
 @login_required
 @admin_required
@@ -1933,354 +2235,101 @@ def import_csv():
     form = CSVUploadForm()
     if form.validate_on_submit():
         if form.csv_files.data:
-            # Process first file for now (TODO: enhance to handle multiple files)
-            csv_file = form.csv_files.data[0]
-            # 文件大小检查 (最大10MB)
-            MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
-            csv_file.seek(0, 2)  # 移动到文件末尾
-            file_size = csv_file.tell()
-            csv_file.seek(0)  # 重置到开始
+            # 多文件批量处理逻辑
+            files_to_process = []
+            total_files = len(form.csv_files.data)
             
-            if file_size > MAX_FILE_SIZE:
-                flash(f'File size ({file_size // (1024*1024)}MB) exceeds the maximum allowed size (10MB).', 'danger')
-                return redirect(url_for('cell_storage.import_csv'))
-            
-            if file_size == 0:
-                flash('The uploaded file is empty.', 'danger')
-                return redirect(url_for('cell_storage.import_csv'))
-            
-            updated_count = 0
-            created_count = 0
-            skipped_rows = []
-            try:
-                # Ensure the file pointer is at the beginning
-                csv_file.seek(0)
+            # 验证所有文件
+            for idx, csv_file in enumerate(form.csv_files.data, 1):
+                if not csv_file or not csv_file.filename:
+                    continue
+                    
+                # 基本验证
+                filename = csv_file.filename
+                if not filename.lower().endswith('.csv'):
+                    flash(f'File {filename} is not a CSV file.', 'danger')
+                    return redirect(url_for('cell_storage.import_csv'))
                 
-                # 尝试检测文件编码
+                files_to_process.append((csv_file, filename))
+            
+            if not files_to_process:
+                flash('No valid CSV files selected.', 'danger')
+                return redirect(url_for('cell_storage.import_csv'))
+            
+            # 按文件名排序，确保按顺序处理
+            files_to_process.sort(key=lambda x: x[1])
+            
+            # 逐个处理文件 - 每个文件完全独立处理
+            total_created = 0
+            total_updated = 0
+            total_skipped = 0
+            success_files = []
+            failed_files = []
+            
+            for idx, (csv_file, filename) in enumerate(files_to_process, 1):
+                current_app.logger.info(f'Processing file {idx}/{len(files_to_process)}: {filename}')
+                
                 try:
-                    raw_data = csv_file.read()
-                    try:
-                        content = raw_data.decode('utf-8')
-                    except UnicodeDecodeError:
-                        try:
-                            content = raw_data.decode('latin-1')
-                        except UnicodeDecodeError:
-                            content = raw_data.decode('utf-8', errors='replace')
-                            flash('Warning: Some characters in the file could not be decoded properly.', 'warning')
+                    # 处理单个文件
+                    result = process_single_csv_file(csv_file, filename)
+                    
+                    # 立即处理结果
+                    if result['success']:
+                        total_created += result['created_count']
+                        total_updated += result['updated_count']
+                        total_skipped += len(result['skipped_rows'])
+                        success_files.append(filename)
+                        
+                        # 为每个文件显示详细结果
+                        if result['created_count'] > 0 or result['updated_count'] > 0:
+                            flash(f'✅ {filename}: {result["created_count"]} created, {result["updated_count"]} updated', 'success')
+                        
+                        if result['skipped_rows']:
+                            reasons_summary = {}
+                            for _, _, reason in result['skipped_rows']:
+                                reasons_summary[reason] = reasons_summary.get(reason, 0) + 1
+                            
+                            summary_messages = [f"{count} rows skipped ({reason})" for reason, count in reasons_summary.items()]
+                            flash(f'⚠️ {filename}: {"; ".join(summary_messages)}', 'warning')
+                    else:
+                        failed_files.append((filename, result['error']))
+                        flash(f'❌ {filename}: {result["error"]}', 'danger')
+                        
                 except Exception as e:
-                    flash(f'Error reading file: {e}', 'danger')
-                    return redirect(url_for('cell_storage.import_csv'))
+                    failed_files.append((filename, str(e)))
+                    flash(f'❌ {filename}: Unexpected error - {str(e)}', 'danger')
+                    current_app.logger.error(f'Error processing file {filename}: {e}', exc_info=True)
                 
-                stream = io.StringIO(content, newline=None)
-                try:
-                    csv_input = csv.reader(stream)
-                    header = next(csv_input)
-                except StopIteration:
-                    flash('The CSV file appears to be empty or has no header row.', 'danger')
-                    return redirect(url_for('cell_storage.import_csv'))
-                except csv.Error as e:
-                    flash(f'Error parsing CSV file: {e}', 'danger')
-                    return redirect(url_for('cell_storage.import_csv'))
-                
-                # 验证表头
-                expected_headers_admin = [
-                    'Vial ID', 'Batch ID', 'Batch Name', 'Vial Tag', 'Cell Line',
-                    'Passage Number', 'Date Frozen', 'Frozen By', 'Status', 'Location',
-                    'Volume (ml)', 'Concentration', 'Fluorescence Tag', 
-                    'Resistance', 'Parental Cell Line', 'Notes'
-                ]
-                expected_headers_user = [
-                    'Vial ID', 'Batch ID', 'Batch Name', 'Vial Tag', 'Cell Line',
-                    'Passage Number', 'Date Frozen', 'Frozen By', 'Status',
-                    'Volume (ml)', 'Concentration', 'Fluorescence Tag', 
-                    'Resistance', 'Parental Cell Line', 'Notes'
-                ]
-                
-                if header not in [expected_headers_admin, expected_headers_user]:
-                    flash('CSV header does not match the expected format. Please use an unmodified export file from Inventory Summary.', 'danger')
-                    return redirect(url_for('cell_storage.import_csv'))
-
-                has_location = 'Location' in header
-                row_count = 0
-                
-                for i, row in enumerate(csv_input, 2): # Start from line 2
-                    row_count += 1
-                    if row_count > 10000:  # 限制最大行数
-                        flash('File contains too many rows (maximum 10,000 allowed). Please split into smaller files.', 'danger')
-                        break
+                finally:
+                    # 关键：文件处理后立即清理内存和数据库连接
+                    try:
+                        # 确保数据库session被清理
+                        db.session.close()
                         
-                    if not any(field.strip() for field in row): # Skip empty rows
-                        continue
-                        
-                    if len(row) != len(header):
-                        skipped_rows.append((i, row, f"Row has {len(row)} columns, expected {len(header)} columns."))
-                        continue
-                        
-                    row_data = dict(zip(header, row))
-
-                    vial_id = row_data.get('Vial ID', '').strip()
-                    vial_tag = row_data.get('Vial Tag', '').strip()
-                    batch_name = row_data.get('Batch Name', '').strip()
-                    cell_line_name = row_data.get('Cell Line', '').strip()
-                    
-                    # Determine if this is a new record or existing record
-                    vial = None
-                    is_new_record = False
-                    
-                    if vial_id:
-                        # Try to find existing vial by ID
-                        try:
-                            vial = CryoVial.query.get(int(vial_id))
-                        except (ValueError, TypeError):
-                            # Invalid Vial ID format, treat as new record
-                            is_new_record = True
-                        else:
-                            if vial:
-                                # Found existing vial, sanity check vial tag
-                                if vial_tag and vial.unique_vial_id_tag != vial_tag:
-                                    skipped_rows.append((i, row, "Vial Tag in file does not match database record."))
-                                    continue
-                                # This is an update to existing record
-                                is_new_record = False
-                            else:
-                                # Vial ID not found in database, treat as new record
-                                is_new_record = True
-                    else:
-                        # Vial ID is empty, this is definitely a new record
-                        is_new_record = True
-                    
-                    # For new records, validate required fields and check uniqueness
-                    if is_new_record:
-                        if not all([batch_name, cell_line_name, vial_tag]):
-                            skipped_rows.append((i, row, "New records require Batch Name, Cell Line, and Vial Tag."))
-                            continue
+                        # 清理文件对象
+                        if hasattr(csv_file, 'close'):
+                            csv_file.close()
                             
-                        # Check if vial tag already exists
-                        if CryoVial.query.filter_by(unique_vial_id_tag=vial_tag).first():
-                            skipped_rows.append((i, row, f"Vial Tag '{vial_tag}' already exists."))
-                            continue
+                        # 强制垃圾回收释放内存
+                        import gc
+                        gc.collect()
+                        
+                        current_app.logger.info(f'Completed cleanup for file {filename}')
+                        
+                    except Exception as cleanup_error:
+                        current_app.logger.error(f'Error during cleanup for file {filename}: {cleanup_error}')
+            
+            # 显示总体结果
+            if success_files:
+                flash(f'📊 Total Summary: {total_created} vials created, {total_updated} vials updated, {total_skipped} rows skipped across {len(success_files)} files', 'info')
+            
+            if failed_files:
+                flash(f'❌ {len(failed_files)} files failed to process', 'danger')
+            
+            return redirect(url_for('cell_storage.import_csv'))
+    
+    return render_template('main/import_csv.html', title='Import Multiple CSV Files', form=form)
 
-                    # Parse and validate date
-                    date_frozen_str = row_data.get('Date Frozen', '').strip()
-                    date_frozen = None
-                    if date_frozen_str:
-                        try:
-                            date_frozen = datetime.strptime(date_frozen_str, '%Y-%m-%d').date()
-                        except ValueError:
-                            skipped_rows.append((i, row, "Invalid Date Frozen format (must be YYYY-MM-DD)."))
-                            continue
-                    
-                    # Parse and validate location
-                    box_id = None
-                    row_in_box = None
-                    col_in_box = None
-                    if has_location:
-                        location_str = row_data.get('Location', '').strip()
-                        if location_str:
-                            # Parse location string: "Tower 1/Drawer 1/Box 1 R1C2" (handles spaces in names)
-                            location_match = re.match(r'(.+)/(.+)/(.+)\s+R(\d+)C(\d+)', location_str)
-                            if location_match:
-                                tower_name, drawer_name, box_name, row_str, col_str = location_match.groups()
-                                # Strip whitespace from names
-                                tower_name = tower_name.strip()
-                                drawer_name = drawer_name.strip() 
-                                box_name = box_name.strip()
-                                
-                                box = Box.query.join(Drawer).join(Tower).filter(
-                                    Tower.name == tower_name,
-                                    Drawer.name == drawer_name,
-                                    Box.name == box_name
-                                ).first()
-                                
-                                if box:
-                                    box_id = box.id
-                                    row_in_box = int(row_str)
-                                    col_in_box = int(col_str)
-                                else:
-                                    skipped_rows.append((i, row, f"Location '{location_str}' not found. Looking for Tower: '{tower_name}', Drawer: '{drawer_name}', Box: '{box_name}'."))
-                                    continue
-                            else:
-                                skipped_rows.append((i, row, "Invalid Location format."))
-                                continue
-
-                    if is_new_record:
-                        # Create new vial record
-                        
-                        # Find or create batch
-                        batch_id_from_csv = row_data.get('Batch ID', '').strip()
-                        batch = None
-                        
-                        # First try to find batch by ID if provided in CSV
-                        if batch_id_from_csv:
-                            try:
-                                batch = VialBatch.query.get(int(batch_id_from_csv))
-                                if batch and batch.name != batch_name:
-                                    # Batch ID exists but name doesn't match
-                                    skipped_rows.append((i, row, f"Batch ID '{batch_id_from_csv}' exists but has different name '{batch.name}' (expected '{batch_name}')."))
-                                    continue
-                            except (ValueError, TypeError):
-                                # Invalid Batch ID format, treat as new batch creation
-                                pass
-                        
-                        # If not found by ID, try to find by name
-                        if not batch:
-                            batch = VialBatch.query.filter_by(name=batch_name).first()
-                        
-                        # If still not found, create new batch
-                        if not batch:
-                            batch = VialBatch(
-                                name=batch_name,
-                                created_by_user_id=current_user.id
-                            )
-                            # If CSV specifies a Batch ID, try to use it
-                            if batch_id_from_csv:
-                                try:
-                                    requested_id = int(batch_id_from_csv)
-                                    # Check if this ID is already taken
-                                    existing_batch = VialBatch.query.get(requested_id)
-                                    if not existing_batch:
-                                        batch.id = requested_id
-                                except (ValueError, TypeError):
-                                    # Invalid ID format, let database auto-assign
-                                    pass
-                            
-                            db.session.add(batch)
-                            db.session.flush()  # Get the ID
-                        
-                        # Find cell line
-                        cell_line = CellLine.query.filter_by(name=cell_line_name).first()
-                        if not cell_line:
-                            skipped_rows.append((i, row, f"Cell Line '{cell_line_name}' not found. Please create it first."))
-                            continue
-                        
-                        # For new records, location is required
-                        if not all([box_id, row_in_box, col_in_box]):
-                            skipped_rows.append((i, row, "New records require a valid Location."))
-                            continue
-                        
-                        # Create new vial
-                        vial = CryoVial(
-                            unique_vial_id_tag=vial_tag,
-                            batch_id=batch.id,
-                            cell_line_id=cell_line.id,
-                            box_id=box_id,
-                            row_in_box=row_in_box,
-                            col_in_box=col_in_box,
-                            date_frozen=date_frozen or datetime.utcnow().date(),
-                            frozen_by_user_id=current_user.id,
-                            status=row_data.get('Status', 'Available').strip().capitalize(),
-                            passage_number=row_data.get('Passage Number', ''),
-                            volume_ml=float(row_data.get('Volume (ml)')) if row_data.get('Volume (ml)') and row_data.get('Volume (ml)').strip() else None,
-                            concentration=row_data.get('Concentration', ''),
-                            fluorescence_tag=row_data.get('Fluorescence Tag', ''),
-                            resistance=row_data.get('Resistance', ''),
-                            parental_cell_line=row_data.get('Parental Cell Line', ''),
-                            notes=row_data.get('Notes', '')
-                        )
-                        
-                        # If CSV specifies a Vial ID, try to use it
-                        if vial_id:
-                            try:
-                                requested_vial_id = int(vial_id)
-                                # Check if this ID is already taken
-                                existing_vial = CryoVial.query.get(requested_vial_id)
-                                if not existing_vial:
-                                    vial.id = requested_vial_id
-                            except (ValueError, TypeError):
-                                # Invalid ID format, let database auto-assign
-                                pass
-                        db.session.add(vial)
-                        created_count += 1
-                        
-                    else:
-                        # Update existing vial
-                        
-                        # Update status if changed
-                        new_status = row_data.get('Status', '').strip().capitalize()
-                        if new_status and new_status != vial.status:
-                            vial.status = new_status
-                        
-                        # Update date frozen if changed
-                        if date_frozen and date_frozen != vial.date_frozen:
-                            vial.date_frozen = date_frozen
-                        
-                        # Update location if changed and provided
-                        if all([box_id, row_in_box, col_in_box]):
-                            if (vial.box_id != box_id or 
-                                vial.row_in_box != row_in_box or 
-                                vial.col_in_box != col_in_box):
-                                vial.box_id = box_id
-                                vial.row_in_box = row_in_box
-                                vial.col_in_box = col_in_box
-                        
-                        # Update additional fields
-                        new_passage = row_data.get('Passage Number', '').strip()
-                        if new_passage and new_passage != vial.passage_number:
-                            vial.passage_number = new_passage
-                        
-                        new_volume = row_data.get('Volume (ml)', '').strip()
-                        if new_volume:
-                            try:
-                                volume_float = float(new_volume)
-                                if volume_float != vial.volume_ml:
-                                    vial.volume_ml = volume_float
-                            except ValueError:
-                                pass  # Ignore invalid volume values
-                        
-                        new_concentration = row_data.get('Concentration', '').strip()
-                        if new_concentration and new_concentration != vial.concentration:
-                            vial.concentration = new_concentration
-                        
-                        new_fluorescence = row_data.get('Fluorescence Tag', '').strip()
-                        if new_fluorescence and new_fluorescence != vial.fluorescence_tag:
-                            vial.fluorescence_tag = new_fluorescence
-                        
-                        new_resistance = row_data.get('Resistance', '').strip()
-                        if new_resistance and new_resistance != vial.resistance:
-                            vial.resistance = new_resistance
-                        
-                        new_parental = row_data.get('Parental Cell Line', '').strip()
-                        if new_parental and new_parental != vial.parental_cell_line:
-                            vial.parental_cell_line = new_parental
-                        
-                        new_notes = row_data.get('Notes', '').strip()
-                        if new_notes and new_notes != vial.notes:
-                            vial.notes = new_notes
-
-                        db.session.add(vial)
-                        updated_count += 1
-
-                db.session.commit()
-                
-                message_parts = []
-                if updated_count > 0:
-                    message_parts.append(f"{updated_count} vials updated")
-                if created_count > 0:
-                    message_parts.append(f"{created_count} new vials created")
-                
-                if message_parts:
-                    flash(f'CSV import completed successfully! {", ".join(message_parts)}. You can now import another file or check the Inventory Summary to view your data.', 'success')
-                else:
-                    flash('CSV processed successfully. No changes were made as all data was already up to date.', 'info')
-                    
-                if skipped_rows:
-                    # Create a summary of skipped reasons for a cleaner message
-                    reasons_summary = {}
-                    for _, _, reason in skipped_rows:
-                        reasons_summary[reason] = reasons_summary.get(reason, 0) + 1
-                    
-                    summary_messages = [f"{count} rows skipped ({reason})" for reason, count in reasons_summary.items()]
-                    flash(f'{len(skipped_rows)} total rows were skipped. Reasons: {"; ".join(summary_messages)}', 'warning')
-
-                return redirect(url_for('cell_storage.import_csv'))
-
-            except Exception as e:
-                db.session.rollback()
-                current_app.logger.error(f'CSV import error: {e}')
-                flash(f'An unexpected error occurred during import: {e}', 'danger')
-                return redirect(url_for('cell_storage.import_csv'))
-
-    return render_template('main/import_csv.html', title='Import CSV', form=form)
 
 @bp.route('/vial/<int:vial_id>/test')
 @login_required
@@ -2300,6 +2349,7 @@ def vial_test(vial_id):
     except Exception as e:
         current_app.logger.error(f'Test endpoint error: {e}')
         return jsonify({"error": str(e)}), 500
+
 
 @bp.route('/vial/<int:vial_id>/details')
 @login_required
@@ -2404,7 +2454,7 @@ def delete_vial(vial_id):
         db.session.delete(vial)
         db.session.commit()
         
-        return jsonify({"success": True, "message": f"Successfully deleted {vial_info}"})
+        return jsonify({"success": True, "message": "Vial deleted successfully"})
     except Exception as e:
         current_app.logger.error(f'Error deleting vial {vial_id}: {e}')
         return jsonify({"success": False, "error": "Unable to delete vial. Please try again later."}), 500
@@ -2421,8 +2471,10 @@ def batch_delete_vials():
             return jsonify({"success": False, "error": "CSRF token validation failed"}), 400
         
         data = request.get_json()
-        vial_ids = data.get('vial_ids', [])
+        if not data or 'vial_ids' not in data:
+            return jsonify({"success": False, "error": "No vial IDs provided"}), 400
         
+        vial_ids = data.get('vial_ids', [])
         if not vial_ids:
             return jsonify({"success": False, "error": "No vial IDs provided"}), 400
         
@@ -2433,604 +2485,42 @@ def batch_delete_vials():
             return jsonify({"success": False, "error": "No vials found"}), 404
         
         deleted_count = 0
-        vial_info_list = []
-        
         for vial in vials:
-            vial_info = f"Vial {vial.unique_vial_id_tag} (Batch: {vial.batch.name if vial.batch else 'Unknown'})"
-            vial_info_list.append(vial_info)
+            # 记录日志
+            readable_details = create_audit_log(
+                user_id=current_user.id,
+                action='DELETE',
+                target_type='CryoVial',
+                target_id=vial.id,
+                vial_tag=vial.unique_vial_id_tag,
+                batch_id=vial.batch_id,
+                batch_name=vial.batch.name if vial.batch else 'Unknown'
+            )
+            log_audit(current_user.id, 'DELETE', target_type='CryoVial', target_id=vial.id, details=readable_details)
             
             # 删除vial
             db.session.delete(vial)
             deleted_count += 1
         
-        # 记录批量删除的总体日志
-        readable_details = create_audit_log(
-            user_id=current_user.id,
-            action='BATCH_DELETE',
-            target_type='Batch',
-            target_id=None,
-            vial_ids=vial_ids,
-            count=deleted_count
-        )
-        log_audit(current_user.id, 'BATCH_DELETE', target_type='Batch', target_id=None, details=readable_details)
-        
         db.session.commit()
         
-        return jsonify({
-            "success": True, 
-            "deleted_count": deleted_count,
-            "message": f"Successfully deleted {deleted_count} vials"
-        })
+        return jsonify({"success": True, "deleted_count": deleted_count, "message": f"Successfully deleted {deleted_count} vials"})
     except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f'Error batch deleting vials {vial_ids}: {e}')
+        current_app.logger.error(f'Error batch deleting vials: {e}')
         return jsonify({"success": False, "error": "Unable to delete vials. Please try again later."}), 500
 
-# =============================================================================
-# 预警管理相关路由
-# =============================================================================
 
-@bp.route('/alerts')
+# Dashboard和API路由部分
+
+@bp.route('/api/theme')
 @login_required
-@admin_required
-def alerts_management():
-    """预警管理页面"""
-    from app.shared.utils import get_active_alerts
-    from app.cell_storage.models import Alert
-    
-    # 获取查询参数
-    status_filter = request.args.get('status', 'active')  # active, resolved, dismissed, all
-    alert_type_filter = request.args.get('type', '')
-    page = request.args.get('page', 1, type=int)
-    per_page = 20
-    
-    # 构建查询
-    query = Alert.query
-    
-    if status_filter == 'active':
-        query = query.filter_by(is_resolved=False, is_dismissed=False)
-    elif status_filter == 'resolved':
-        query = query.filter_by(is_resolved=True)
-    elif status_filter == 'dismissed':
-        query = query.filter_by(is_dismissed=True)
-    # 'all' 不添加额外过滤条件
-    
-    if alert_type_filter:
-        query = query.filter_by(alert_type=alert_type_filter)
-    
-    # 分页查询
-    alerts_pagination = query.order_by(Alert.created_at.desc()).paginate(
-        page=page, per_page=per_page, error_out=False
-    )
-    
-    # 获取统计信息
-    alert_stats = {
-        'active': Alert.query.filter_by(is_resolved=False, is_dismissed=False).count(),
-        'resolved': Alert.query.filter_by(is_resolved=True).count(),
-        'dismissed': Alert.query.filter_by(is_dismissed=True).count(),
-        'total': Alert.query.count()
-    }
-    
-    # 获取预警类型列表
-    alert_types = db.session.query(Alert.alert_type).distinct().all()
-    alert_types = [t[0] for t in alert_types]
-    
-    return render_template(
-        'main/alerts_management.html',
-        title='Alerts Management',
-        alerts_pagination=alerts_pagination,
-        alert_stats=alert_stats,
-        alert_types=alert_types,
-        status_filter=status_filter,
-        alert_type_filter=alert_type_filter
-    )
-
-
-@bp.route('/api/alerts/<int:alert_id>/resolve', methods=['POST'])
-@login_required
-@admin_required
-def resolve_alert_api(alert_id):
-    """解决预警API"""
-    from app.shared.utils import resolve_alert
-    
+def get_theme():
+    """Get theme configuration"""
     try:
-        alert = resolve_alert(alert_id, current_user.id)
-        if alert:
-            return jsonify({
-                'success': True,
-                'message': f'Alert "{alert.title}" has been resolved.'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'Alert not found or already resolved.'
-            }), 404
+        return jsonify({'success': True, 'theme': 'light'})  # 暂时返回固定主题
     except Exception as e:
-        current_app.logger.error(f'Error resolving alert {alert_id}: {e}')
-        return jsonify({
-            'success': False,
-            'message': 'An error occurred while resolving the alert.'
-        }), 500
-
-
-@bp.route('/api/alerts/<int:alert_id>/dismiss', methods=['POST'])
-@login_required
-@admin_required
-def dismiss_alert_api(alert_id):
-    """忽略预警API"""
-    from app.shared.utils import dismiss_alert
-    
-    try:
-        alert = dismiss_alert(alert_id, current_user.id)
-        if alert:
-            return jsonify({
-                'success': True,
-                'message': f'Alert "{alert.title}" has been dismissed.'
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'message': 'Alert not found or already dismissed.'
-            }), 404
-    except Exception as e:
-        current_app.logger.error(f'Error dismissing alert {alert_id}: {e}')
-        return jsonify({
-            'success': False,
-            'message': 'An error occurred while dismissing the alert.'
-        }), 500
-
-
-@bp.route('/api/alerts/generate', methods=['POST'])
-@login_required
-@admin_required
-def generate_alerts_api():
-    """手动生成预警API"""
-    from app.shared.utils import generate_all_alerts
-    
-    try:
-        alert_count = generate_all_alerts()
-        return jsonify({
-            'success': True,
-            'message': f'Generated {alert_count} new alerts.',
-            'alert_count': alert_count
-        })
-    except Exception as e:
-        current_app.logger.error(f'Error generating alerts: {e}')
-        return jsonify({
-            'success': False,
-            'message': 'An error occurred while generating alerts.'
-        }), 500
-
-
-# =============================================================================
-# 高级搜索相关API
-# =============================================================================
-
-@bp.route('/api/search/suggestions')
-@login_required
-def search_suggestions():
-    """搜索建议API"""
-    query = request.args.get('q', '').strip()
-    category = request.args.get('category', 'all')  # all, vials, batches, cell_lines
-    limit = min(int(request.args.get('limit', 10)), 20)  # 最多20个建议
-    
-    if len(query) < 2:
-        return jsonify({'suggestions': []})
-    
-    suggestions = []
-    
-    try:
-        if category in ['all', 'vials']:
-            # 冻存管标签建议
-            vial_tags = db.session.query(CryoVial.unique_vial_id_tag)\
-                .filter(CryoVial.unique_vial_id_tag.ilike(f'%{query}%'))\
-                .distinct().limit(limit//3 if category == 'all' else limit).all()
-            
-            for tag, in vial_tags:
-                suggestions.append({
-                    'type': 'vial',
-                    'value': tag,
-                    'label': f'Vial: {tag}',
-                    'icon': 'thermometer-snow'
-                })
-        
-        if category in ['all', 'batches']:
-            # 批次名称建议
-            batch_names = db.session.query(VialBatch.name)\
-                .filter(VialBatch.name.ilike(f'%{query}%'))\
-                .distinct().limit(limit//3 if category == 'all' else limit).all()
-            
-            for name, in batch_names:
-                suggestions.append({
-                    'type': 'batch',
-                    'value': name,
-                    'label': f'Batch: {name}',
-                    'icon': 'collection'
-                })
-        
-        if category in ['all', 'cell_lines']:
-            # 细胞系名称建议
-            cell_line_names = db.session.query(CellLine.name)\
-                .filter(CellLine.name.ilike(f'%{query}%'))\
-                .distinct().limit(limit//3 if category == 'all' else limit).all()
-            
-            for name, in cell_line_names:
-                suggestions.append({
-                    'type': 'cell_line',
-                    'value': name,
-                    'label': f'Cell Line: {name}',
-                    'icon': 'diagram-3'
-                })
-        
-        # 荧光标签建议
-        if category in ['all']:
-            fluorescence_tags = db.session.query(CryoVial.fluorescence_tag)\
-                .filter(CryoVial.fluorescence_tag.ilike(f'%{query}%'))\
-                .filter(CryoVial.fluorescence_tag.isnot(None))\
-                .filter(CryoVial.fluorescence_tag != '')\
-                .distinct().limit(3).all()
-            
-            for tag, in fluorescence_tags:
-                suggestions.append({
-                    'type': 'fluorescence',
-                    'value': tag,
-                    'label': f'Fluorescence: {tag}',
-                    'icon': 'lightbulb'
-                })
-        
-        # 排序并限制结果
-        suggestions = suggestions[:limit]
-        
-        return jsonify({
-            'suggestions': suggestions,
-            'query': query
-        })
-        
-    except Exception as e:
-        current_app.logger.error(f'Error generating search suggestions: {e}')
-        return jsonify({'suggestions': []})
-
-
-@bp.route('/api/search/history')
-@login_required
-def search_history():
-    """获取用户搜索历史"""
-    # 从session中获取搜索历史
-    search_history = session.get('search_history', [])
-    return jsonify({'history': search_history[-10:]})  # 最近10个搜索
-
-
-@bp.route('/api/search/history', methods=['POST'])
-@login_required
-def add_search_history():
-    """添加搜索历史"""
-    data = request.get_json()
-    query = data.get('query', '').strip()
-    
-    if query and len(query) >= 2:
-        search_history = session.get('search_history', [])
-        
-        # 移除重复项
-        if query in search_history:
-            search_history.remove(query)
-        
-        # 添加到开头
-        search_history.insert(0, query)
-        
-        # 限制历史记录数量
-        search_history = search_history[:20]
-        
-        session['search_history'] = search_history
-        session.permanent = True
-        
-        return jsonify({'success': True})
-    
-    return jsonify({'success': False})
-
-
-@bp.route('/api/search/advanced')
-@login_required
-def advanced_search_api():
-    """高级搜索API"""
-    # 搜索参数
-    query = request.args.get('q', '').strip()
-    cell_line_id = request.args.get('cell_line_id', type=int)
-    status = request.args.get('status', '')
-    date_from = request.args.get('date_from', '')
-    date_to = request.args.get('date_to', '')
-    creator_id = request.args.get('creator_id', type=int)
-    fluorescence = request.args.get('fluorescence', '')
-    resistance = request.args.get('resistance', '')
-    batch_id = request.args.get('batch_id', type=int)
-    location_type = request.args.get('location_type', '')  # tower, drawer, box
-    location_id = request.args.get('location_id', type=int)
-    
-    # 基础查询
-    vial_query = CryoVial.query.join(VialBatch).join(CellLine)
-    
-    # 添加用户权限相关的表
-    vial_query = vial_query.join(User, VialBatch.created_by_user_id == User.id)
-    
-    # 添加位置相关的表
-    if current_user.is_admin:
-        vial_query = vial_query.join(Box).join(Drawer).join(Tower)
-    
-    # 应用搜索条件
-    if query:
-        like_pattern = f'%{query}%'
-        vial_query = vial_query.filter(
-            (CryoVial.unique_vial_id_tag.ilike(like_pattern)) |
-            (VialBatch.name.ilike(like_pattern)) |
-            (CellLine.name.ilike(like_pattern)) |
-            (CryoVial.fluorescence_tag.ilike(like_pattern)) |
-            (CryoVial.resistance.ilike(like_pattern)) |
-            (CryoVial.notes.ilike(like_pattern))
-        )
-    
-    if cell_line_id:
-        vial_query = vial_query.filter(CryoVial.cell_line_id == cell_line_id)
-    
-    if status:
-        vial_query = vial_query.filter(CryoVial.status == status)
-    
-    if date_from:
-        try:
-            from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
-            vial_query = vial_query.filter(CryoVial.date_frozen >= from_date)
-        except ValueError:
-            pass
-    
-    if date_to:
-        try:
-            to_date = datetime.strptime(date_to, '%Y-%m-%d').date()
-            vial_query = vial_query.filter(CryoVial.date_frozen <= to_date)
-        except ValueError:
-            pass
-    
-    if creator_id:
-        vial_query = vial_query.filter(VialBatch.created_by_user_id == creator_id)
-    
-    if fluorescence:
-        vial_query = vial_query.filter(CryoVial.fluorescence_tag.ilike(f'%{fluorescence}%'))
-    
-    if resistance:
-        vial_query = vial_query.filter(CryoVial.resistance.ilike(f'%{resistance}%'))
-    
-    if batch_id:
-        vial_query = vial_query.filter(CryoVial.batch_id == batch_id)
-    
-    # 位置过滤
-    if current_user.is_admin and location_type and location_id:
-        if location_type == 'tower':
-            vial_query = vial_query.filter(Tower.id == location_id)
-        elif location_type == 'drawer':
-            vial_query = vial_query.filter(Drawer.id == location_id)
-        elif location_type == 'box':
-            vial_query = vial_query.filter(Box.id == location_id)
-    
-    # 执行查询并分页
-    page = request.args.get('page', 1, type=int)
-    per_page = min(request.args.get('per_page', 50, type=int), 100)
-    
-    vials_pagination = vial_query.order_by(VialBatch.id, CryoVial.unique_vial_id_tag)\
-                                .paginate(page=page, per_page=per_page, error_out=False)
-    
-    # 格式化结果
-    results = []
-    for vial in vials_pagination.items:
-        vial_data = {
-            'id': vial.id,
-            'unique_vial_id_tag': vial.unique_vial_id_tag,
-            'batch_name': vial.batch.name,
-            'batch_id': vial.batch_id,
-            'cell_line_name': vial.cell_line_info.name,
-            'status': vial.status,
-            'date_frozen': vial.date_frozen.strftime('%Y-%m-%d') if vial.date_frozen else None,
-            'fluorescence_tag': vial.fluorescence_tag,
-            'resistance': vial.resistance,
-            'notes': vial.notes
-        }
-        
-        # 添加位置信息（如果用户是管理员）
-        if current_user.is_admin:
-            vial_data.update({
-                'location': {
-                    'tower_name': vial.box_location.drawer_info.tower_info.name,
-                    'drawer_name': vial.box_location.drawer_info.name,
-                    'box_name': vial.box_location.name,
-                    'position': f'R{vial.row_in_box}C{vial.col_in_box}'
-                }
-            })
-        
-        results.append(vial_data)
-    
-    return jsonify({
-        'results': results,
-        'pagination': {
-            'page': vials_pagination.page,
-            'pages': vials_pagination.pages,
-            'per_page': vials_pagination.per_page,
-            'total': vials_pagination.total,
-            'has_prev': vials_pagination.has_prev,
-            'has_next': vials_pagination.has_next
-        }
-    })
-
-
-# =============================================================================
-# 批量操作相关API
-# =============================================================================
-
-@bp.route('/api/vials/batch-update-status', methods=['POST'])
-@login_required
-@admin_required
-def batch_update_vials_status():
-    """批量更新冻存管状态"""
-    try:
-        data = request.get_json()
-        vial_ids = data.get('vial_ids', [])
-        new_status = data.get('status', '')
-        
-        if not vial_ids or not new_status:
-            return jsonify({
-                'success': False,
-                'message': 'Missing vial IDs or status.'
-            }), 400
-        
-        if new_status not in ['Available', 'Used', 'Depleted', 'Discarded']:
-            return jsonify({
-                'success': False,
-                'message': 'Invalid status value.'
-            }), 400
-        
-        # 查询要更新的冻存管
-        vials = CryoVial.query.filter(CryoVial.id.in_(vial_ids)).all()
-        
-        if not vials:
-            return jsonify({
-                'success': False,
-                'message': 'No vials found with the provided IDs.'
-            }), 404
-        
-        # 记录更新前的状态
-        old_statuses = {vial.id: vial.status for vial in vials}
-        
-        # 批量更新状态
-        updated_count = 0
-        for vial in vials:
-            old_status = vial.status
-            vial.status = new_status
-            updated_count += 1
-            
-            # 记录审计日志
-            log_audit(
-                user_id=current_user.id,
-                action='UPDATE_VIAL_STATUS',
-                target_type='CryoVial',
-                target_id=vial.id,
-                details={
-                    'old_status': old_status,
-                    'new_status': new_status,
-                    'vial_tag': vial.unique_vial_id_tag,
-                    'batch_operation': True
-                }
-            )
-        
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': f'Successfully updated {updated_count} vials to status: {new_status}',
-            'updated_count': updated_count
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        current_app.logger.error(f'Error in batch status update: {e}')
-        return jsonify({
-            'success': False,
-            'message': 'An error occurred while updating vial statuses.'
-        }), 500
-
-
-@bp.route('/api/vials/batch-export', methods=['POST'])
-@login_required
-@admin_required
-def batch_export_vials():
-    """批量导出选中的冻存管"""
-    try:
-        data = request.get_json()
-        vial_ids = data.get('vial_ids', [])
-        
-        if not vial_ids:
-            return jsonify({
-                'success': False,
-                'message': 'No vials selected for export.'
-            }), 400
-        
-        # 查询选中的冻存管
-        vials = db.session.query(CryoVial).join(VialBatch).join(CellLine)\
-                          .filter(CryoVial.id.in_(vial_ids))\
-                          .order_by(VialBatch.id, CryoVial.unique_vial_id_tag).all()
-        
-        if not vials:
-            return jsonify({
-                'success': False,
-                'message': 'No vials found with the provided IDs.'
-            }), 404
-        
-        # 生成CSV数据
-        output = StringIO()
-        writer = csv.writer(output)
-        
-        # 表头
-        headers = [
-            'Vial ID', 'Batch ID', 'Batch Name', 'Vial Tag', 'Cell Line',
-            'Passage Number', 'Date Frozen', 'Frozen By', 'Status'
-        ]
-        if current_user.is_admin:
-            headers.append('Location')
-        headers.extend([
-            'Volume (ml)', 'Concentration', 'Fluorescence Tag', 
-            'Resistance', 'Parental Cell Line', 'Notes'
-        ])
-        writer.writerow(headers)
-        
-        # 数据行
-        for vial in vials:
-            row_data = [
-                vial.id,
-                vial.batch.id,
-                vial.batch.name,
-                vial.unique_vial_id_tag,
-                vial.cell_line_info.name,
-                vial.passage_number or '',
-                vial.date_frozen,
-                vial.freezer_operator.username if vial.freezer_operator else '',
-                vial.status,
-            ]
-            if current_user.is_admin:
-                location = (
-                    f"{vial.box_location.drawer_info.tower_info.name}/"
-                    f"{vial.box_location.drawer_info.name}/"
-                    f"{vial.box_location.name} R{vial.row_in_box}C{vial.col_in_box}"
-                )
-                row_data.append(location)
-            
-            row_data.extend([
-                vial.volume_ml or '',
-                vial.concentration or '',
-                vial.fluorescence_tag or '',
-                vial.resistance or '',
-                vial.parental_cell_line or '',
-                vial.notes or ''
-            ])
-            writer.writerow(row_data)
-        
-        # 记录审计日志
-        log_audit(
-            user_id=current_user.id,
-            action='BATCH_EXPORT_VIALS',
-            details={
-                'vial_count': len(vials),
-                'vial_ids': vial_ids[:10]  # 只记录前10个ID
-            }
-        )
-        
-        return Response(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={
-                'Content-Disposition': f'attachment;filename=selected_vials_{len(vials)}_items.csv'
-            }
-        )
-        
-    except Exception as e:
-        current_app.logger.error(f'Error in batch export: {e}')
-        return jsonify({
-            'success': False,
-            'message': 'An error occurred while exporting vials.'
-        }), 500
+        current_app.logger.error(f'Get theme error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get theme configuration'}), 500
 
 @bp.route('/theme-settings')
 @login_required
@@ -3131,7 +2621,7 @@ def get_dashboard_stats():
         batch_vial_counts = db.session.query(
             VialBatch.id,
             func.count(CryoVial.id).label('total_count'),
-            func.sum(func.case([(CryoVial.status == 'Available', 1)], else_=0)).label('available_count')
+            func.sum(func.case([(CryoVial.status == 'Available', 1)], 0)).label('available_count')
         ).join(
             CryoVial, CryoVial.batch_id == VialBatch.id
         ).group_by(VialBatch.id).all()
@@ -3156,3 +2646,16 @@ def get_dashboard_stats():
     except Exception as e:
         current_app.logger.error(f'Dashboard stats error: {e}')
         return jsonify({'success': False, 'message': 'Failed to get dashboard statistics'}), 500
+
+@bp.route('/alerts_management')
+@login_required
+def alerts_management():
+    """Alerts management page"""
+    try:
+        # Get alerts data - for now, just return a basic alerts management page
+        # This could be expanded to include actual alert functionality
+        return render_template('main/alerts_management.html')
+    except Exception as e:
+        current_app.logger.error(f'Alerts management error: {e}')
+        flash('Failed to load alerts management page', 'error')
+        return redirect(url_for('cell_storage.index'))

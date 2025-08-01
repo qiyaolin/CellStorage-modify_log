@@ -39,7 +39,18 @@ class PrintingService:
     """Backend printing service - manages job queue for print servers"""
     
     def __init__(self):
-        self.enabled = current_app.config.get('CENTRALIZED_PRINTING_ENABLED', False)
+        self._enabled = None
+    
+    @property
+    def enabled(self) -> bool:
+        """Lazily load the enabled configuration from Flask app config"""
+        if self._enabled is None:
+            try:
+                self._enabled = current_app.config.get('CENTRALIZED_PRINTING_ENABLED', False)
+            except RuntimeError:
+                # No application context available, default to False
+                self._enabled = False
+        return self._enabled
     
     def is_available(self) -> bool:
         """Check if centralized printing is enabled and database is accessible"""

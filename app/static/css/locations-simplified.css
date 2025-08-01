@@ -2,7 +2,6 @@
 .storage-management {
     padding: 20px;
     background-color: #f8f9fa;
-    min-height: 100vh;
 }
 
 /* Header Styles */
@@ -76,7 +75,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 20px;
-    height: calc(100vh - 200px);
+    min-height: 600px;
 }
 
 /* Tree Panel */

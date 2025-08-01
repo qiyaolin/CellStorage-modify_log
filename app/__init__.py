@@ -57,8 +57,13 @@ def create_app(config_class=Config):
     from .inventory import routes as inventory_routes
     app.register_blueprint(inventory_routes.bp, url_prefix='/inventory')
     
+    # Initialize Flask-Admin first
+    from .admin_interface import init_admin
+    init_admin(app)
+
+    # Register the original admin blueprint with a different prefix
     from .admin import bp as admin_bp
-    app.register_blueprint(admin_bp)
+    app.register_blueprint(admin_bp, url_prefix='/system-admin')
 
     # Import models from both subprojects
     from app.cell_storage import models as cell_models

@@ -17,7 +17,7 @@
             <li>After import, check the <a href="{{ url_for('cell_storage.inventory_summary') }}" class="alert-link">Inventory Summary</a> page to verify your data.</li>
           </ol>
         </div>
-        <form method="POST" enctype="multipart/form-data" novalidate>
+        <form method="POST" enctype="multipart/form-data" novalidate id="csvUploadForm">
           {{ form.hidden_tag() }}
           <div class="mb-3">
             {{ form.csv_file.label(class="form-label") }}
@@ -29,11 +29,110 @@
             {% endif %}
           </div>
           <div class="d-grid">
-            {{ form.submit(class="btn btn-primary btn-lg") }}
+            {{ form.submit(class="btn btn-primary btn-lg", id="submitBtn") }}
           </div>
+          
+          <!-- Loading indicator -->
+          <div id="loadingIndicator" class="text-center mt-3" style="display: none;">
+            <div class="spinner-border text-primary" role="status">
+              <span class="visually-hidden">Loading...</span>
+            </div>
+            <p class="mt-2 text-muted">Processing CSV file... This may take a moment.</p>
+          </div>
+          
+          <!-- Success message with quick action buttons -->
+          {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages and messages[0][0] == 'success' %}
+              <div class="alert alert-success mt-3" role="alert">
+                <div class="d-flex align-items-center justify-content-between">
+                  <div>
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    Import successful! You can:
+                  </div>
+                </div>
+                <div class="mt-2">
+                  <a href="{{ url_for('cell_storage.inventory_summary') }}" class="btn btn-sm btn-outline-success me-2">
+                    <i class="bi bi-list-ul me-1"></i>View Inventory
+                  </a>
+                  <button type="button" class="btn btn-sm btn-outline-primary" onclick="clearForm()">
+                    <i class="bi bi-plus-circle me-1"></i>Import Another File
+                  </button>
+                </div>
+              </div>
+            {% endif %}
+          {% endwith %}
         </form>
       </div>
     </div>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('csvUploadForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const loadingIndicator = document.getElementById('loadingIndicator');
+    const fileInput = document.querySelector('input[type="file"]');
+    
+    form.addEventListener('submit', function(e) {
+        // Check if a file is selected
+        if (!fileInput.files.length) {
+            e.preventDefault();
+            alert('Please select a CSV file to upload.');
+            return;
+        }
+        
+        // Show loading state
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status"></span>Uploading...';
+        loadingIndicator.style.display = 'block';
+        
+        // Scroll to loading indicator
+        loadingIndicator.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    
+    // File input validation
+    fileInput.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file) {
+            // Check file size (10MB limit)
+            const maxSize = 10 * 1024 * 1024; // 10MB
+            if (file.size > maxSize) {
+                alert('File size exceeds 10MB limit. Please choose a smaller file.');
+                this.value = '';
+                return;
+            }
+            
+            // Check file type
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                alert('Please select a CSV file.');
+                this.value = '';
+                return;
+            }
+            
+            // Show file info
+            const fileSize = (file.size / 1024 / 1024).toFixed(2);
+            console.log(`Selected file: ${file.name} (${fileSize} MB)`);
+        }
+    });
+    
+    // Function to clear form for new import
+    window.clearForm = function() {
+        // Reset form
+        form.reset();
+        
+        // Remove validation classes
+        fileInput.classList.remove('is-valid', 'is-invalid');
+        
+        // Hide success message if visible
+        const successAlert = document.querySelector('.alert-success');
+        if (successAlert) {
+            successAlert.style.display = 'none';
+        }
+        
+        // Focus on file input
+        fileInput.focus();
+    };
+});
+</script>
 {% endblock %} 

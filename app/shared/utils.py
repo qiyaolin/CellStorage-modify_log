@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 import json
+from sqlalchemy import text
 from .. import db
-from ..cell_storage.models import AuditLog, AppConfig, VialBatch
+from ..cell_storage.models import AuditLog, AppConfig, VialBatch, CryoVial
 
 def log_audit(user_id, action, target_type=None, target_id=None, details=None, **extra):
     """Create an ``AuditLog`` entry.
@@ -64,6 +65,81 @@ def clear_database_except_admin():
     db.session.commit()
 
 
+def get_vial_counter():
+    """Return current vial counter as int, ensuring sync with PostgreSQL sequence."""
+    try:
+        # 获取 PostgreSQL 序列的当前值
+        result = db.session.execute(text("SELECT last_value FROM cryovials_id_seq")).fetchone()
+        sequence_value = result[0] if result else 0
+        
+        # 获取 AppConfig 中的值
+        setting = AppConfig.query.filter_by(key='vial_counter').first()
+        
+        if not setting:
+            # 初始化：基于当前最大 ID 或序列值
+            max_id = db.session.query(db.func.max(CryoVial.id)).scalar() or 0
+            next_value = max(max_id + 1, sequence_value + 1)
+            setting = AppConfig(key='vial_counter', value=str(next_value))
+            db.session.add(setting)
+            # 同步序列值
+            db.session.execute(text(f"ALTER SEQUENCE cryovials_id_seq RESTART WITH {next_value}"))
+            db.session.commit()
+            return next_value
+        
+        # 检查 AppConfig 和序列是否同步
+        config_value = int(setting.value)
+        if abs(config_value - sequence_value) > 1:  # 允许1的差异（序列可能已经被使用）
+            # 不同步时，以序列值为准，更新 AppConfig
+            next_value = sequence_value + 1
+            setting.value = str(next_value)
+            db.session.commit()
+            return next_value
+        
+        return config_value
+        
+    except (ValueError, TypeError):
+        return 1
+    except Exception as e:
+        # 发生错误时，回退到基于最大 ID 的方式
+        max_id = db.session.query(db.func.max(CryoVial.id)).scalar() or 0
+        return max_id + 1
+
+
+def set_vial_counter(value):
+    """Set vial counter and update PostgreSQL sequence to match"""
+    try:
+        new_value = int(value)
+        if new_value < 1:
+            raise ValueError("Vial counter must be a positive integer")
+        
+        # 更新 AppConfig 中的计数器值
+        setting = AppConfig.query.filter_by(key='vial_counter').first()
+        if not setting:
+            setting = AppConfig(key='vial_counter')
+            db.session.add(setting)
+        setting.value = str(new_value)
+        
+        # 同时更新 PostgreSQL 序列，让下一个 ID 从指定值开始
+        db.session.execute(text(f"ALTER SEQUENCE cryovials_id_seq RESTART WITH {new_value}"))
+        db.session.commit()
+        
+    except (ValueError, TypeError) as e:
+        db.session.rollback()
+        raise ValueError(f"Invalid vial counter value: {e}")
+    except Exception as e:
+        db.session.rollback()
+        raise Exception(f"Failed to update vial counter: {e}")
+
+
+def get_next_vial_id(auto_commit=True):
+    """
+    这个函数已经不再需要，因为 CryoVial 的 id 现在由 PostgreSQL 序列自动管理。
+    保留此函数是为了向后兼容，但实际上 vial 的 ID 将由数据库自动分配。
+    """
+    # 获取当前的 vial_counter 值（这只是为了显示目的）
+    return get_vial_counter()
+
+
 def get_batch_counter():
     """Return current batch counter as int, initializing if missing."""
     setting = AppConfig.query.filter_by(key='batch_counter').first()
@@ -89,17 +165,54 @@ def set_batch_counter(value):
 
 
 def get_next_batch_id(auto_commit=True):
-    """Retrieve and increment the batch counter atomically."""
-    setting = AppConfig.query.filter_by(key='batch_counter').with_for_update().first()
-    if not setting:
+    """Retrieve and increment the batch counter atomically using database-level operations."""
+    try:
+        # Use PostgreSQL's built-in atomic operations for ID generation
+        # This prevents race conditions by using database-level locking
+        
+        # Try to get existing counter setting with row-level lock
+        setting = AppConfig.query.filter_by(key='batch_counter').with_for_update().first()
+        
+        if not setting:
+            # Initialize counter based on current max ID
+            max_id = db.session.query(db.func.max(VialBatch.id)).scalar() or 0
+            setting = AppConfig(key='batch_counter', value=str(max_id + 1))
+            db.session.add(setting)
+            # Commit immediately to avoid transaction conflicts
+            db.session.commit()
+            return max_id + 1
+        
+        # Get current value and increment atomically
+        current = int(setting.value)
+        setting.value = str(current + 1)
+        
+        if auto_commit:
+            db.session.commit()
+        else:
+            # For non-auto-commit, we still need to commit the counter update
+            # to avoid conflicts, then start a new transaction for the batch creation
+            db.session.commit()
+            
+        return current
+        
+    except Exception as e:
+        # Fallback: generate ID based on current max + timestamp to ensure uniqueness
+        import time
         max_id = db.session.query(db.func.max(VialBatch.id)).scalar() or 0
-        setting = AppConfig(key='batch_counter', value=str(max_id + 1))
-        db.session.add(setting)
-    current = int(setting.value)
-    setting.value = str(current + 1)
-    if auto_commit:
-        db.session.commit()
-    return current
+        timestamp_suffix = int(time.time() * 1000) % 10000  # Last 4 digits of timestamp
+        fallback_id = max_id + 1 + timestamp_suffix
+        
+        # Update counter to this value to maintain sequence
+        try:
+            setting = AppConfig.query.filter_by(key='batch_counter').first()
+            if setting:
+                setting.value = str(fallback_id + 1)
+                if auto_commit:
+                    db.session.commit()
+        except:
+            pass  # Counter update failed, but we have a valid ID
+            
+        return fallback_id
 
 
 # =============================================================================
@@ -173,7 +286,8 @@ def check_low_stock_alerts():
         CellLine.id,
         CellLine.name,
         db.func.count(CryoVial.id).label('available_count')
-    ).outerjoin(CryoVial, (CryoVial.cell_line_id == CellLine.id) & (CryoVial.status == 'Available'))\
+    ).select_from(CellLine)\
+     .outerjoin(CryoVial, (CryoVial.cell_line_id == CellLine.id) & (CryoVial.status == 'Available'))\
      .group_by(CellLine.id, CellLine.name).all()
     
     for cell_line_id, cell_line_name, available_count in cell_lines_stock:
@@ -222,7 +336,7 @@ def check_box_capacity_alerts():
         Box.rows,
         Box.columns,
         db.func.count(CryoVial.id).label('used_positions')
-    ).outerjoin(CryoVial).group_by(Box.id, Box.name, Box.rows, Box.columns).all()
+    ).outerjoin(CryoVial, CryoVial.box_id == Box.id).group_by(Box.id, Box.name, Box.rows, Box.columns).all()
     
     for box_id, box_name, rows, columns, used_positions in boxes_usage:
         total_positions = rows * columns
@@ -277,7 +391,7 @@ def check_old_samples_alerts():
         CellLine.name.label('cell_line_name'),
         db.func.min(CryoVial.date_frozen).label('oldest_date'),
         db.func.count(CryoVial.id).label('vial_count')
-    ).join(CryoVial).join(CellLine)\
+    ).join(CryoVial, CryoVial.batch_id == VialBatch.id).join(CellLine, CellLine.id == CryoVial.cell_line_id)\
      .filter(CryoVial.date_frozen <= cutoff_date)\
      .filter(CryoVial.status == 'Available')\
      .group_by(VialBatch.id, VialBatch.name, CellLine.name).all()

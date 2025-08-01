@@ -84,7 +84,7 @@ from ..models import (
 )
 
 from ...shared.utils import log_audit, clear_database_except_admin
-from ...shared.utils import get_next_batch_id, get_batch_counter, set_batch_counter
+from ...shared.utils import get_next_batch_id, get_batch_counter, set_batch_counter, get_next_vial_id, get_vial_counter, set_vial_counter
 from ...shared.audit_utils import create_audit_log, format_audit_details
 import io
 import csv
@@ -353,11 +353,33 @@ def locations_overview():
 def add_tower():
     form = TowerForm()
     if form.validate_on_submit():
+        # Create the tower
         tower = Tower(name=form.name.data, freezer_name=form.freezer_name.data, description=form.description.data)
         db.session.add(tower)
+        db.session.flush()  # Flush to get the tower ID
+        
+        # Automatically create 5 drawers for the new tower
+        box_counter = 1
+        for drawer_num in range(1, 6):
+            drawer = Drawer(name=f'Drawer {drawer_num}', tower_id=tower.id)
+            db.session.add(drawer)
+            db.session.flush()  # Flush to get the drawer ID
+            
+            # Automatically create 5 boxes (9x9) for each drawer
+            for box_num in range(1, 6):
+                box = Box(
+                    name=f'Box {box_counter}',
+                    drawer_id=drawer.id,
+                    rows=9,
+                    columns=9,
+                    description=f'Auto-created 9x9 box for Drawer {drawer_num}'
+                )
+                db.session.add(box)
+                box_counter += 1
+        
         db.session.commit()
-        log_audit(current_user.id, 'CREATE_TOWER', target_type='Tower', target_id=tower.id, details=f'Tower "{tower.name}" in freezer "{tower.freezer_name}"')
-        flash(f'Tower "{tower.name}" added successfully!', 'success')
+        log_audit(current_user.id, 'CREATE_TOWER', target_type='Tower', target_id=tower.id, details=f'Tower "{tower.name}" in freezer "{tower.freezer_name}" with 5 drawers and 25 boxes')
+        flash(f'Tower "{tower.name}" added successfully with 5 drawers and 25 boxes (9x9 each)!', 'success')
         return redirect(url_for('cell_storage.locations_overview'))
     return render_template('main/tower_form.html', title='Add Tower', form=form, form_action=url_for('cell_storage.add_tower'))
 
@@ -375,6 +397,32 @@ def edit_tower(tower_id):
         flash(f'Tower "{tower.name}" updated successfully!', 'success')
         return redirect(url_for('cell_storage.locations_overview'))
     return render_template('main/tower_form.html', title='Edit Tower', form=form, tower=tower, form_action=url_for('cell_storage.edit_tower', tower_id=tower.id))
+
+@bp.route('/tower/<int:tower_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_tower(tower_id):
+    tower = Tower.query.get_or_404(tower_id)
+    tower_name = tower.name
+    
+    # Delete all associated drawers, boxes, and vials
+    for drawer in tower.drawers:
+        for box in drawer.boxes:
+            # Delete all vials in this box
+            for vial in box.cryovials:
+                db.session.delete(vial)
+            # Delete the box
+            db.session.delete(box)
+        # Delete the drawer
+        db.session.delete(drawer)
+    
+    # Delete the tower
+    db.session.delete(tower)
+    db.session.commit()
+    
+    log_audit(current_user.id, 'DELETE_TOWER', target_type='Tower', target_id=tower_id, details=f'Tower "{tower_name}" and all contents deleted')
+    flash(f'Tower "{tower_name}" and all its contents have been deleted successfully!', 'success')
+    return redirect(url_for('cell_storage.locations_overview'))
 
 # --- Drawer Routes ---
 @bp.route('/drawer/add', methods=['GET', 'POST'])
@@ -414,6 +462,29 @@ def edit_drawer(drawer_id):
     # Ensure tower_id is set correctly for the form on GET request if not using obj
     # form.tower_id.data = drawer.tower_id # This is handled by obj=drawer
     return render_template('main/drawer_form.html', title='Edit Drawer', form=form, drawer=drawer, form_action=url_for('cell_storage.edit_drawer', drawer_id=drawer.id))
+
+@bp.route('/drawer/<int:drawer_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_drawer(drawer_id):
+    drawer = Drawer.query.get_or_404(drawer_id)
+    drawer_name = drawer.name
+    
+    # Delete all associated boxes and vials
+    for box in drawer.boxes:
+        # Delete all vials in this box
+        for vial in box.cryovials:
+            db.session.delete(vial)
+        # Delete the box
+        db.session.delete(box)
+    
+    # Delete the drawer
+    db.session.delete(drawer)
+    db.session.commit()
+    
+    log_audit(current_user.id, 'DELETE_DRAWER', target_type='Drawer', target_id=drawer_id, details=f'Drawer "{drawer_name}" and all contents deleted')
+    flash(f'Drawer "{drawer_name}" and all its contents have been deleted successfully!', 'success')
+    return redirect(url_for('cell_storage.locations_overview'))
 
 # --- Box Routes ---
 @bp.route('/box/add', methods=['GET', 'POST'])
@@ -468,6 +539,25 @@ def edit_box(box_id):
         return redirect(url_for('cell_storage.locations_overview'))
     # form.drawer_id.data = box.drawer_id # Handled by obj=box
     return render_template('main/box_form.html', title='Edit Box', form=form, box=box, form_action=url_for('cell_storage.edit_box', box_id=box.id))
+
+@bp.route('/box/<int:box_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_box(box_id):
+    box = Box.query.get_or_404(box_id)
+    box_name = box.name
+    
+    # Delete all vials in this box
+    for vial in box.cryovials:
+        db.session.delete(vial)
+    
+    # Delete the box
+    db.session.delete(box)
+    db.session.commit()
+    
+    log_audit(current_user.id, 'DELETE_BOX', target_type='Box', target_id=box_id, details=f'Box "{box_name}" and all contents deleted')
+    flash(f'Box "{box_name}" and all its contents have been deleted successfully!', 'success')
+    return redirect(url_for('cell_storage.locations_overview'))
 
 @bp.route('/inventory', methods=['GET', 'POST'])
 @login_required
@@ -723,6 +813,7 @@ def cryovial_inventory():
         all_fluorescence_tags=all_fluorescence_tags,
         all_resistances=all_resistances,
         batch_counter=get_batch_counter(),
+        vial_counter=get_vial_counter(),
         batch_color_map=batch_color_map
     )
 
@@ -836,19 +927,35 @@ def add_cryovial():
             flash('Placement confirmation data lost. Please try again.', 'danger')
             return redirect(url_for('cell_storage.add_cryovial'))
 
-        batch = VialBatch(
-            id=get_next_batch_id(auto_commit=False),
-            name=vial_common_data.get('batch_name'),
-            created_by_user_id=current_user.id,
-        )
-        db.session.add(batch)
-        db.session.flush()  # 确保batch ID可用但不提交
-        base_tag = f"B{batch.id}"
-
+        try:
+            batch_id = get_next_batch_id(auto_commit=False)
+            batch = VialBatch(
+                id=batch_id,
+                name=vial_common_data.get('batch_name'),
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(batch)
+            db.session.flush()  # 确保batch ID可用但不提交
+        except Exception as e:
+            current_app.logger.error(f'Error creating batch: {str(e)}', exc_info=True)
+            # If batch creation fails, clean up session and retry with a simple approach
+            db.session.rollback()
+            # Use simple max+1 approach as fallback
+            max_id = db.session.query(db.func.max(VialBatch.id)).scalar() or 0
+            batch = VialBatch(
+                id=max_id + 1,
+                name=vial_common_data.get('batch_name'),
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(batch)
+            db.session.flush()
         created_vials_info = []
         quantity_being_added = len(placements) # Get the actual number from placements
 
         for i, p in enumerate(placements):
+            # Use vial counter for unique ID generation
+            # 使用正确的批次标签格式
+            base_tag = f"B{batch.id}"
             unique_tag_suffix = f"-{i+1}" if quantity_being_added > 1 else ""
             unique_tag = f"{base_tag}{unique_tag_suffix}"
 
@@ -882,9 +989,10 @@ def add_cryovial():
             created_vials_info.append(f"Vial {unique_tag} at Box ID {p['box_id']}, R{p['row']}C{p['col']}")
 
         try:
-            db.session.flush() # Ensure vial IDs are available if batch.vials.all() needs them before commit
-            # Get vial IDs for the audit log
-            vial_ids = [v.id for v in batch.vials.all() if v.id is not None]
+            db.session.flush() # Ensure vial IDs are available before commit
+            # Get vial IDs for the audit log - collect them directly from created vials
+            created_vials = db.session.query(CryoVial).filter_by(batch_id=batch.id).all()
+            vial_ids = [v.id for v in created_vials if v.id is not None]
             
             # Create human-readable audit log
             readable_details = create_audit_log(
@@ -914,8 +1022,12 @@ def add_cryovial():
             return redirect(url_for('cell_storage.cryovial_inventory'))
         except Exception as e:
             db.session.rollback()
-            # The error message reported by the user indicates the exception 'e' contains the specific Python error.
-            flash(f'Error saving vial(s): {e}. Please try again.', 'danger')
+            # Log the full error for debugging
+            current_app.logger.error(f'Error in vial placement confirmation: {str(e)}', exc_info=True)
+            flash(f'Error saving vial(s): {str(e)}. Please try again.', 'danger')
+            # Clear session data to prevent stuck state
+            session.pop('proposed_placements', None)
+            session.pop('vial_common_data', None)
             return redirect(url_for('cell_storage.add_cryovial'))
 
     if form.validate_on_submit():
@@ -1215,6 +1327,8 @@ def add_vial_at_position(box_id, row, col):
             db.session.add(batch)
             db.session.commit()
 
+        # Use vial counter for unique ID generation
+        # 使用正确的批次标签格式
         base_tag = f"B{batch.id}"
         count = batch.vials.count()
         unique_tag = base_tag if count == 0 else f"{base_tag}-{count + 1}"
@@ -1287,6 +1401,22 @@ def update_batch_counter():
         flash('Batch counter updated.', 'success')
     except (TypeError, ValueError):
         flash('Invalid batch counter value.', 'danger')
+    return redirect(url_for('cell_storage.cryovial_inventory'))
+
+
+@bp.route('/admin/vial_counter', methods=['POST'])
+@login_required
+@admin_required
+def update_vial_counter():
+    value = request.form.get('vial_counter')
+    try:
+        new_val = int(value)
+        if new_val < 1:
+            raise ValueError
+        set_vial_counter(new_val)
+        flash('Vial counter updated.', 'success')
+    except (TypeError, ValueError):
+        flash('Invalid vial counter value.', 'danger')
     return redirect(url_for('cell_storage.cryovial_inventory'))
 
 
@@ -1945,10 +2075,14 @@ def import_csv():
                     if has_location:
                         location_str = row_data.get('Location', '').strip()
                         if location_str:
-                            # Parse location string: "Tower1/Drawer1/Box1 R1C1"
+                            # Parse location string: "Tower 1/Drawer 1/Box 1 R1C2" (handles spaces in names)
                             location_match = re.match(r'(.+)/(.+)/(.+)\s+R(\d+)C(\d+)', location_str)
                             if location_match:
                                 tower_name, drawer_name, box_name, row_str, col_str = location_match.groups()
+                                # Strip whitespace from names
+                                tower_name = tower_name.strip()
+                                drawer_name = drawer_name.strip() 
+                                box_name = box_name.strip()
                                 
                                 box = Box.query.join(Drawer).join(Tower).filter(
                                     Tower.name == tower_name,
@@ -1961,7 +2095,7 @@ def import_csv():
                                     row_in_box = int(row_str)
                                     col_in_box = int(col_str)
                                 else:
-                                    skipped_rows.append((i, row, f"Location '{location_str}' not found."))
+                                    skipped_rows.append((i, row, f"Location '{location_str}' not found. Looking for Tower: '{tower_name}', Drawer: '{drawer_name}', Box: '{box_name}'."))
                                     continue
                             else:
                                 skipped_rows.append((i, row, "Invalid Location format."))
@@ -1971,12 +2105,43 @@ def import_csv():
                         # Create new vial record
                         
                         # Find or create batch
-                        batch = VialBatch.query.filter_by(name=batch_name).first()
+                        batch_id_from_csv = row_data.get('Batch ID', '').strip()
+                        batch = None
+                        
+                        # First try to find batch by ID if provided in CSV
+                        if batch_id_from_csv:
+                            try:
+                                batch = VialBatch.query.get(int(batch_id_from_csv))
+                                if batch and batch.name != batch_name:
+                                    # Batch ID exists but name doesn't match
+                                    skipped_rows.append((i, row, f"Batch ID '{batch_id_from_csv}' exists but has different name '{batch.name}' (expected '{batch_name}')."))
+                                    continue
+                            except (ValueError, TypeError):
+                                # Invalid Batch ID format, treat as new batch creation
+                                pass
+                        
+                        # If not found by ID, try to find by name
+                        if not batch:
+                            batch = VialBatch.query.filter_by(name=batch_name).first()
+                        
+                        # If still not found, create new batch
                         if not batch:
                             batch = VialBatch(
                                 name=batch_name,
                                 created_by_user_id=current_user.id
                             )
+                            # If CSV specifies a Batch ID, try to use it
+                            if batch_id_from_csv:
+                                try:
+                                    requested_id = int(batch_id_from_csv)
+                                    # Check if this ID is already taken
+                                    existing_batch = VialBatch.query.get(requested_id)
+                                    if not existing_batch:
+                                        batch.id = requested_id
+                                except (ValueError, TypeError):
+                                    # Invalid ID format, let database auto-assign
+                                    pass
+                            
                             db.session.add(batch)
                             db.session.flush()  # Get the ID
                         
@@ -2001,7 +2166,7 @@ def import_csv():
                             col_in_box=col_in_box,
                             date_frozen=date_frozen or datetime.utcnow().date(),
                             frozen_by_user_id=current_user.id,
-                            status=row_data.get('Status', 'Available'),
+                            status=row_data.get('Status', 'Available').strip().capitalize(),
                             passage_number=row_data.get('Passage Number', ''),
                             volume_ml=float(row_data.get('Volume (ml)')) if row_data.get('Volume (ml)') and row_data.get('Volume (ml)').strip() else None,
                             concentration=row_data.get('Concentration', ''),
@@ -2010,6 +2175,18 @@ def import_csv():
                             parental_cell_line=row_data.get('Parental Cell Line', ''),
                             notes=row_data.get('Notes', '')
                         )
+                        
+                        # If CSV specifies a Vial ID, try to use it
+                        if vial_id:
+                            try:
+                                requested_vial_id = int(vial_id)
+                                # Check if this ID is already taken
+                                existing_vial = CryoVial.query.get(requested_vial_id)
+                                if not existing_vial:
+                                    vial.id = requested_vial_id
+                            except (ValueError, TypeError):
+                                # Invalid ID format, let database auto-assign
+                                pass
                         db.session.add(vial)
                         created_count += 1
                         
@@ -2017,7 +2194,7 @@ def import_csv():
                         # Update existing vial
                         
                         # Update status if changed
-                        new_status = row_data.get('Status', '').strip()
+                        new_status = row_data.get('Status', '').strip().capitalize()
                         if new_status and new_status != vial.status:
                             vial.status = new_status
                         
@@ -2080,9 +2257,9 @@ def import_csv():
                     message_parts.append(f"{created_count} new vials created")
                 
                 if message_parts:
-                    flash(f'CSV processed successfully. {", ".join(message_parts)}.', 'success')
+                    flash(f'CSV import completed successfully! {", ".join(message_parts)}. You can now import another file or check the Inventory Summary to view your data.', 'success')
                 else:
-                    flash('CSV processed. No changes were made.', 'info')
+                    flash('CSV processed successfully. No changes were made as all data was already up to date.', 'info')
                     
                 if skipped_rows:
                     # Create a summary of skipped reasons for a cleaner message
@@ -2093,12 +2270,13 @@ def import_csv():
                     summary_messages = [f"{count} rows skipped ({reason})" for reason, count in reasons_summary.items()]
                     flash(f'{len(skipped_rows)} total rows were skipped. Reasons: {"; ".join(summary_messages)}', 'warning')
 
-                return redirect(url_for('cell_storage.inventory_summary'))
+                return redirect(url_for('cell_storage.import_csv'))
 
             except Exception as e:
                 db.session.rollback()
                 current_app.logger.error(f'CSV import error: {e}')
                 flash(f'An unexpected error occurred during import: {e}', 'danger')
+                return redirect(url_for('cell_storage.import_csv'))
 
     return render_template('main/import_csv.html', title='Import CSV', form=form)
 

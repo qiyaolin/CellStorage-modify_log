@@ -173,6 +173,28 @@
                                             {% endif %}
                                         </div>
                                         
+                                        <!-- Capacity Progress Bar for Tower -->
+                                        <div class="mb-3">
+                                            {% set tower_capacity = tower.drawers.count() * 10 %}
+                                            {% set total_boxes = 0 %}
+                                            {% for drawer in tower.drawers %}
+                                                {% set total_boxes = total_boxes + drawer.boxes.count() %}
+                                            {% endfor %}
+                                            {% set tower_usage_percent = ((total_boxes / tower_capacity * 100) if tower_capacity > 0 else 0) | round(1) %}
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <small class="text-muted">Capacity Usage</small>
+                                                <small class="fw-bold">{{ total_boxes }}/{{ tower_capacity }} ({{ tower_usage_percent }}%)</small>
+                                            </div>
+                                            <div class="progress" style="height: 6px;">
+                                                <div class="progress-bar {% if tower_usage_percent >= 90 %}bg-danger{% elif tower_usage_percent >= 75 %}bg-warning{% else %}bg-success{% endif %}" 
+                                                     role="progressbar" 
+                                                     style="width: {{ tower_usage_percent }}%" 
+                                                     aria-valuenow="{{ tower_usage_percent }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100"></div>
+                                            </div>
+                                        </div>
+
                                         <!-- Statistics Information -->
                                         <div class="row g-2 text-center">
                                             <div class="col-4">
@@ -184,13 +206,7 @@
                                             <div class="col-4">
                                                 <div class="bg-light rounded p-2">
                                                     <small class="text-muted d-block">Boxes</small>
-                                                    <strong class="text-warning">
-                                                        {% set total_boxes = 0 %}
-                                                        {% for drawer in tower.drawers %}
-                                                            {% set total_boxes = total_boxes + drawer.boxes.count() %}
-                                                        {% endfor %}
-                                                        {{ total_boxes }}
-                                                    </strong>
+                                                    <strong class="text-warning">{{ total_boxes }}</strong>
                                                 </div>
                                             </div>
                                             <div class="col-4">
@@ -269,6 +285,25 @@
                                                                     <li><a class="dropdown-item" href="{{ url_for('cell_storage.edit_drawer', drawer_id=drawer.id) }}">Edit</a></li>
                                                                     <li><a class="dropdown-item" href="{{ url_for('cell_storage.add_box', drawer_id=drawer.id) }}">Add Box</a></li>
                                                                 </ul>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <!-- Capacity Progress Bar for Drawer -->
+                                                        <div class="mb-3">
+                                                            {% set drawer_capacity = 10 %}
+                                                            {% set drawer_boxes = drawer.boxes.count() %}
+                                                            {% set drawer_usage_percent = ((drawer_boxes / drawer_capacity * 100) if drawer_capacity > 0 else 0) | round(1) %}
+                                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                                <small class="text-muted">Capacity Usage</small>
+                                                                <small class="fw-bold">{{ drawer_boxes }}/{{ drawer_capacity }} ({{ drawer_usage_percent }}%)</small>
+                                                            </div>
+                                                            <div class="progress" style="height: 4px;">
+                                                                <div class="progress-bar {% if drawer_usage_percent >= 90 %}bg-danger{% elif drawer_usage_percent >= 75 %}bg-warning{% else %}bg-success{% endif %}" 
+                                                                     role="progressbar" 
+                                                                     style="width: {{ drawer_usage_percent }}%" 
+                                                                     aria-valuenow="{{ drawer_usage_percent }}" 
+                                                                     aria-valuemin="0" 
+                                                                     aria-valuemax="100"></div>
                                                             </div>
                                                         </div>
                                                         

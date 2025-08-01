@@ -9,12 +9,24 @@
 {% if current_user.is_admin %}
 <div class="card bg-light border-secondary mb-4">
     <div class="card-body">
-        <form method="post" action="{{ url_for('cell_storage.update_batch_counter') }}" class="d-flex align-items-center">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <label for="batch_counter_input" class="form-label me-2 mb-0">Next Batch ID:</label>
-            <input type="number" id="batch_counter_input" name="batch_counter" value="{{ batch_counter }}" class="form-control me-2" style="width: 120px;">
-            <button type="submit" class="btn btn-sm btn-outline-primary">Set</button>
-        </form>
+        <div class="row">
+            <div class="col-md-6">
+                <form method="post" action="{{ url_for('cell_storage.update_batch_counter') }}" class="d-flex align-items-center">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <label for="batch_counter_input" class="form-label me-2 mb-0">Next Batch ID:</label>
+                    <input type="number" id="batch_counter_input" name="batch_counter" value="{{ batch_counter }}" class="form-control me-2" style="width: 120px;">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Set</button>
+                </form>
+            </div>
+            <div class="col-md-6">
+                <form method="post" action="{{ url_for('cell_storage.update_vial_counter') }}" class="d-flex align-items-center">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <label for="vial_counter_input" class="form-label me-2 mb-0">Next Vial ID:</label>
+                    <input type="number" id="vial_counter_input" name="vial_counter" value="{{ vial_counter }}" class="form-control me-2" style="width: 120px;">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Set</button>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 {% endif %}
@@ -371,7 +383,7 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
   var vialDetailsModal = document.getElementById('vialDetailsModal');
@@ -559,76 +571,105 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // Batch deletion functionality (admin only)
-  var batchDeleteToggleBtn = document.getElementById('batch-delete-toggle');
-  if (batchDeleteToggleBtn) {
-    var batchDeleteMode = false;
-    var selectedVials = new Set();
-    var confirmBtn = document.getElementById('batch-delete-confirm');
-    var cancelBtn = document.getElementById('batch-delete-cancel');
-    var batchDeleteInfo = document.getElementById('batch-delete-info');
-  
-    batchDeleteToggleBtn.addEventListener('click', function() {
-      console.log('🗑️ Entering batch deletion mode');
-      batchDeleteMode = true;
-      this.style.display = 'none';
-      confirmBtn.style.display = 'inline-block';
-      cancelBtn.style.display = 'inline-block';
-      batchDeleteInfo.style.display = 'block';
-      
-      var checkboxes = document.querySelectorAll('.batch-delete-checkbox');
-      console.log('📦 Found', checkboxes.length, 'checkboxes');
-      // Don't display checkbox, only use red box highlighting
-      // checkboxes remain hidden but still used for internal data tracking
-      
-      var vialCells = document.querySelectorAll('.vial-cell');
-      console.log('🔲 Found', vialCells.length, 'vial cells');
-      vialCells.forEach(cell => {
-        cell.removeAttribute('data-bs-toggle');
-        cell.style.cursor = 'default';
-        cell.classList.add('batch-delete-mode');
-        cell.addEventListener('click', handleCellClickInDeleteMode);
-      });
-      
-      // Add checkbox event listeners
-      addCheckboxListeners();
-      updateDeleteButtonState();
-      
-      // Show success prompt
-      alert('✅ Entered batch deletion mode!\n\n💡 You can now click cells to select vials for deletion\n📦 Found ' + checkboxes.length + ' selectable vials');
-    });
-  
-    cancelBtn.addEventListener('click', exitBatchDeleteMode);
-  
-    confirmBtn.addEventListener('click', function() {
-      if (selectedVials.size === 0) {
-        alert('Please select cryovials to delete');
+  function initializeBatchDelete() {
+    var batchDeleteToggleBtn = document.getElementById('batch-delete-toggle');
+    console.log('🔍 Initializing batch delete, button found:', !!batchDeleteToggleBtn);
+    
+    if (batchDeleteToggleBtn) {
+      // Check if already initialized to prevent duplicate listeners
+      if (batchDeleteToggleBtn.hasAttribute('data-initialized')) {
+        console.log('📝 Batch delete already initialized, skipping');
         return;
       }
       
-      if (confirm('Are you sure you want to delete the selected ' + selectedVials.size + ' cryovials? This action cannot be undone.')) {
-        fetch('/vials/batch_delete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('meta[name=csrf-token]') ? document.querySelector('meta[name=csrf-token]').getAttribute('content') : ''
-          },
-          body: JSON.stringify({ vial_ids: Array.from(selectedVials) })
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            alert('Successfully deleted ' + data.deleted_count + ' cryovials');
-            location.reload();
-          } else {
-            alert('Deletion failed: ' + (data.error || 'Unknown error'));
-          }
-        })
-        .catch(error => {
-          console.error('Error deleting vials:', error);
-          alert('An error occurred during deletion, please try again later.');
-        });
+      var batchDeleteMode = false;
+      var selectedVials = new Set();
+      var confirmBtn = document.getElementById('batch-delete-confirm');
+      var cancelBtn = document.getElementById('batch-delete-cancel');
+      var batchDeleteInfo = document.getElementById('batch-delete-info');
+      
+      console.log('🔍 Button elements found:', {
+        toggle: !!batchDeleteToggleBtn,
+        confirm: !!confirmBtn,
+        cancel: !!cancelBtn,
+        info: !!batchDeleteInfo
+      });
+    
+      // Mark as initialized
+      batchDeleteToggleBtn.setAttribute('data-initialized', 'true');
+      
+      // Add event listener directly without cloning
+      batchDeleteToggleBtn.addEventListener('click', function(e) {
+        e.preventDefault();
+        console.log('🗑️ Batch Delete button clicked - entering batch deletion mode');
+        
+        try {
+          batchDeleteMode = true;
+          this.style.display = 'none';
+          confirmBtn.style.display = 'inline-block';
+          cancelBtn.style.display = 'inline-block';
+          batchDeleteInfo.style.display = 'block';
+          
+          var checkboxes = document.querySelectorAll('.batch-delete-checkbox');
+          console.log('📦 Found', checkboxes.length, 'checkboxes');
+          
+          var vialCells = document.querySelectorAll('.vial-cell');
+          console.log('🔲 Found', vialCells.length, 'vial cells');
+          vialCells.forEach(cell => {
+            cell.removeAttribute('data-bs-toggle');
+            cell.style.cursor = 'default';
+            cell.classList.add('batch-delete-mode');
+            cell.addEventListener('click', handleCellClickInDeleteMode);
+          });
+          
+          // Add checkbox event listeners
+          addCheckboxListeners();
+          updateDeleteButtonState();
+          
+          // Show success prompt
+          alert('✅ Entered batch deletion mode!\n\n💡 You can now click cells to select vials for deletion\n📦 Found ' + checkboxes.length + ' selectable vials');
+        } catch (error) {
+          console.error('❌ Error entering batch delete mode:', error);
+          alert('Error entering batch delete mode. Please refresh the page and try again.');
+        }
+      });
+  
+      // Add event listeners for cancel and confirm buttons
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', exitBatchDeleteMode);
       }
-    });
+    
+      if (confirmBtn) {
+        confirmBtn.addEventListener('click', function() {
+          if (selectedVials.size === 0) {
+            alert('Please select cryovials to delete');
+            return;
+          }
+          
+          if (confirm('Are you sure you want to delete the selected ' + selectedVials.size + ' cryovials? This action cannot be undone.')) {
+            fetch('/vials/batch_delete', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]') ? document.querySelector('meta[name=csrf-token]').getAttribute('content') : ''
+              },
+              body: JSON.stringify({ vial_ids: Array.from(selectedVials) })
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.success) {
+                alert('Successfully deleted ' + data.deleted_count + ' cryovials');
+                location.reload();
+              } else {
+                alert('Deletion failed: ' + (data.error || 'Unknown error'));
+              }
+            })
+            .catch(error => {
+              console.error('Error deleting vials:', error);
+              alert('An error occurred during deletion, please try again later.');
+            });
+          }
+        });
 
     function handleCellClickInDeleteMode(event) {
         event.preventDefault(); // Prevent triggering other events
@@ -708,7 +749,36 @@ document.addEventListener('DOMContentLoaded', function () {
         confirmBtn.classList.add('btn-outline-danger');
       }
     }
+    }
   }
+  
+  // Initialize batch delete functionality when page loads
+  console.log('🚀 Page loaded, initializing batch delete');
+  initializeBatchDelete();
+  
+  // Also initialize when Browse by Location tab is clicked
+  var browseTab = document.getElementById('browse-tab');
+  if (browseTab) {
+    browseTab.addEventListener('click', function() {
+      // Wait for tab content to be shown
+      setTimeout(function() {
+        console.log('🔄 Re-initializing batch delete after tab switch');
+        initializeBatchDelete();
+      }, 100);
+    });
+  }
+  
+  // Add a test function to verify the button is clickable
+  setTimeout(function() {
+    var testBtn = document.getElementById('batch-delete-toggle');
+    if (testBtn && testBtn.style.display !== 'none') {
+      console.log('✅ Batch Delete button is visible and ready');
+      console.log('📍 Button position:', testBtn.getBoundingClientRect());
+      console.log('🎯 Button initialized:', testBtn.hasAttribute('data-initialized'));
+    } else {
+      console.log('⚠️ Batch Delete button not found or hidden');
+    }
+  }, 500);
 });
 </script>
 {% endblock %}

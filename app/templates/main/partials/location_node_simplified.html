@@ -14,6 +14,19 @@
         
         <div class="node-info" onclick="selectLocation('{{ tower.id }}', 'tower')">
             <div class="node-name">{{ tower.name }}</div>
+            <div class="node-capacity">
+                {% set ns = namespace(used=0, total=0) %}
+                {% for drawer in tower.drawers %}
+                    {% for box in drawer.boxes %}
+                        {% set ns.used = ns.used + box.cryovials.count() %}
+                        {% set ns.total = ns.total + (box.rows * box.columns) %}
+                    {% endfor %}
+                {% endfor %}
+                <span class="capacity-text">{{ ns.used }}/{{ ns.total }}</span>
+                <div class="capacity-bar">
+                    <div class="capacity-fill" style="width: {{ ((ns.used / ns.total * 100) if ns.total > 0 else 0) }}%"></div>
+                </div>
+            </div>
         </div>
         
         <div class="node-actions">
@@ -50,6 +63,17 @@
                         
                         <div class="node-info" onclick="selectLocation('{{ drawer.id }}', 'drawer')">
                             <div class="node-name">{{ drawer.name }}</div>
+                            <div class="node-capacity">
+                                {% set drawer_ns = namespace(used=0, total=0) %}
+                                {% for box in drawer.boxes %}
+                                    {% set drawer_ns.used = drawer_ns.used + box.cryovials.count() %}
+                                    {% set drawer_ns.total = drawer_ns.total + (box.rows * box.columns) %}
+                                {% endfor %}
+                                <span class="capacity-text">{{ drawer_ns.used }}/{{ drawer_ns.total }}</span>
+                                <div class="capacity-bar">
+                                    <div class="capacity-fill" style="width: {{ ((drawer_ns.used / drawer_ns.total * 100) if drawer_ns.total > 0 else 0) }}%"></div>
+                                </div>
+                            </div>
                         </div>
                         
                         <div class="node-actions">
@@ -83,9 +107,9 @@
                                         <div class="node-info" onclick="selectLocation('{{ box.id }}', 'box')">
                                             <div class="node-name">{{ box.name }}</div>
                                             <div class="node-capacity">
-                        <span class="capacity-text">{{ box.cryovials.filter_by(status='Available').count() }}/{{ box.rows * box.columns }}</span>
+                        <span class="capacity-text">{{ box.cryovials.count() }}/{{ box.rows * box.columns }}</span>
                                                 <div class="capacity-bar">
-                                                    <div class="capacity-fill" style="width: {{ ((box.cryovials.filter_by(status='Available').count()) / (box.rows * box.columns) * 100) if (box.rows * box.columns) > 0 else 0 }}%"></div>
+                                                    <div class="capacity-fill" style="width: {{ ((box.cryovials.count()) / (box.rows * box.columns) * 100) if (box.rows * box.columns) > 0 else 0 }}%"></div>
                                                 </div>
                                             </div>
                                         </div>

@@ -640,7 +640,18 @@ class StorageLocationManager {
     // Initialize tree state (expand/collapse memory)
     initTreeState() {
         try {
-            // Restore expanded state from localStorage
+            // First, set all nodes to collapsed by default
+            document.querySelectorAll('.node-children').forEach(children => {
+                children.classList.add('collapsed');
+                children.style.maxHeight = '0';
+            });
+            document.querySelectorAll('.node-toggle i').forEach(icon => {
+                if (icon.classList.contains('bi-chevron-down')) {
+                    icon.className = 'bi bi-chevron-right';
+                }
+            });
+            
+            // Then restore expanded state from localStorage (if user had previously expanded some nodes)
             const expandedNodes = JSON.parse(localStorage.getItem('expandedNodes') || '[]');
             console.log('Restoring expanded nodes:', expandedNodes);
             
@@ -651,6 +662,7 @@ class StorageLocationManager {
                     const toggle = node.querySelector('.node-toggle');
                     if (children && toggle) {
                         children.classList.remove('collapsed');
+                        children.style.maxHeight = 'none';
                         const icon = toggle.querySelector('i');
                         if (icon) {
                             icon.className = 'bi bi-chevron-down';
@@ -659,7 +671,7 @@ class StorageLocationManager {
                 }
             });
             
-            console.log('Tree state initialized');
+            console.log('Tree state initialized - default collapsed with restored expansions');
         } catch (error) {
             console.error('Error initializing tree state:', error);
         }

@@ -1,0 +1,109 @@
+{% extends 'admin/master.html' %}
+
+{% block body %}
+<div class="admin-header">
+    <h1><i class="fas fa-tachometer-alt"></i> Cell Storage System Dashboard</h1>
+    <p>Manage your cell storage database with full administrative control</p>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats.users }}</div>
+            <div class="stat-label">Total Users</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats.vials }}</div>
+            <div class="stat-label">Total Vials</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats.available_vials }}</div>
+            <div class="stat-label">Available Vials</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats.batches }}</div>
+            <div class="stat-label">Vial Batches</div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats.cell_lines }}</div>
+            <div class="stat-label">Cell Lines</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats.towers }}</div>
+            <div class="stat-label">Storage Towers</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats.drawers }}</div>
+            <div class="stat-label">Storage Drawers</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card text-center">
+            <div class="stat-number">{{ stats.boxes }}</div>
+            <div class="stat-label">Storage Boxes</div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-info-circle"></i> Quick Access</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <h5>Quick Access</h5>
+                        <div class="alert alert-info">
+                            <p><i class="fas fa-info-circle"></i> Use the navigation menu above to access different data management sections.</p>
+                            <ul class="mb-0">
+                                <li><strong>User Management</strong>: Manage system users and their roles</li>
+                                <li><strong>Cell Lines</strong>: Manage cell line information and properties</li>
+                                <li><strong>Storage</strong>: Manage towers, drawers, and storage boxes</li>
+                                <li><strong>Vials</strong>: Manage vial batches and cryo vials</li>
+                                <li><strong>Inventory</strong>: Manage storage locations and inventory items</li>
+                            </ul>
+                        </div>
+                        <div class="mt-3">
+                            <a href="{{ url_for('cell_storage.index') }}" class="btn btn-success" target="_blank">
+                                <i class="fas fa-external-link-alt"></i> Go to Main Application
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="alert alert-info">
+            <h5><i class="fas fa-lightbulb"></i> Admin Tips</h5>
+            <ul class="mb-0">
+                <li>Use the search functionality to quickly find specific records</li>
+                <li>Export data in various formats using the export button</li>
+                <li>Use filters to narrow down large datasets</li>
+                <li>Batch operations are available for bulk updates and deletions</li>
+                <li>Click on any record to view detailed information</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,27 @@
+{
+  "name": "Cell Storage System",
+  "short_name": "CellStorage",
+  "description": "Mobile interface for Cell Storage Management System",
+  "start_url": "/cell-storage/mobile",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/mobile/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/mobile/icon-192.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["medical", "productivity", "utilities"],
+  "lang": "en",
+  "dir": "ltr"
+}

@@ -57,6 +57,14 @@ def create_app(config_class=Config):
     from .inventory import routes as inventory_routes
     app.register_blueprint(inventory_routes.bp, url_prefix='/inventory')
     
+    # Register mobile routes
+    from .mobile_routes import mobile_bp
+    app.register_blueprint(mobile_bp, url_prefix='/cell-storage')
+    
+    # Register mobile middleware
+    from .mobile_middleware import mobile_redirect_middleware
+    mobile_redirect_middleware(app)
+    
     # Initialize Flask-Admin first
     from .admin_interface import init_admin
     init_admin(app)

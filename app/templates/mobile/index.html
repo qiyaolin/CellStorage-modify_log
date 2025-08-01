@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CryoVial Inventory - Mobile</title>
+    <link rel="manifest" href="{{ url_for('static', filename='mobile/manifest.json') }}">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="CryoVial Inventory">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='mobile/mobile-styles.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>CryoVial Inventory</h1>
+        </div>
+        
+        <div class="main-content">
+            <div class="tab-nav">
+                <button class="tab-btn active" data-tab="search">Search</button>
+                <button class="tab-btn" data-tab="browse">Browse</button>
+                <button class="tab-btn" data-tab="pickup">Pickup</button>
+                <button class="tab-btn" data-tab="add">Add New</button>
+            </div>
+            
+            <!-- Search Tab -->
+            <div id="search-tab" class="tab-content active">
+                <div class="search-section">
+                    <input type="text" id="search-input" class="search-input" placeholder="Search batch name, cell line or tag...">
+                    
+                    <div class="filter-row">
+                        <select id="creator-filter" class="filter-select">
+                            <option value="">All Creators</option>
+                        </select>
+                        <select id="fluorescence-filter" class="filter-select">
+                            <option value="">All Fluorescence</option>
+                        </select>
+                    </div>
+                    
+                    <div class="filter-row">
+                        <select id="resistance-filter" class="filter-select">
+                            <option value="">All Resistances</option>
+                        </select>
+                        <div></div>
+                    </div>
+                    
+                    <div class="search-buttons">
+                        <button id="search-btn" class="btn btn-primary">Search</button>
+                        <button id="view-all-btn" class="btn btn-secondary">View All</button>
+                        <button id="clear-btn" class="btn btn-outline">Clear</button>
+                    </div>
+                    
+                    <div class="search-buttons" style="margin-top: 0.5rem;">
+                        <button id="add-to-pickup-btn" class="btn btn-primary" style="display: none;">Add to Pickup List</button>
+                    </div>
+                </div>
+                
+                <div id="search-results" class="results-section">
+                    <div class="empty-state">
+                        Please enter search criteria or click "View All" to browse samples
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Browse Tab -->
+            <div id="browse-tab" class="tab-content">
+                <div id="inventory-content" class="inventory-grid">
+                    <div class="loading">Loading inventory data...</div>
+                </div>
+            </div>
+            
+            <!-- Pickup Tab -->
+            <div id="pickup-tab" class="tab-content">
+                <div id="pickup-content" class="pickup-list-section">
+                    <div class="empty-state">Pickup list is empty</div>
+                </div>
+            </div>
+            
+            <!-- Add New Vial Tab -->
+            <div id="add-tab" class="tab-content">
+                <div class="search-section">
+                    <h3 style="margin-bottom: 1rem; color: #1f2937; font-weight: 600;">Add New CryoVial</h3>
+                    
+                    <form id="add-vial-form">
+                        <div class="form-group">
+                            <label class="form-label" for="cell-line-select">Cell Line *</label>
+                            <select id="cell-line-select" class="form-input" required>
+                                <option value="">Select Cell Line</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="batch-name-input">Batch Name *</label>
+                            <input type="text" id="batch-name-input" class="form-input" required placeholder="Enter batch name">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="tower-select">Tower *</label>
+                            <select id="tower-select" class="form-input" required>
+                                <option value="">Select Tower</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="drawer-select">Drawer *</label>
+                            <select id="drawer-select" class="form-input" required disabled>
+                                <option value="">Select Drawer</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="box-select">Box *</label>
+                            <select id="box-select" class="form-input" required disabled>
+                                <option value="">Select Box</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Position *</label>
+                            <div id="position-info" style="font-size: 0.9rem; color: #6b7280; margin-bottom: 0.5rem;">
+                                Select a box to see available positions
+                            </div>
+                            <div id="position-grid" class="position-grid" style="display: none;">
+                                <!-- Position cells will be populated by JavaScript -->
+                            </div>
+                            <input type="hidden" id="selected-row" required>
+                            <input type="hidden" id="selected-col" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="passage-number-input">Passage Number</label>
+                            <input type="number" id="passage-number-input" class="form-input" placeholder="Enter passage number">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="date-frozen-input">Date Frozen</label>
+                            <input type="date" id="date-frozen-input" class="form-input">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="volume-input">Volume (ml)</label>
+                            <input type="number" step="0.1" id="volume-input" class="form-input" placeholder="Enter volume">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="concentration-input">Concentration</label>
+                            <input type="text" id="concentration-input" class="form-input" placeholder="Enter concentration">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="fluorescence-input">Fluorescence Tag</label>
+                            <input type="text" id="fluorescence-input" class="form-input" placeholder="Enter fluorescence tag">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="resistance-input">Resistance</label>
+                            <input type="text" id="resistance-input" class="form-input" placeholder="Enter resistance">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="parental-cell-line-input">Parental Cell Line</label>
+                            <input type="text" id="parental-cell-line-input" class="form-input" placeholder="Enter parental cell line">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label" for="notes-input">Notes</label>
+                            <textarea id="notes-input" class="form-textarea" placeholder="Enter any additional notes"></textarea>
+                        </div>
+                        
+                        <div class="search-buttons">
+                            <button type="submit" class="btn btn-success">Add CryoVial</button>
+                            <button type="button" id="reset-form-btn" class="btn btn-outline">Reset Form</button>
+                        </div>
+                    </form>
+                    
+                    <div id="add-result" style="margin-top: 1rem;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Vial Details Modal -->
+    <div id="vial-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title">Vial Details</h3>
+                <button class="close-btn">&times;</button>
+            </div>
+            <div id="vial-details">
+                <!-- Details will be populated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='mobile/mobile-app.js') }}"></script>
+</body>
+</html>

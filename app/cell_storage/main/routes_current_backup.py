@@ -362,9 +362,10 @@ def add_tower():
         for drawer_num in range(1, 6):
             drawer = Drawer(name=f'Drawer {drawer_num}', tower_id=tower.id)
             db.session.add(drawer)
-            db.session.flush()  # Flush to get the drawer ID
-            
+            db.session.flush()  # Get drawer.id
+
             # Automatically create 5 boxes (9x9) for each drawer
+            # Each drawer has boxes numbered 1-5
             for box_num in range(1, 6):
                 box = Box(
                     name=f'Box {box_num}',

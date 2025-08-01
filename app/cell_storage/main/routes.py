@@ -359,23 +359,22 @@ def add_tower():
         db.session.flush()  # Flush to get the tower ID
         
         # Automatically create 5 drawers for the new tower
-        box_counter = 1
         for drawer_num in range(1, 6):
             drawer = Drawer(name=f'Drawer {drawer_num}', tower_id=tower.id)
             db.session.add(drawer)
-            db.session.flush()  # Flush to get the drawer ID
-            
+            db.session.flush()  # Get drawer.id
+
             # Automatically create 5 boxes (9x9) for each drawer
+            # Each drawer has boxes numbered 1-5
             for box_num in range(1, 6):
                 box = Box(
-                    name=f'Box {box_counter}',
+                    name=f'Box {box_num}',
                     drawer_id=drawer.id,
                     rows=9,
                     columns=9,
                     description=f'Auto-created 9x9 box for Drawer {drawer_num}'
                 )
                 db.session.add(box)
-                box_counter += 1
         
         db.session.commit()
         log_audit(current_user.id, 'CREATE_TOWER', target_type='Tower', target_id=tower.id, details=f'Tower "{tower.name}" in freezer "{tower.freezer_name}" with 5 drawers and 25 boxes')

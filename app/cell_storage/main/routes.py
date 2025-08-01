@@ -1380,8 +1380,10 @@ def clear_all():
     form = ConfirmForm()
     if form.validate_on_submit():
         if form.confirm.data.strip() == 'confirm_hayer':
+            # 在数据库清理操作前保存用户ID，避免DetachedInstanceError
+            user_id = current_user.id
             clear_database_except_admin()
-            log_audit(current_user.id, 'CLEAR_ALL', target_type='System')
+            log_audit(user_id, 'CLEAR_ALL', target_type='System')
             flash('All records except admin accounts have been removed.', 'success')
             return redirect(url_for('cell_storage.index'))
         flash('Incorrect confirmation phrase.', 'danger')
@@ -2122,11 +2124,40 @@ def import_csv():
                                 # Invalid Batch ID format, treat as new batch creation
                                 pass
                         
-                        # If not found by ID, try to find by name
-                        if not batch:
-                            batch = VialBatch.query.filter_by(name=batch_name).first()
+                        # 修复：如果CSV指定了Batch ID但未找到对应记录，不应该通过名称查找
+                        # 这会导致不同Batch ID的记录被错误合并
+                        # if not batch:
+                        #     batch = VialBatch.query.filter_by(name=batch_name).first()
                         
-                        # If still not found, create new batch
+                        # 修复：正确的导入逻辑
+                        if not batch:
+                            # 如果CSV指定了Batch ID但数据库中不存在，使用指定的ID创建新batch
+                            if batch_id_from_csv:
+                                try:
+                                    requested_id = int(batch_id_from_csv)
+                                    # 检查ID是否已被其他batch占用
+                                    existing_batch_with_id = VialBatch.query.get(requested_id)
+                                    if existing_batch_with_id:
+                                        # 这种情况在前面已经处理过了，不应该到达这里
+                                        skipped_rows.append((i, row, f"Batch ID '{batch_id_from_csv}' already exists with different name."))
+                                        continue
+                                    
+                                    # 创建具有指定ID的新batch
+                                    batch = VialBatch(
+                                        id=requested_id,
+                                        name=batch_name,
+                                        created_by_user_id=current_user.id
+                                    )
+                                    db.session.add(batch)
+                                    db.session.flush()  # 获取ID但不提交
+                                except ValueError:
+                                    skipped_rows.append((i, row, f"Invalid Batch ID format: '{batch_id_from_csv}'"))
+                                    continue
+                            else:
+                                # CSV没有指定Batch ID，尝试通过名称查找现有batch
+                                batch = VialBatch.query.filter_by(name=batch_name).first()
+                        
+                        # 如果仍然没有找到batch，创建新batch（不指定ID，让数据库自动分配）
                         if not batch:
                             batch = VialBatch(
                                 name=batch_name,

@@ -27,33 +27,56 @@
 
 基于现有代码的详细工作流程分析，包含6个主要阶段：文件上传、文件验证、CSV结构验证、数据行处理、字段验证和批量数据处理。系统支持两种CSV格式（管理员和用户格式），具备完整的错误处理和反馈机制。
 
-## 重要发现：Batch处理逻辑
+## ⚠️ 严重问题发现：Batch处理逻辑缺陷
 
 ### 关键问题：相同Batch Name但不同Batch ID的记录会被合并吗？
 
-**答案：不会被合并，会产生冲突错误**
+**答案：会被错误合并！这是一个严重的数据完整性缺陷**
 
-系统的Batch处理遵循严格的一致性检查：
+### 问题根源
+现有系统的逻辑缺陷：
 
-1. **优先级顺序**：
-   - 如果CSV提供Batch ID → 先通过ID查找
-   - 如果ID对应的记录名称与CSV中的Batch Name不匹配 → **报错跳过**
-   - 如果没有ID或ID不存在 → 通过Name查找现有Batch
-   - 如果Name也不存在 → 创建新Batch
-
-2. **冲突检测机制**：
 ```python
-if batch and batch.name != batch_name:
-    skipped_rows.append((i, row, 
-        f"Batch ID '{batch_id_from_csv}' exists but has different name '{batch.name}' (expected '{batch_name}')."))
+# 1. 先通过Batch ID查找
+if batch_id_from_csv:
+    batch = VialBatch.query.get(int(batch_id_from_csv))
+    if batch and batch.name != batch_name:
+        # 只有ID存在但名称不匹配时才报错
+        skipped_rows.append(...)
+
+# 2. 关键缺陷：如果通过ID没找到，直接通过名称查找
+if not batch:
+    batch = VialBatch.query.filter_by(name=batch_name).first()
+    # 这里完全忽略了CSV中指定的Batch ID！
 ```
 
-3. **数据一致性保护**：
-   - Batch ID是唯一标识符，必须与数据库中的名称匹配
-   - 不允许ID与Name不一致，防止数据混乱
-   - 冲突行会被跳过，不会强制合并
+### 错误场景示例
+假设数据库中存在：Batch ID=100, Name="实验批次A"
 
-详细分析请参考：`Batch处理逻辑详细分析.md`
+导入CSV：
+```csv
+Vial ID,Batch ID,Batch Name,Vial Tag,Cell Line,...
+,300,实验批次A,V001,HeLa,...
+```
+
+**错误处理流程：**
+1. 通过ID=300查找 → 没找到
+2. 通过name="实验批次A"查找 → 找到ID=100的记录
+3. **错误**：将记录分配给Batch ID=100，而不是创建新的ID=300批次
+
+### 数据完整性风险
+- **批次混淆**：不同实验批次被错误合并
+- **ID冲突隐患**：CSV指定的Batch ID被完全忽略
+- **审计追踪问题**：无法准确追踪样本原始批次归属
+- **实验可追溯性丢失**：影响质量控制和合规性
+
+### 修复建议
+Batch ID应该是唯一标识符，即使Batch Name相同，不同Batch ID也必须视为不同批次。需要修改逻辑：
+- 当CSV指定的Batch ID不存在时，检查是否有同名的不同ID批次
+- 如果存在同名不同ID的批次，应该报错而不是合并
+- 只有在确认无冲突时才创建新批次
+
+详细分析请参考：`Batch处理逻辑问题分析-修正版.md`
 
 ## Plan
 

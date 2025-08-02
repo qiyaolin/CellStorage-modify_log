@@ -34,12 +34,36 @@ def create_app(config_class=Config):
         from app.shared.utils import get_batch_counter
         db.create_all()
         try:
+            # Add password_plain column to users table
             db.session.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_plain VARCHAR(128);"
             ))
+            
+            # Add batch_id column to print_jobs table if it exists
+            db.session.execute(text(
+                "ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS batch_id INTEGER;"
+            ))
+            
+            # Add foreign key constraint if it doesn't exist
+            db.session.execute(text("""
+                DO $$ 
+                BEGIN 
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints 
+                        WHERE constraint_name = 'fk_print_jobs_batch_id'
+                    ) THEN
+                        ALTER TABLE print_jobs 
+                        ADD CONSTRAINT fk_print_jobs_batch_id 
+                        FOREIGN KEY (batch_id) REFERENCES vial_batches(id);
+                    END IF;
+                END $$;
+            """))
+            
             db.session.commit()
-        except Exception:
+        except Exception as e:
             db.session.rollback()
+            # Log the error but don't stop app startup
+            print(f"Database migration warning: {e}")
 
         # Ensure batch counter config exists
         get_batch_counter()

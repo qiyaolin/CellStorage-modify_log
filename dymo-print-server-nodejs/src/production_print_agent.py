@@ -174,8 +174,10 @@ class ProductionPrintAgent:
             endpoint = template.format(job_id=job_id)
             url = urllib.parse.urljoin(self.backend_url, endpoint)
             
-            batch_id = job_data.get('batch_id')
-            batch_name = job_data.get('batch_name')
+            # Correctly extract batch info from the nested 'label_data' object
+            label_data = job_data.get('label_data', {})
+            batch_id = label_data.get('batch_id')
+            batch_name = label_data.get('batch_name')
 
             if not batch_id or not batch_name:
                 logger.warning(f"Job #{job_id} is missing batch_id or batch_name. Status update may fail.")

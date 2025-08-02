@@ -333,8 +333,12 @@ class PrintJob(db.Model):
     # Print server info
     print_server_id = db.Column(db.String(100), nullable=True)  # Which server processed this job
     
+    # Batch association
+    batch_id = db.Column(db.Integer, db.ForeignKey('vial_batches.id'), nullable=True)  # Associated batch
+    
     # Relationships
     user = db.relationship('User', backref='print_jobs')
+    batch = db.relationship('VialBatch', backref='print_jobs')
     
     @property
     def can_retry(self):
@@ -370,7 +374,9 @@ class PrintJob(db.Model):
             'retry_count': self.retry_count,
             'max_retries': self.max_retries,
             'can_retry': self.can_retry,
-            'print_server_id': self.print_server_id
+            'print_server_id': self.print_server_id,
+            'batch_id': self.batch_id,
+            'batch_name': self.batch.name if self.batch else None
         }
     
     def mark_processing(self, server_id=None, notes=None):

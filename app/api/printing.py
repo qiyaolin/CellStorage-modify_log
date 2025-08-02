@@ -256,7 +256,7 @@ def fetch_pending_job():
         if job:
             return jsonify({'job': job.to_dict()})
         else:
-            return jsonify({'job': None}), 404
+            return jsonify({'job': None})
             
     except Exception as e:
         logger.error(f"Error fetching pending job: {e}")

@@ -615,9 +615,13 @@ class ProductionPrintAgent:
 
     def health_check(self):
         """Perform a health check on backend, template, and dymo framework."""
-        # Backend API - use print status endpoint
+        # Backend API - test fetch-pending-job endpoint with API token
         try:
-            resp = requests.get(f"{self.backend_url}/api/print/status", timeout=5)
+            resp = requests.get(
+                f"{self.backend_url}/api/print/fetch-pending-job?server_id=health-check",
+                headers=self.get_auth_headers(),
+                timeout=5
+            )
             backend_ok = resp.status_code == 200
         except:
             backend_ok = False

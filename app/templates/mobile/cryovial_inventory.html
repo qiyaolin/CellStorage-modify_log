@@ -78,6 +78,17 @@
                                     </select>
                                 </div>
 
+                                <div class="mobile-form-group">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" name="show_unavailable" 
+                                               id="show-unavailable" value="true"
+                                               {% if request.args.get('show_unavailable') %}checked{% endif %}>
+                                        <label class="form-check-label" for="show-unavailable">
+                                            Show items with 0 available
+                                        </label>
+                                    </div>
+                                </div>
+
                                 <div class="d-grid gap-2">
                                     <button type="submit" class="btn btn-primary btn-mobile">
                                         <i class="fas fa-search me-2"></i>Search
@@ -123,57 +134,67 @@
         <input type="hidden" name="creator" value="{{ search_creator }}">
         <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
         <input type="hidden" name="resistance" value="{{ search_resistance }}">
+        <input type="hidden" name="show_unavailable" value="{{ request.args.get('show_unavailable', '') }}">
 
         {% for result in search_results %}
-        <div class="card card-mobile mb-3">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" 
-                               name="selected_batches" value="{{ result.batch.id }}" 
-                               id="batch-{{ result.batch.id }}">
-                        <label class="form-check-label fw-bold" for="batch-{{ result.batch.id }}">
-                            Batch {{ result.batch.id }}
-                        </label>
-                    </div>
-                    <span class="badge bg-{{ 'success' if result.available_quantity > 0 else 'secondary' }}">
-                        {{ result.available_quantity }} available
-                    </span>
+        <div class="inventory-result-card">
+            <div class="result-header">
+                <div class="result-selection">
+                    <input class="form-check-input" type="checkbox" 
+                           name="selected_batches" value="{{ result.batch.id }}" 
+                           id="batch-{{ result.batch.id }}">
+                    <label class="result-title" for="batch-{{ result.batch.id }}">
+                        <div class="batch-id">Batch {{ result.batch.id }}</div>
+                        <div class="batch-name">{{ result.batch.name }}</div>
+                    </label>
                 </div>
+                <div class="availability-badge">
+                    <span class="availability-count bg-{{ 'success' if result.available_quantity > 0 else 'secondary' }}">
+                        {{ result.available_quantity }}
+                    </span>
+                    <small>available</small>
+                </div>
+            </div>
 
-                <h6 class="card-title mb-2">{{ result.batch.name }}</h6>
+            <div class="result-details">
+                <div class="cell-line-info">
+                    <i class="fas fa-dna text-primary"></i>
+                    <span class="cell-line-name">{{ result.cell_line }}</span>
+                </div>
                 
-                <div class="row g-2 text-sm">
-                    <div class="col-12">
-                        <strong>Cell Line:</strong> {{ result.cell_line }}
-                    </div>
+                <div class="result-meta">
                     {% if result.passage_number %}
-                    <div class="col-6">
-                        <strong>Passage:</strong> {{ result.passage_number }}
+                    <div class="meta-item">
+                        <i class="fas fa-layer-group"></i>
+                        <span>P{{ result.passage_number }}</span>
                     </div>
                     {% endif %}
                     {% if result.date_frozen %}
-                    <div class="col-6">
-                        <strong>Date:</strong> {{ result.date_frozen }}
+                    <div class="meta-item">
+                        <i class="fas fa-calendar"></i>
+                        <span>{{ result.date_frozen }}</span>
                     </div>
                     {% endif %}
                     {% if result.fluorescence_tag %}
-                    <div class="col-6">
-                        <strong>Fluorescence:</strong> {{ result.fluorescence_tag }}
+                    <div class="meta-item">
+                        <i class="fas fa-lightbulb"></i>
+                        <span>{{ result.fluorescence_tag }}</span>
                     </div>
                     {% endif %}
                     {% if result.resistance %}
-                    <div class="col-6">
-                        <strong>Resistance:</strong> {{ result.resistance }}
-                    </div>
-                    {% endif %}
-                    {% if result.notes %}
-                    <div class="col-12">
-                        <strong>Notes:</strong> 
-                        <span class="text-muted">{{ result.notes[:100] }}{% if result.notes|length > 100 %}...{% endif %}</span>
+                    <div class="meta-item">
+                        <i class="fas fa-shield-alt"></i>
+                        <span>{{ result.resistance }}</span>
                     </div>
                     {% endif %}
                 </div>
+                
+                {% if result.notes %}
+                <div class="result-notes">
+                    <i class="fas fa-sticky-note text-muted"></i>
+                    <span class="notes-text">{{ result.notes[:100] }}{% if result.notes|length > 100 %}...{% endif %}</span>
+                </div>
+                {% endif %}
             </div>
         </div>
         {% endfor %}
@@ -262,6 +283,7 @@
                 <input type="hidden" name="creator" value="{{ search_creator }}">
                 <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
                 <input type="hidden" name="resistance" value="{{ search_resistance }}">
+                <input type="hidden" name="show_unavailable" value="{{ request.args.get('show_unavailable', '') }}">
 
                 {% for sel in selected_batches %}
                 <div class="d-flex justify-content-between align-items-center p-2 border-bottom">

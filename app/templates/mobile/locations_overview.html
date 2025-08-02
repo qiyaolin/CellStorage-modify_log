@@ -64,64 +64,32 @@
                                 </div>
                             </button>
                         </h2>
-                        <div id="box-{{ box.id }}" class="accordion-collapse collapse">
+                        <div id="box-{{ box.id }}" class="accordion-collapse collapse" data-box-id="{{ box.id }}">
                             <div class="accordion-body">
-                                {% if box.occupied > 0 %}
-                                <!-- Box Grid -->
-                                <div class="table-responsive">
-                                    <table class="table table-bordered table-sm" style="font-size: 0.75rem;">
-                                        <thead>
-                                            <tr>
-                                                <th style="width: 30px;">#</th>
-                                                {% for c in range(1, box.columns + 1) %}
-                                                <th class="text-center" style="width: 40px;">{{ c }}</th>
-                                                {% endfor %}
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {% for r in range(1, box.rows + 1) %}
-                                            <tr>
-                                                <th class="text-center bg-light">{{ r }}</th>
-                                                {% for c in range(1, box.columns + 1) %}
-                                                    {% set key = r ~ '-' ~ c %}
-                                                    {% set vial = box.vials.get(key) %}
-                                                    <td class="text-center p-1 batch-browse-{{ vial.batch_color if vial else '0' }}"
-                                                        {% if not vial %}style="background-color: #f8f9fa !important; color: #6c757d !important;"{% endif %}
-                                                        {% if vial %}
-                                                        style="cursor: pointer;"
-                                                        data-bs-toggle="modal" 
-                                                        data-bs-target="#mobileVialModal"
-                                                        data-vial-id="{{ vial.id }}"
-                                                        data-vial-tag="{{ vial.tag }}"
-                                                        data-batch-name="{{ vial.batch_name }}"
-                                                        data-cell-line="{{ vial.cell_line }}"
-                                                        data-status="{{ vial.status }}"
-                                                        data-position="R{{ r }}C{{ c }}"
-                                                        {% endif %}>
-                                                        {% if vial %}
-                                                            <small>{{ vial.batch_id }}</small>
-                                                        {% else %}
-                                                            <small class="text-muted">-</small>
-                                                        {% endif %}
-                                                    </td>
-                                                {% endfor %}
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                    </table>
+                                <!-- Loading indicator -->
+                                <div class="box-loading-indicator" id="loading-{{ box.id }}">
+                                    <div class="text-center p-4">
+                                        <div class="loading-spinner me-2"></div>
+                                        <span class="text-muted">Loading box contents...</span>
+                                    </div>
                                 </div>
                                 
-                                <!-- Legend -->
-                                <div class="mt-2">
-                                    <small class="text-muted">
-                                        <i class="fas fa-info-circle me-1"></i>
-                                        Different colors represent different batches. Click on any vial for details.
-                                        <span class="badge bg-light text-dark ms-2">Empty positions are gray</span>
-                                    </small>
+                                <!-- Error state -->
+                                <div class="box-error-state d-none" id="error-{{ box.id }}">
+                                    <div class="text-center p-4">
+                                        <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                                        <span class="text-muted">Failed to load box contents</span>
+                                        <br>
+                                        <button class="btn btn-sm btn-outline-primary mt-2" onclick="loadBoxDetails({{ box.id }})">
+                                            <i class="fas fa-redo me-1"></i>Retry
+                                        </button>
+                                    </div>
                                 </div>
-                                {% else %}
-                                <p class="text-muted mb-0">This box is empty</p>
-                                {% endif %}
+                                
+                                <!-- Box content (will be populated via AJAX) -->
+                                <div class="box-content d-none" id="content-{{ box.id }}">
+                                    <!-- Content will be inserted here dynamically -->
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -259,6 +227,10 @@
 
 {% block extra_js %}
 <script>
+// Cache for loaded box data
+const loadedBoxes = new Set();
+const boxDataCache = new Map();
+
 document.addEventListener('DOMContentLoaded', function() {
     // Add touch feedback for box cards
     document.querySelectorAll('.card .card-body').forEach(function(card) {
@@ -285,41 +257,58 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 300);
     
+    // Handle accordion expand events for lazy loading
+    document.querySelectorAll('.accordion-collapse').forEach(function(accordion) {
+        accordion.addEventListener('show.bs.collapse', function() {
+            const boxId = this.getAttribute('data-box-id');
+            if (boxId && !loadedBoxes.has(boxId)) {
+                loadBoxDetails(boxId);
+            }
+        });
+    });
+    
     // Handle vial modal
     const vialModal = document.getElementById('mobileVialModal');
     let currentVialId = null;
     
-    vialModal.addEventListener('show.bs.modal', function(event) {
-        const button = event.relatedTarget;
-        
-        // Extract data from the clicked cell
-        currentVialId = button.getAttribute('data-vial-id');
-        const vialTag = button.getAttribute('data-vial-tag');
-        const batchName = button.getAttribute('data-batch-name');
-        const cellLine = button.getAttribute('data-cell-line');
-        const status = button.getAttribute('data-status');
-        const position = button.getAttribute('data-position');
-        
-        // Update modal content
-        document.getElementById('modal-vial-tag').textContent = vialTag || '-';
-        document.getElementById('modal-batch-name').textContent = batchName || '-';
-        document.getElementById('modal-cell-line').textContent = cellLine || '-';
-        document.getElementById('modal-position').textContent = position || '-';
-        
-        // Update status with appropriate badge
-        const statusElement = document.getElementById('modal-status');
-        let statusBadge = '';
-        switch (status) {
-            case 'Available':
-                statusBadge = '<span class="badge bg-success">Available</span>';
-                break;
-            case 'Used':
-                statusBadge = '<span class="badge bg-secondary">Used</span>';
-                break;
-            default:
-                statusBadge = `<span class="badge bg-warning">${status}</span>`;
+    // Use event delegation for dynamically loaded vial cells
+    document.addEventListener('click', function(event) {
+        if (event.target.closest('[data-vial-id]')) {
+            const button = event.target.closest('[data-vial-id]');
+            
+            // Extract data from the clicked cell
+            currentVialId = button.getAttribute('data-vial-id');
+            const vialTag = button.getAttribute('data-vial-tag');
+            const batchName = button.getAttribute('data-batch-name');
+            const cellLine = button.getAttribute('data-cell-line');
+            const status = button.getAttribute('data-status');
+            const position = button.getAttribute('data-position');
+            
+            // Update modal content
+            document.getElementById('modal-vial-tag').textContent = vialTag || '-';
+            document.getElementById('modal-batch-name').textContent = batchName || '-';
+            document.getElementById('modal-cell-line').textContent = cellLine || '-';
+            document.getElementById('modal-position').textContent = position || '-';
+            
+            // Update status with appropriate badge
+            const statusElement = document.getElementById('modal-status');
+            let statusBadge = '';
+            switch (status) {
+                case 'Available':
+                    statusBadge = '<span class="badge bg-success">Available</span>';
+                    break;
+                case 'Used':
+                    statusBadge = '<span class="badge bg-secondary">Used</span>';
+                    break;
+                default:
+                    statusBadge = `<span class="badge bg-warning">${status}</span>`;
+            }
+            statusElement.innerHTML = statusBadge;
+            
+            // Show modal
+            const modal = new bootstrap.Modal(vialModal);
+            modal.show();
         }
-        statusElement.innerHTML = statusBadge;
     });
     
     // Handle "View in Inventory" button
@@ -334,5 +323,104 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
 });
+
+// Function to load box details via AJAX
+function loadBoxDetails(boxId) {
+    if (loadedBoxes.has(boxId)) {
+        return; // Already loaded
+    }
+    
+    const loadingElement = document.getElementById(`loading-${boxId}`);
+    const errorElement = document.getElementById(`error-${boxId}`);
+    const contentElement = document.getElementById(`content-${boxId}`);
+    
+    // Show loading state
+    loadingElement.classList.remove('d-none');
+    errorElement.classList.add('d-none');
+    contentElement.classList.add('d-none');
+    
+    // Make AJAX request
+    fetch(`/mobile/api/box/${boxId}/details`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Cache the data
+                boxDataCache.set(boxId, data);
+                loadedBoxes.add(boxId);
+                
+                // Generate and insert the box content
+                const content = generateBoxContent(data);
+                contentElement.innerHTML = content;
+                
+                // Show content and hide loading
+                loadingElement.classList.add('d-none');
+                contentElement.classList.remove('d-none');
+            } else {
+                throw new Error(data.error || 'Failed to load box details');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading box details:', error);
+            
+            // Show error state
+            loadingElement.classList.add('d-none');
+            errorElement.classList.remove('d-none');
+        });
+}
+
+// Function to generate box content HTML
+function generateBoxContent(data) {
+    if (data.occupied === 0) {
+        return '<p class="text-muted mb-0">This box is empty</p>';
+    }
+    
+    let html = '<div class="table-responsive">';
+    html += '<table class="table table-bordered table-sm" style="font-size: 0.75rem;">';
+    
+    // Header
+    html += '<thead><tr><th style="width: 30px;">#</th>';
+    for (let c = 1; c <= data.columns; c++) {
+        html += `<th class="text-center" style="width: 40px;">${c}</th>`;
+    }
+    html += '</tr></thead>';
+    
+    // Body
+    html += '<tbody>';
+    for (let r = 1; r <= data.rows; r++) {
+        html += `<tr><th class="text-center bg-light">${r}</th>`;
+        for (let c = 1; c <= data.columns; c++) {
+            const key = `${r}-${c}`;
+            const vial = data.vials[key];
+            
+            if (vial) {
+                html += `<td class="text-center p-1 batch-browse-${vial.batch_color}" 
+                            style="cursor: pointer;" 
+                            data-vial-id="${vial.id}"
+                            data-vial-tag="${vial.tag}"
+                            data-batch-name="${vial.batch_name}"
+                            data-cell-line="${vial.cell_line}"
+                            data-status="${vial.status}"
+                            data-position="R${r}C${c}">
+                            <small>${vial.batch_id}</small>
+                         </td>`;
+            } else {
+                html += '<td class="text-center p-1" style="background-color: #f8f9fa !important; color: #6c757d !important;">';
+                html += '<small class="text-muted">-</small></td>';
+            }
+        }
+        html += '</tr>';
+    }
+    html += '</tbody></table></div>';
+    
+    // Legend
+    html += '<div class="mt-2">';
+    html += '<small class="text-muted">';
+    html += '<i class="fas fa-info-circle me-1"></i>';
+    html += 'Different colors represent different batches. Click on any vial for details.';
+    html += '<span class="badge bg-light text-dark ms-2">Empty positions are gray</span>';
+    html += '</small></div>';
+    
+    return html;
+}
 </script>
 {% endblock %}

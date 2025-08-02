@@ -5,7 +5,7 @@ This module provides mobile-optimized routes that work alongside
 existing desktop functionality without interfering with it.
 """
 
-from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, g
+from flask import Blueprint, render_template, request, redirect, url_for, flash, session, jsonify, g, current_app
 from flask_login import login_required, current_user
 from datetime import datetime
 
@@ -15,9 +15,10 @@ from .cell_storage.forms import CryoVialForm
 from .mobile_utils import (
     get_device_info, format_mobile_search_result, format_mobile_batch_summary,
     get_mobile_navigation_items, get_mobile_quick_actions, get_mobile_print_data,
-    mobile_pagination_info, render_mobile_template
+    mobile_pagination_info, render_mobile_template, get_frequently_used_cells,
+    track_cell_line_interaction
 )
-from .shared.utils import get_next_batch_id, get_next_vial_id
+from .shared.utils import get_next_batch_id, get_next_vial_id, log_audit
 from .shared.decorators import admin_required
 
 # Create mobile blueprint
@@ -46,11 +47,15 @@ def index():
     # Format recent vials for mobile display
     formatted_recent = [format_mobile_search_result(vial) for vial in recent_vials]
     
+    # Get frequently used cells for current user
+    frequent_cells = get_frequently_used_cells(current_user.id, limit=5)
+    
     context = {
         'total_vials': total_vials,
         'available_vials': available_vials,
         'total_batches': total_batches,
         'recent_vials': formatted_recent,
+        'frequent_cells': frequent_cells,
         'navigation_items': get_mobile_navigation_items(),
         'quick_actions': get_mobile_quick_actions(),
         'device_info': get_device_info()
@@ -68,6 +73,7 @@ def cryovial_inventory():
     search_creator = request.args.get('creator', '').strip()
     search_fluorescence = request.args.get('fluorescence', '').strip()
     search_resistance = request.args.get('resistance', '').strip()
+    show_unavailable = request.args.get('show_unavailable', '').lower() == 'true'
     view_all = request.args.get('view_all', '').lower() == 'true'
     page = request.args.get('page', 1, type=int)
     per_page = 10  # Smaller page size for mobile
@@ -121,6 +127,10 @@ def cryovial_inventory():
                 batch_id=batch.id, status='Available'
             ).count()
             
+            # Skip batches with 0 available vials unless specifically requested
+            if available_count == 0 and not show_unavailable:
+                continue
+            
             result = {
                 'batch': batch,
                 'cell_line': batch.cell_line,
@@ -133,6 +143,10 @@ def cryovial_inventory():
                 'notes': batch.notes
             }
             search_results.append(result)
+            
+            # Track user interaction with this cell line for recommendations
+            if search_q or search_creator or search_fluorescence or search_resistance:
+                track_cell_line_interaction(current_user.id, batch.cell_line_id, 'search')
     
     # Get filter options
     all_creators = User.query.distinct().all()
@@ -173,6 +187,7 @@ def cryovial_inventory():
         'search_creator': search_creator,
         'search_fluorescence': search_fluorescence,
         'search_resistance': search_resistance,
+        'show_unavailable': show_unavailable,
         'view_all': view_all,
         'all_creators': all_creators,
         'all_fluorescence_tags': all_fluorescence_tags,
@@ -242,6 +257,7 @@ def cryovial_inventory_post():
         'creator': request.form.get('creator', ''),
         'fluorescence': request.form.get('fluorescence', ''),
         'resistance': request.form.get('resistance', ''),
+        'show_unavailable': request.form.get('show_unavailable', ''),
     }
     
     # Remove empty parameters
@@ -266,9 +282,14 @@ def quick_search():
                 CellLine.name.contains(query),  # Search actual cell line names
                 VialBatch.name.contains(query)  # Use batch name as tag equivalent
             )
-        ).limit(20).all()
+        ).filter(CryoVial.status == 'Available').limit(20).all()  # Only show available vials
         
         results = [format_mobile_search_result(vial) for vial in vials]
+        
+        # Track user search interactions for recommendations
+        for vial in vials:
+            if vial.cell_line_id:
+                track_cell_line_interaction(current_user.id, vial.cell_line_id, 'search')
     
     return render_template('mobile/quick_search.html', 
                          query=query, 
@@ -279,16 +300,10 @@ def quick_search():
 @mobile_bp.route('/locations')
 @login_required
 def locations_overview():
-    """Mobile locations overview with detailed box contents"""
+    """Mobile locations overview with lazy loading for box contents"""
     towers = Tower.query.all()
     
-    # Create batch color mapping (consistent with desktop)
-    all_batches = VialBatch.query.all()
-    batch_color_map = {}
-    for i, batch in enumerate(all_batches):
-        batch_color_map[batch.id] = i % 12  # Use 12 different colors
-    
-    # Build detailed location structure for mobile (similar to desktop Browse by Location)
+    # Build basic location structure for mobile (without detailed vial data)
     location_data = []
     for tower in towers:
         tower_info = {
@@ -303,38 +318,19 @@ def locations_overview():
             }
             
             for box in drawer.boxes:
-                # Get all vials in this box
-                vials_in_box = CryoVial.query.filter_by(box_id=box.id).all()
-                
-                # Create a grid of vials
-                vial_grid = {}
-                for vial in vials_in_box:
-                    if vial.row_in_box and vial.col_in_box:
-                        key = f"{vial.row_in_box}-{vial.col_in_box}"
-                        vial_grid[key] = {
-                            'id': vial.id,
-                            'tag': vial.unique_vial_id_tag,
-                            'batch_id': vial.batch_id,
-                            'batch_name': vial.batch.name if vial.batch else 'Unknown',
-                            'cell_line': vial.batch.cell_line if vial.batch else 'Unknown',
-                            'status': vial.status,
-                            'row': vial.row_in_box,
-                            'col': vial.col_in_box,
-                            'batch_color': batch_color_map.get(vial.batch_id, 0)
-                        }
-                
+                # Only get basic info and occupancy count - no detailed vial data
+                occupied_count = CryoVial.query.filter_by(box_id=box.id).count()
                 total_positions = box.rows * box.columns
-                occupied_positions = len(vial_grid)
                 
                 box_info = {
                     'id': box.id,
                     'name': box.name,
                     'rows': box.rows,
                     'columns': box.columns,
-                    'occupied': occupied_positions,
+                    'occupied': occupied_count,
                     'total': total_positions,
-                    'occupancy_rate': (occupied_positions / total_positions * 100) if total_positions > 0 else 0,
-                    'vials': vial_grid
+                    'occupancy_rate': (occupied_count / total_positions * 100) if total_positions > 0 else 0,
+                    'vials_loaded': False  # Flag to indicate vials are not loaded yet
                 }
                 drawer_info['boxes'].append(box_info)
             
@@ -345,6 +341,62 @@ def locations_overview():
     return render_template('mobile/locations_overview.html',
                          location_data=location_data,
                          device_info=get_device_info())
+
+
+@mobile_bp.route('/api/box/<int:box_id>/details')
+@login_required
+def get_box_details(box_id):
+    """API endpoint to load box details on demand"""
+    try:
+        # Get the box
+        box = Box.query.get_or_404(box_id)
+        
+        # Create batch color mapping (consistent with desktop)
+        all_batches = VialBatch.query.all()
+        batch_color_map = {}
+        for i, batch in enumerate(all_batches):
+            batch_color_map[batch.id] = i % 12  # Use 12 different colors
+        
+        # Get all vials in this box
+        vials_in_box = CryoVial.query.filter_by(box_id=box.id).all()
+        
+        # Create a grid of vials
+        vial_grid = {}
+        for vial in vials_in_box:
+            if vial.row_in_box and vial.col_in_box:
+                key = f"{vial.row_in_box}-{vial.col_in_box}"
+                vial_grid[key] = {
+                    'id': vial.id,
+                    'tag': vial.unique_vial_id_tag,
+                    'batch_id': vial.batch_id,
+                    'batch_name': vial.batch.name if vial.batch else 'Unknown',
+                    'cell_line': vial.batch.cell_line if vial.batch else 'Unknown',
+                    'status': vial.status,
+                    'row': vial.row_in_box,
+                    'col': vial.col_in_box,
+                    'batch_color': batch_color_map.get(vial.batch_id, 0)
+                }
+        
+        # Return the vial grid data
+        response_data = {
+            'success': True,
+            'box_id': box.id,
+            'box_name': box.name,
+            'rows': box.rows,
+            'columns': box.columns,
+            'vials': vial_grid,
+            'occupied': len(vial_grid),
+            'total': box.rows * box.columns
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        current_app.logger.error(f'Error loading box details for box {box_id}: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'error': 'Failed to load box details'
+        }), 500
 
 
 @mobile_bp.route('/print')
@@ -369,10 +421,21 @@ def print_interface():
 def add_cryovial():
     """Mobile add vial interface"""
     if request.method == 'POST':
-        # Redirect to desktop add_cryovial for processing, then back to mobile success page
-        return redirect(url_for('cell_storage.add_cryovial', mobile_redirect=True))
+        # Forward form data to desktop add_cryovial for processing
+        form_data = request.form.to_dict()
+        form_data['mobile_redirect'] = 'true'
+        
+        # Create a new request to the desktop route with the form data
+        from werkzeug.wrappers import Request
+        from flask import redirect, url_for
+        
+        # Simply redirect with form data preserved through session
+        session['mobile_form_data'] = form_data
+        return redirect(url_for('cell_storage.add_cryovial'))
     
     form = CryoVialForm()
+    # Set choices for select fields
+    form.cell_line_id.choices = [(cl.id, cl.name) for cl in CellLine.query.order_by(CellLine.name).all()]
     
     # Get next IDs for form defaults
     next_batch_id = get_next_batch_id()
@@ -446,6 +509,71 @@ def mobile_vial_details(vial_id):
     }
     
     return jsonify(details)
+
+
+@mobile_bp.route('/api/vial/<int:vial_id>/status', methods=['POST'])
+@login_required
+def update_vial_status(vial_id):
+    """API endpoint to update vial status"""
+    
+    try:
+        vial = CryoVial.query.get_or_404(vial_id)
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'error': 'No data provided'}), 400
+        
+        new_status = data.get('status')
+        notes = data.get('notes', '')
+        
+        if new_status not in ['Available', 'Used', 'Depleted', 'Discarded']:
+            return jsonify({'success': False, 'error': 'Invalid status'}), 400
+        
+        # Update vial status
+        old_status = vial.status
+        vial.status = new_status
+        
+        # Add notes to vial if provided
+        if notes:
+            existing_notes = vial.notes or ''
+            if existing_notes:
+                vial.notes = f"{existing_notes}\n{notes}"
+            else:
+                vial.notes = notes
+        
+        db.session.commit()
+        
+        # Log the action
+        log_audit(
+            current_user.id, 
+            'UPDATE_VIAL_STATUS', 
+            target_type='CryoVial', 
+            target_id=vial.id,
+            details=f'Status changed from {old_status} to {new_status}'
+        )
+        
+        return jsonify({
+            'success': True, 
+            'new_status': new_status,
+            'vial_id': vial_id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.error(f'Error updating vial status: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
+
+
+@mobile_bp.route('/api/clear-pickup-list', methods=['POST'])
+@login_required
+def clear_pickup_list():
+    """API endpoint to clear the pickup list"""
+    try:
+        session.pop('pickup_ids', None)
+        return jsonify({'success': True})
+    except Exception as e:
+        current_app.logger.error(f'Error clearing pickup list: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'error': 'Internal server error'}), 500
 
 
 @mobile_bp.route('/switch-to-desktop')

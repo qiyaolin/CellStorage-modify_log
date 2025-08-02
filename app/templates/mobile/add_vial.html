@@ -29,7 +29,7 @@
             </h6>
         </div>
         <div class="card-body">
-            <form method="POST" action="{{ url_for('cell_storage.add_cryovial') }}">
+            <form method="POST" action="{{ url_for('mobile.add_cryovial') }}">
                 {{ form.hidden_tag() }}
                 
                 <!-- Batch Information -->
@@ -39,23 +39,28 @@
                 </div>
 
                 <div class="mobile-form-group">
-                    <label for="cell_line">Cell Line *</label>
-                    {{ form.cell_line(class="form-control", required=True) }}
+                    <label for="cell_line_id">Cell Line *</label>
+                    {{ form.cell_line_id(class="form-control", required=True) }}
                 </div>
 
                 <div class="row">
                     <div class="col-6">
                         <div class="mobile-form-group">
                             <label for="passage_number">Passage #</label>
-                            {{ form.passage_number(class="form-control") }}
+                            {{ form.passage_number(class="form-control", required=True) }}
                         </div>
                     </div>
                     <div class="col-6">
                         <div class="mobile-form-group">
-                            <label for="quantity">Quantity *</label>
-                            {{ form.quantity(class="form-control", value="1", required=True) }}
+                            <label for="quantity_to_add">Quantity *</label>
+                            {{ form.quantity_to_add(class="form-control", value="1", required=True) }}
                         </div>
                     </div>
+                </div>
+
+                <div class="mobile-form-group">
+                    <label for="date_frozen">Date Frozen *</label>
+                    {{ form.date_frozen(class="form-control", required=True) }}
                 </div>
 
                 <!-- Optional Information -->
@@ -103,40 +108,17 @@
                     </div>
                 </div>
 
-                <!-- Storage Location -->
+                <!-- Auto Storage Info -->
                 <div class="card bg-light mb-3">
                     <div class="card-header">
-                        <h6 class="mb-0">Storage Location</h6>
+                        <h6 class="mb-0">
+                            <i class="fas fa-magic me-2"></i>Storage Location
+                        </h6>
                     </div>
                     <div class="card-body">
-                        <div class="mobile-form-group">
-                            <label for="tower">Tower *</label>
-                            {{ form.tower(class="form-control", required=True) }}
-                        </div>
-
-                        <div class="mobile-form-group">
-                            <label for="drawer">Drawer *</label>
-                            {{ form.drawer(class="form-control", required=True) }}
-                        </div>
-
-                        <div class="mobile-form-group">
-                            <label for="box">Box *</label>
-                            {{ form.box(class="form-control", required=True) }}
-                        </div>
-
-                        <div class="row">
-                            <div class="col-6">
-                                <div class="mobile-form-group">
-                                    <label for="row">Row</label>
-                                    {{ form.row(class="form-control") }}
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="mobile-form-group">
-                                    <label for="col">Column</label>
-                                    {{ form.col(class="form-control") }}
-                                </div>
-                            </div>
+                        <div class="alert alert-info mb-0">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Storage locations will be automatically assigned by the system
                         </div>
                     </div>
                 </div>
@@ -144,7 +126,7 @@
                 <!-- Submit Buttons -->
                 <div class="d-grid gap-2">
                     <button type="submit" class="btn btn-success btn-mobile">
-                        <i class="fas fa-save me-2"></i>Save Vial
+                        <i class="fas fa-arrow-right me-2"></i>Next: Plan Placement
                     </button>
                     <a href="{{ url_for('mobile.index') }}" class="btn btn-outline-secondary btn-mobile">
                         <i class="fas fa-times me-2"></i>Cancel
@@ -189,7 +171,7 @@
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Auto-calculate suggestions
-    const cellLineInput = document.getElementById('cell_line');
+    const cellLineInput = document.getElementById('cell_line_id');
     const batchNameInput = document.getElementById('batch_name');
     
     if (cellLineInput && batchNameInput) {
@@ -198,26 +180,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
                 batchNameInput.value = `${this.value}_${date}`;
             }
-        });
-    }
-    
-    // Dependent dropdown updates
-    const towerSelect = document.getElementById('tower');
-    const drawerSelect = document.getElementById('drawer');
-    const boxSelect = document.getElementById('box');
-    
-    if (towerSelect && drawerSelect) {
-        towerSelect.addEventListener('change', function() {
-            // Update drawer options based on tower selection
-            // This would need to be implemented with AJAX calls to the server
-            console.log('Tower changed:', this.value);
-        });
-    }
-    
-    if (drawerSelect && boxSelect) {
-        drawerSelect.addEventListener('change', function() {
-            // Update box options based on drawer selection
-            console.log('Drawer changed:', this.value);
         });
     }
     

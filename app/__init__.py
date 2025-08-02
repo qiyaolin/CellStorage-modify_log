@@ -89,6 +89,12 @@ def create_app(config_class=Config):
     from .mobile_middleware import init_mobile_middleware
     init_mobile_middleware(app)
     
+    # Exempt specific mobile API endpoints from CSRF protection
+    # Only exempt the API routes, not the entire mobile blueprint
+    from .mobile_routes import update_vial_status, clear_pickup_list
+    csrf.exempt(update_vial_status)
+    csrf.exempt(clear_pickup_list)
+    
     # Register API blueprints
     from .api.printing import printing_api
     app.register_blueprint(printing_api)

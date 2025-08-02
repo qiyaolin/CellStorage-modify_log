@@ -62,61 +62,52 @@
         </div>
     </div>
 
-    <!-- Recent Activity -->
+
+    <!-- Frequently Used Cells -->
+    {% if frequent_cells %}
     <div class="row mb-4">
         <div class="col-12">
-            <h5 class="mb-3">Recent Vials</h5>
-            {% if recent_vials %}
-                {% for vial in recent_vials %}
-                <div class="card card-mobile mb-2">
-                    <div class="card-body p-3">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div class="flex-grow-1">
-                                <h6 class="card-title mb-1">{{ vial.tag }}</h6>
-                                <p class="card-text text-muted small mb-1">
-                                    <strong>Batch:</strong> {{ vial.batch_name }}<br>
-                                    <strong>Cell Line:</strong> {{ vial.cell_line }}<br>
-                                    <strong>Location:</strong> {{ vial.location }}
-                                </p>
-                                <small class="text-muted">{{ vial.date_frozen }}</small>
+            <div class="card card-mobile">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-star text-warning me-2"></i>Frequently Used
+                    </h6>
+                    <small class="text-muted">Based on your activity</small>
+                </div>
+                <div class="card-body p-2">
+                    <div class="frequent-cells-grid">
+                        {% for cell in frequent_cells %}
+                        <div class="frequent-cell-item" onclick="searchCellLine('{{ cell.name }}')">
+                            <div class="cell-icon">
+                                <i class="fas fa-vials"></i>
                             </div>
-                            <div class="ms-2">
-                                {% if vial.available %}
-                                    <span class="badge bg-success">Available</span>
-                                {% else %}
-                                    <span class="badge bg-secondary">{{ vial.status }}</span>
-                                {% endif %}
+                            <div class="cell-info">
+                                <div class="cell-name">{{ cell.name }}</div>
+                                <small class="cell-count">{{ cell.available_count }} available</small>
+                                <div class="usage-indicator">
+                                    <div class="usage-bar" style="width: {{ (cell.usage_frequency / 10 * 100)|round }}%"></div>
+                                </div>
+                            </div>
+                            <div class="add-btn">
+                                <i class="fas fa-plus"></i>
                             </div>
                         </div>
+                        {% endfor %}
                     </div>
                 </div>
-                {% endfor %}
-                
-                <div class="text-center mt-3">
-                    <a href="{{ url_for('mobile.cryovial_inventory', view_all='true') }}" class="btn btn-outline-primary btn-mobile">
-                        View All Vials
-                    </a>
-                </div>
-            {% else %}
-                <div class="card card-mobile">
-                    <div class="card-body text-center p-4">
-                        <i class="fas fa-vials fa-3x text-muted mb-3"></i>
-                        <p class="text-muted">No vials found</p>
-                        <a href="{{ url_for('mobile.add_cryovial') }}" class="btn btn-primary btn-mobile">
-                            Add First Vial
-                        </a>
-                    </div>
-                </div>
-            {% endif %}
+            </div>
         </div>
     </div>
+    {% endif %}
 
     <!-- Quick Search -->
     <div class="row mb-4">
         <div class="col-12">
             <div class="card card-mobile">
                 <div class="card-header">
-                    <h6 class="mb-0">Quick Search</h6>
+                    <h6 class="mb-0">
+                        <i class="fas fa-search me-2"></i>Quick Search
+                    </h6>
                 </div>
                 <div class="card-body">
                     <form action="{{ url_for('mobile.quick_search') }}" method="GET">
@@ -134,48 +125,6 @@
         </div>
     </div>
 
-    <!-- Additional Actions -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <h5 class="mb-3">More Actions</h5>
-            <div class="list-group">
-                <a href="{{ url_for('mobile.locations_overview') }}" class="list-group-item list-group-item-action">
-                    <div class="d-flex w-100 justify-content-between align-items-center">
-                        <div>
-                            <i class="fas fa-map-marker-alt me-2"></i>
-                            <strong>Locations Overview</strong>
-                        </div>
-                        <i class="fas fa-chevron-right text-muted"></i>
-                    </div>
-                    <small class="text-muted">Browse storage locations and occupancy</small>
-                </a>
-                
-                {% if current_user.is_admin %}
-                <a href="{{ url_for('cell_storage.list_cell_lines') }}" class="list-group-item list-group-item-action">
-                    <div class="d-flex w-100 justify-content-between align-items-center">
-                        <div>
-                            <i class="fas fa-dna me-2"></i>
-                            <strong>Manage Cell Lines</strong>
-                        </div>
-                        <i class="fas fa-chevron-right text-muted"></i>
-                    </div>
-                    <small class="text-muted">Add and manage cell line information</small>
-                </a>
-                
-                <a href="{{ url_for('cell_storage.locations_overview') }}" class="list-group-item list-group-item-action">
-                    <div class="d-flex w-100 justify-content-between align-items-center">
-                        <div>
-                            <i class="fas fa-cogs me-2"></i>
-                            <strong>Manage Storage</strong>
-                        </div>
-                        <i class="fas fa-chevron-right text-muted"></i>
-                    </div>
-                    <small class="text-muted">Configure towers, drawers, and boxes</small>
-                </a>
-                {% endif %}
-            </div>
-        </div>
-    </div>
 </div>
 {% endblock %}
 
@@ -205,6 +154,27 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
+    
+    // Touch feedback for frequent cell items
+    document.querySelectorAll('.frequent-cell-item').forEach(function(item) {
+        item.addEventListener('touchstart', function() {
+            this.style.transform = 'scale(0.98)';
+            this.style.opacity = '0.8';
+        });
+        
+        item.addEventListener('touchend', function() {
+            this.style.transform = 'scale(1)';
+            this.style.opacity = '1';
+        });
+    });
 });
+
+// Function to search for a specific cell line
+function searchCellLine(cellLineName) {
+    const searchForm = document.querySelector('form[action*="quick_search"]');
+    const searchInput = searchForm.querySelector('input[name="q"]');
+    searchInput.value = cellLineName;
+    searchForm.submit();
+}
 </script>
 {% endblock %}

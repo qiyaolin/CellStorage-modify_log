@@ -6,6 +6,8 @@ without affecting existing desktop functionality.
 """
 
 from flask import request, g, session, url_for, render_template
+from datetime import datetime, timedelta
+from . import db
 from .mobile_middleware import MobileDetectionMiddleware
 
 
@@ -270,3 +272,78 @@ def mobile_pagination_info(page, per_page, total):
         'prev_page': page - 1 if page > 1 else None,
         'next_page': page + 1 if end < total else None
     }
+
+
+def track_cell_line_interaction(user_id, cell_line_id, interaction_type):
+    """Track user interactions with cell lines for recommendation system"""
+    from .cell_storage.models import AuditLog
+    
+    try:
+        # Log the interaction
+        log_entry = AuditLog(
+            user_id=user_id,
+            action=f'CELL_LINE_INTERACTION_{interaction_type.upper()}',
+            target_type='CellLine',
+            target_id=cell_line_id,
+            details=f'Mobile {interaction_type} interaction'
+        )
+        db.session.add(log_entry)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        # Don't let tracking errors break the main functionality
+        pass
+
+
+def get_frequently_used_cells(user_id, limit=5):
+    """Get frequently used cell lines for a user based on interaction history"""
+    from .cell_storage.models import AuditLog, CellLine, CryoVial
+    from sqlalchemy import func, desc
+    
+    try:
+        # Get cell line interactions from the last 30 days
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        
+        # Count interactions per cell line
+        interaction_counts = db.session.query(
+            AuditLog.target_id.label('cell_line_id'),
+            func.count(AuditLog.id).label('interaction_count')
+        ).filter(
+            AuditLog.user_id == user_id,
+            AuditLog.target_type == 'CellLine',
+            AuditLog.action.like('CELL_LINE_INTERACTION_%'),
+            AuditLog.timestamp >= thirty_days_ago
+        ).group_by(AuditLog.target_id).subquery()
+        
+        # Get cell lines with their interaction counts and available vial counts
+        frequent_cells = db.session.query(
+            CellLine,
+            interaction_counts.c.interaction_count,
+            func.count(CryoVial.id).label('available_count')
+        ).join(
+            interaction_counts, CellLine.id == interaction_counts.c.cell_line_id
+        ).outerjoin(
+            CryoVial, (CellLine.id == CryoVial.cell_line_id) & (CryoVial.status == 'Available')
+        ).group_by(
+            CellLine.id, interaction_counts.c.interaction_count
+        ).order_by(
+            desc(interaction_counts.c.interaction_count)
+        ).limit(limit).all()
+        
+        # Format the results
+        result = []
+        for cell_line, interaction_count, available_count in frequent_cells:
+            result.append({
+                'id': cell_line.id,
+                'name': cell_line.name,
+                'available_count': available_count or 0,
+                'usage_frequency': min(interaction_count, 10),  # Cap at 10 for display
+                'source': cell_line.source,
+                'species': cell_line.species
+            })
+        
+        return result
+        
+    except Exception as e:
+        # Return empty list if there's an error
+        return []

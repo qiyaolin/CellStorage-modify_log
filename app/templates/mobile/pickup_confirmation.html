@@ -27,8 +27,7 @@
                 <li class="mb-2">Review the list of vials below</li>
                 <li class="mb-2">Note the location and position of each vial</li>
                 <li class="mb-2">Collect vials from their storage locations</li>
-                <li class="mb-2">Update vial status after pickup</li>
-                <li>Print labels if needed</li>
+                <li>Update vial status after pickup</li>
             </ol>
         </div>
     </div>
@@ -71,10 +70,6 @@
                         <button class="btn btn-sm btn-outline-primary" 
                                 onclick="markAsPickedUp({{ vial.id }})">
                             <i class="fas fa-check"></i> Picked Up
-                        </button>
-                        <button class="btn btn-sm btn-outline-info" 
-                                onclick="printVialLabel({{ vial.id }})">
-                            <i class="fas fa-print"></i> Print
                         </button>
                     </div>
                 </div>
@@ -122,10 +117,6 @@
             <div class="d-grid gap-2">
                 <button class="btn btn-success btn-mobile" onclick="markAllAsPickedUp()">
                     <i class="fas fa-check-double me-2"></i>Mark All as Picked Up
-                </button>
-                
-                <button class="btn btn-info btn-mobile" onclick="printAllLabels()">
-                    <i class="fas fa-print me-2"></i>Print All Labels
                 </button>
                 
                 <a href="{{ url_for('mobile.cryovial_inventory') }}" class="btn btn-outline-secondary btn-mobile">
@@ -264,21 +255,6 @@ function markAllAsPickedUp() {
     });
 }
 
-// Print single vial label
-function printVialLabel(vialId) {
-    showMobileLoading('Preparing print job...');
-    
-    // Redirect to mobile print interface with specific vial
-    window.location.href = `/mobile/print?vial_id=${vialId}`;
-}
-
-// Print all labels
-function printAllLabels() {
-    showMobileLoading('Preparing print jobs...');
-    
-    // Redirect to mobile print interface
-    window.location.href = '{{ url_for("mobile.print_interface") }}';
-}
 
 // Clear pickup list
 function clearPickupList(showConfirmation = true) {
@@ -350,14 +326,9 @@ document.addEventListener('DOMContentLoaded', function() {
             if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 100) {
                 const vialId = this.querySelector('button[onclick*="markAsPickedUp"]')?.getAttribute('onclick')?.match(/\d+/)?.[0];
                 
-                if (vialId) {
-                    if (deltaX > 0) {
-                        // Swipe right - mark as picked up
-                        markAsPickedUp(parseInt(vialId));
-                    } else {
-                        // Swipe left - print label
-                        printVialLabel(parseInt(vialId));
-                    }
+                if (vialId && deltaX > 0) {
+                    // Swipe right - mark as picked up
+                    markAsPickedUp(parseInt(vialId));
                 }
             }
         });

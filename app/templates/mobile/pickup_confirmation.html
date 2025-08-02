@@ -1,0 +1,367 @@
+{% extends "mobile/base.html" %}
+
+{% block title %}CellStorage Mobile - Pickup Confirmation{% endblock %}
+{% block page_title %}Pickup Confirmation{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-3">
+    <!-- Summary Card -->
+    <div class="card card-mobile mb-3 bg-warning text-dark">
+        <div class="card-body text-center">
+            <h5 class="mb-1">
+                <i class="fas fa-shopping-cart me-2"></i>Ready for Pickup
+            </h5>
+            <span class="badge bg-dark">{{ vials|length }} vial(s) selected</span>
+        </div>
+    </div>
+
+    <!-- Pickup Instructions -->
+    <div class="card card-mobile mb-3">
+        <div class="card-header bg-info text-white">
+            <h6 class="mb-0">
+                <i class="fas fa-clipboard-list me-2"></i>Pickup Instructions
+            </h6>
+        </div>
+        <div class="card-body">
+            <ol class="mb-0">
+                <li class="mb-2">Review the list of vials below</li>
+                <li class="mb-2">Note the location and position of each vial</li>
+                <li class="mb-2">Collect vials from their storage locations</li>
+                <li class="mb-2">Update vial status after pickup</li>
+                <li>Print labels if needed</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- Vials List -->
+    <div class="card card-mobile mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-list me-2"></i>Vials to Pick Up
+            </h6>
+        </div>
+        <div class="card-body p-2">
+            {% for vial in vials %}
+            <div class="card mb-2">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">{{ vial.tag }}</h6>
+                            <p class="text-muted small mb-2">
+                                <strong>Batch:</strong> {{ vial.batch_name }}<br>
+                                <strong>Cell Line:</strong> {{ vial.cell_line }}<br>
+                                <strong>Location:</strong> {{ vial.location }}
+                                {% if vial.position %}
+                                <br><strong>Position:</strong> {{ vial.position }}
+                                {% endif %}
+                            </p>
+                            {% if vial.date_frozen %}
+                            <small class="text-muted">Frozen: {{ vial.date_frozen }}</small>
+                            {% endif %}
+                        </div>
+                        <div class="ms-2">
+                            <span class="badge bg-{{ 'success' if vial.available else 'secondary' }}">
+                                {{ vial.status }}
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Actions -->
+                    <div class="mt-2 d-flex gap-2">
+                        <button class="btn btn-sm btn-outline-primary" 
+                                onclick="markAsPickedUp({{ vial.id }})">
+                            <i class="fas fa-check"></i> Picked Up
+                        </button>
+                        <button class="btn btn-sm btn-outline-info" 
+                                onclick="printVialLabel({{ vial.id }})">
+                            <i class="fas fa-print"></i> Print
+                        </button>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Location Summary -->
+    <div class="card card-mobile mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-map-marker-alt me-2"></i>Locations Summary
+            </h6>
+        </div>
+        <div class="card-body">
+            {% set locations = {} %}
+            {% for vial in vials %}
+                {% set location = vial.location %}
+                {% if location in locations %}
+                    {% set _ = locations[location].append(vial) %}
+                {% else %}
+                    {% set _ = locations.update({location: [vial]}) %}
+                {% endif %}
+            {% endfor %}
+            
+            {% for location, location_vials in locations.items() %}
+            <div class="mb-2">
+                <strong>{{ location }}</strong>
+                <span class="badge bg-secondary ms-2">{{ location_vials|length }}</span>
+                <br>
+                <small class="text-muted">
+                    {% for vial in location_vials %}
+                        {{ vial.tag }}{% if vial.position %} ({{ vial.position }}){% endif %}{% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                </small>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card card-mobile">
+        <div class="card-body">
+            <div class="d-grid gap-2">
+                <button class="btn btn-success btn-mobile" onclick="markAllAsPickedUp()">
+                    <i class="fas fa-check-double me-2"></i>Mark All as Picked Up
+                </button>
+                
+                <button class="btn btn-info btn-mobile" onclick="printAllLabels()">
+                    <i class="fas fa-print me-2"></i>Print All Labels
+                </button>
+                
+                <a href="{{ url_for('mobile.cryovial_inventory') }}" class="btn btn-outline-secondary btn-mobile">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Inventory
+                </a>
+                
+                <button class="btn btn-outline-danger btn-mobile" onclick="clearPickupList()">
+                    <i class="fas fa-trash me-2"></i>Clear Pickup List
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+<div class="modal fade" id="confirmationModal" tabindex="-1">
+    <div class="modal-dialog modal-mobile">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Action</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="confirmationMessage">
+                <!-- Message will be set dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmButton">Confirm</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let confirmationCallback = null;
+
+// Show confirmation modal
+function showConfirmation(message, callback) {
+    document.getElementById('confirmationMessage').textContent = message;
+    confirmationCallback = callback;
+    
+    const modal = new bootstrap.Modal(document.getElementById('confirmationModal'));
+    modal.show();
+}
+
+// Handle confirmation
+document.getElementById('confirmButton').addEventListener('click', function() {
+    if (confirmationCallback) {
+        confirmationCallback();
+        confirmationCallback = null;
+    }
+    
+    const modal = bootstrap.Modal.getInstance(document.getElementById('confirmationModal'));
+    modal.hide();
+});
+
+// Mark single vial as picked up
+function markAsPickedUp(vialId) {
+    showConfirmation('Mark this vial as picked up?', function() {
+        // Make API call to update vial status
+        fetch(`/mobile/api/vial/${vialId}/status`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content')
+            },
+            body: JSON.stringify({
+                status: 'Used',
+                notes: 'Picked up via mobile interface'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMobileAlert('Vial marked as picked up', 'success');
+                // Update UI
+                const vialCard = document.querySelector(`button[onclick*="${vialId}"]`).closest('.card');
+                vialCard.style.opacity = '0.6';
+                vialCard.querySelector('.badge').textContent = 'Used';
+                vialCard.querySelector('.badge').className = 'badge bg-secondary';
+            } else {
+                showMobileAlert('Failed to update vial status', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error updating vial:', error);
+            showMobileAlert('Error updating vial status', 'danger');
+        });
+    });
+}
+
+// Mark all vials as picked up
+function markAllAsPickedUp() {
+    const vialCount = {{ vials|length }};
+    showConfirmation(`Mark all ${vialCount} vials as picked up?`, function() {
+        showMobileLoading('Updating vial status...');
+        
+        // Update all vials
+        const vialIds = [{% for vial in vials %}{{ vial.id }}{% if not loop.last %}, {% endif %}{% endfor %}];
+        
+        Promise.all(vialIds.map(vialId => 
+            fetch(`/mobile/api/vial/${vialId}/status`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content')
+                },
+                body: JSON.stringify({
+                    status: 'Used',
+                    notes: 'Picked up via mobile interface'
+                })
+            })
+        ))
+        .then(responses => Promise.all(responses.map(r => r.json())))
+        .then(results => {
+            hideMobileLoading();
+            const successCount = results.filter(r => r.success).length;
+            
+            if (successCount === vialIds.length) {
+                showMobileAlert('All vials marked as picked up', 'success');
+                // Clear pickup list and redirect
+                setTimeout(() => {
+                    clearPickupList(false);
+                }, 2000);
+            } else {
+                showMobileAlert(`${successCount}/${vialIds.length} vials updated successfully`, 'warning');
+            }
+        })
+        .catch(error => {
+            hideMobileLoading();
+            console.error('Error updating vials:', error);
+            showMobileAlert('Error updating vial status', 'danger');
+        });
+    });
+}
+
+// Print single vial label
+function printVialLabel(vialId) {
+    showMobileLoading('Preparing print job...');
+    
+    // Redirect to mobile print interface with specific vial
+    window.location.href = `/mobile/print?vial_id=${vialId}`;
+}
+
+// Print all labels
+function printAllLabels() {
+    showMobileLoading('Preparing print jobs...');
+    
+    // Redirect to mobile print interface
+    window.location.href = '{{ url_for("mobile.print_interface") }}';
+}
+
+// Clear pickup list
+function clearPickupList(showConfirmation = true) {
+    const action = function() {
+        fetch('/mobile/api/clear-pickup-list', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showMobileAlert('Pickup list cleared', 'info');
+                setTimeout(() => {
+                    window.location.href = '{{ url_for("mobile.cryovial_inventory") }}';
+                }, 1000);
+            } else {
+                showMobileAlert('Failed to clear pickup list', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error clearing pickup list:', error);
+            showMobileAlert('Error clearing pickup list', 'danger');
+        });
+    };
+    
+    if (showConfirmation) {
+        showConfirmation('Clear the entire pickup list?', action);
+    } else {
+        action();
+    }
+}
+
+// Auto-save pickup progress
+document.addEventListener('DOMContentLoaded', function() {
+    // Save current pickup state to localStorage
+    const pickupData = {
+        vials: [{% for vial in vials %}{{ vial.id }}{% if not loop.last %}, {% endif %}{% endfor %}],
+        timestamp: Date.now()
+    };
+    
+    try {
+        localStorage.setItem('mobile_pickup_progress', JSON.stringify(pickupData));
+    } catch (e) {
+        console.warn('Failed to save pickup progress:', e);
+    }
+    
+    // Add swipe gestures for individual vial actions
+    document.querySelectorAll('.card .card-body').forEach(card => {
+        let startX, startY, currentX, currentY;
+        
+        card.addEventListener('touchstart', function(e) {
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+        });
+        
+        card.addEventListener('touchmove', function(e) {
+            currentX = e.touches[0].clientX;
+            currentY = e.touches[0].clientY;
+        });
+        
+        card.addEventListener('touchend', function(e) {
+            const deltaX = currentX - startX;
+            const deltaY = currentY - startY;
+            
+            // Horizontal swipe with minimum distance
+            if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 100) {
+                const vialId = this.querySelector('button[onclick*="markAsPickedUp"]')?.getAttribute('onclick')?.match(/\d+/)?.[0];
+                
+                if (vialId) {
+                    if (deltaX > 0) {
+                        // Swipe right - mark as picked up
+                        markAsPickedUp(parseInt(vialId));
+                    } else {
+                        // Swipe left - print label
+                        printVialLabel(parseInt(vialId));
+                    }
+                }
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

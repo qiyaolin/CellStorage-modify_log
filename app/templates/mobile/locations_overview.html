@@ -1,0 +1,185 @@
+{% extends "mobile/base.html" %}
+
+{% block title %}CellStorage Mobile - Locations{% endblock %}
+{% block page_title %}Storage Locations{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-3">
+    <!-- Overview Stats -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card card-mobile bg-primary text-white">
+                <div class="card-body text-center">
+                    <h5 class="mb-0">Storage Overview</h5>
+                    <small>{{ location_data|length }} Tower(s) Available</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Location Data -->
+    {% if location_data %}
+        {% for tower in location_data %}
+        <div class="card card-mobile mb-3">
+            <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-building me-2"></i>Tower: {{ tower.name }}
+                    </h6>
+                    <span class="badge bg-light text-dark">{{ tower.drawers|length }} drawer(s)</span>
+                </div>
+            </div>
+            
+            {% for drawer in tower.drawers %}
+            <div class="card-body border-bottom">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h6 class="mb-0">
+                        <i class="fas fa-inbox me-2"></i>Drawer: {{ drawer.name }}
+                    </h6>
+                    <span class="badge bg-secondary">{{ drawer.boxes|length }} box(es)</span>
+                </div>
+                
+                {% if drawer.boxes %}
+                <div class="row g-2">
+                    {% for box in drawer.boxes %}
+                    <div class="col-6 col-md-4">
+                        <div class="card">
+                            <div class="card-body p-2 text-center">
+                                <h6 class="card-title mb-1" style="font-size: 0.875rem;">{{ box.name }}</h6>
+                                
+                                <!-- Occupancy Bar -->
+                                <div class="progress mb-2" style="height: 8px;">
+                                    <div class="progress-bar 
+                                        {% if box.occupancy_rate >= 80 %}bg-danger
+                                        {% elif box.occupancy_rate >= 60 %}bg-warning
+                                        {% else %}bg-success{% endif %}" 
+                                         style="width: {{ box.occupancy_rate }}%">
+                                    </div>
+                                </div>
+                                
+                                <small class="text-muted">
+                                    {{ box.occupied }}/{{ box.total }}
+                                    <br>
+                                    ({{ "%.0f"|format(box.occupancy_rate) }}%)
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No boxes in this drawer</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+            
+            {% if not tower.drawers %}
+            <div class="card-body">
+                <p class="text-muted mb-0">No drawers in this tower</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    {% else %}
+    <!-- No locations message -->
+    <div class="card card-mobile">
+        <div class="card-body text-center p-4">
+            <i class="fas fa-map-marker-alt fa-3x text-muted mb-3"></i>
+            <h6>No Storage Locations</h6>
+            <p class="text-muted">No storage locations have been configured yet.</p>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('cell_storage.locations_overview') }}" class="btn btn-primary btn-mobile">
+                Configure Locations
+            </a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Legend -->
+    <div class="card card-mobile mt-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-info-circle me-2"></i>Occupancy Legend
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-4">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-success" style="width: 20px; height: 10px; border-radius: 2px;"></div>
+                        <small class="ms-2">0-59%</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-warning" style="width: 20px; height: 10px; border-radius: 2px;"></div>
+                        <small class="ms-2">60-79%</small>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-danger" style="width: 20px; height: 10px; border-radius: 2px;"></div>
+                        <small class="ms-2">80-100%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card card-mobile mt-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-bolt me-2"></i>Quick Actions
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="d-grid gap-2">
+                <a href="{{ url_for('mobile.cryovial_inventory') }}" class="btn btn-outline-primary btn-mobile">
+                    <i class="fas fa-vials me-2"></i>View Inventory
+                </a>
+                <a href="{{ url_for('mobile.quick_search') }}" class="btn btn-outline-success btn-mobile">
+                    <i class="fas fa-search me-2"></i>Search Vials
+                </a>
+                {% if current_user.is_admin %}
+                <a href="{{ url_for('cell_storage.locations_overview') }}" class="btn btn-outline-warning btn-mobile">
+                    <i class="fas fa-cogs me-2"></i>Manage Locations
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add touch feedback for box cards
+    document.querySelectorAll('.card .card-body').forEach(function(card) {
+        card.addEventListener('touchstart', function() {
+            this.style.backgroundColor = '#f8f9fa';
+        });
+        
+        card.addEventListener('touchend', function() {
+            setTimeout(() => {
+                this.style.backgroundColor = '';
+            }, 150);
+        });
+    });
+    
+    // Animate progress bars on load
+    setTimeout(() => {
+        document.querySelectorAll('.progress-bar').forEach(function(bar) {
+            const width = bar.style.width;
+            bar.style.width = '0%';
+            bar.style.transition = 'width 1s ease-in-out';
+            setTimeout(() => {
+                bar.style.width = width;
+            }, 100);
+        });
+    }, 300);
+});
+</script>
+{% endblock %}

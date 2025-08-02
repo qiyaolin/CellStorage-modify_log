@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en" class="h-100">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, user-scalable=yes">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    
+    <!-- Mobile-specific meta tags -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#007bff">
+    
+    <title>{% block title %}CellStorage Mobile{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Mobile-specific CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='mobile/mobile.css') }}">
+    
+    {% block extra_css %}{% endblock %}
+    
+    <style>
+        /* Mobile-optimized base styles */
+        body {
+            font-size: 16px; /* Prevent zoom on iOS */
+            -webkit-text-size-adjust: 100%;
+            touch-action: manipulation;
+        }
+        
+        /* Mobile navigation */
+        .mobile-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            border-top: 1px solid #dee2e6;
+            z-index: 1000;
+            padding: 0.5rem 0;
+        }
+        
+        .mobile-nav-item {
+            text-align: center;
+            padding: 0.25rem;
+            text-decoration: none;
+            color: #6c757d;
+            font-size: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .mobile-nav-item.active {
+            color: #007bff;
+        }
+        
+        .mobile-nav-item i {
+            font-size: 1.25rem;
+            margin-bottom: 0.25rem;
+        }
+        
+        /* Content spacing for fixed bottom nav */
+        .mobile-content {
+            padding-bottom: 80px;
+        }
+        
+        /* Mobile-friendly buttons */
+        .btn-mobile {
+            min-height: 48px;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+        }
+        
+        /* Touch-friendly card spacing */
+        .card-mobile {
+            margin-bottom: 1rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* Mobile header */
+        .mobile-header {
+            position: sticky;
+            top: 0;
+            z-index: 999;
+            background: white;
+            border-bottom: 1px solid #dee2e6;
+            padding: 1rem;
+        }
+        
+        /* Quick action buttons */
+        .quick-action-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 1rem 0;
+        }
+        
+        .quick-action-btn {
+            aspect-ratio: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            border-radius: 0.75rem;
+            color: white;
+            font-weight: 500;
+            transition: transform 0.2s;
+        }
+        
+        .quick-action-btn:hover {
+            transform: translateY(-2px);
+            color: white;
+        }
+        
+        .quick-action-btn i {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Mobile search */
+        .mobile-search {
+            position: relative;
+        }
+        
+        .mobile-search input {
+            padding-right: 3rem;
+        }
+        
+        .mobile-search-btn {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            border: none;
+            background: none;
+            color: #6c757d;
+        }
+        
+        /* Mobile-friendly forms */
+        .mobile-form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .mobile-form-group label {
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: #495057;
+        }
+        
+        .mobile-form-group input,
+        .mobile-form-group select,
+        .mobile-form-group textarea {
+            font-size: 16px; /* Prevent zoom */
+            padding: 0.75rem;
+            border-radius: 0.5rem;
+        }
+        
+        /* Alert styling */
+        .alert-mobile {
+            margin: 1rem;
+            border-radius: 0.5rem;
+            border: none;
+            font-weight: 500;
+        }
+        
+        /* Loading states */
+        .loading-spinner {
+            display: inline-block;
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 2px solid #007bff;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Responsive utilities */
+        @media (max-width: 576px) {
+            .container {
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+            
+            .mobile-header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .quick-action-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+
+<body class="d-flex flex-column h-100">
+    <!-- Mobile Header -->
+    <header class="mobile-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h1 class="h4 mb-0">{% block page_title %}CellStorage{% endblock %}</h1>
+                {% if current_user.is_authenticated %}
+                <small class="text-muted">{{ current_user.username }}</small>
+                {% endif %}
+            </div>
+            <div class="d-flex align-items-center">
+                <!-- View mode switch -->
+                <a href="{{ url_for('mobile.switch_to_desktop') }}" class="btn btn-outline-secondary btn-sm me-2">
+                    <i class="fas fa-desktop"></i> Desktop
+                </a>
+                
+                <!-- User menu -->
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="dropdown">
+                        <i class="fas fa-user"></i>
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        {% if current_user.is_authenticated %}
+                            <li><span class="dropdown-item-text">{{ current_user.username }}</span></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('auth.logout') }}">
+                                <i class="fas fa-sign-out-alt me-2"></i>Logout
+                            </a></li>
+                        {% else %}
+                            <li><a class="dropdown-item" href="{{ url_for('auth.login') }}">
+                                <i class="fas fa-sign-in-alt me-2"></i>Login
+                            </a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-mobile alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <main class="flex-grow-1 mobile-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Mobile Bottom Navigation -->
+    <nav class="mobile-nav">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col">
+                    <a href="{{ url_for('mobile.index') }}" class="mobile-nav-item {{ 'active' if request.endpoint == 'mobile.index' }}">
+                        <i class="fas fa-home"></i>
+                        <span>Home</span>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{{ url_for('mobile.cryovial_inventory') }}" class="mobile-nav-item {{ 'active' if 'inventory' in request.endpoint }}">
+                        <i class="fas fa-vials"></i>
+                        <span>Inventory</span>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{{ url_for('mobile.quick_search') }}" class="mobile-nav-item {{ 'active' if 'search' in request.endpoint }}">
+                        <i class="fas fa-search"></i>
+                        <span>Search</span>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{{ url_for('mobile.locations_overview') }}" class="mobile-nav-item {{ 'active' if 'locations' in request.endpoint }}">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>Locations</span>
+                    </a>
+                </div>
+                <div class="col">
+                    <a href="{{ url_for('mobile.print_interface') }}" class="mobile-nav-item {{ 'active' if 'print' in request.endpoint }}">
+                        <i class="fas fa-print"></i>
+                        <span>Print</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Mobile-specific JavaScript -->
+    <script src="{{ url_for('static', filename='mobile/mobile.js') }}"></script>
+    
+    {% block extra_js %}{% endblock %}
+    
+    <script>
+        // Mobile-specific global functions
+        document.addEventListener('DOMContentLoaded', function() {
+            // Prevent double-tap zoom on buttons
+            document.querySelectorAll('button, .btn').forEach(function(button) {
+                button.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    button.click();
+                });
+            });
+            
+            // Add loading states to form submissions
+            document.querySelectorAll('form').forEach(function(form) {
+                form.addEventListener('submit', function() {
+                    const submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+                    if (submitBtn) {
+                        submitBtn.disabled = true;
+                        submitBtn.innerHTML = '<span class="loading-spinner me-2"></span>Loading...';
+                    }
+                });
+            });
+            
+            // Auto-focus search inputs
+            const searchInput = document.querySelector('input[name="q"]');
+            if (searchInput && !searchInput.value) {
+                setTimeout(() => searchInput.focus(), 100);
+            }
+        });
+        
+        // Global mobile utility functions
+        function showMobileAlert(message, type = 'info') {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-mobile alert-dismissible fade show`;
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            const container = document.querySelector('main');
+            container.insertBefore(alertDiv, container.firstChild);
+            
+            // Auto-dismiss after 5 seconds
+            setTimeout(() => {
+                if (alertDiv.parentNode) {
+                    alertDiv.remove();
+                }
+            }, 5000);
+        }
+        
+        function showMobileLoading(show = true) {
+            let loadingDiv = document.getElementById('mobile-loading');
+            
+            if (show) {
+                if (!loadingDiv) {
+                    loadingDiv = document.createElement('div');
+                    loadingDiv.id = 'mobile-loading';
+                    loadingDiv.className = 'position-fixed top-50 start-50 translate-middle';
+                    loadingDiv.style.zIndex = '9999';
+                    loadingDiv.innerHTML = `
+                        <div class="bg-white p-3 rounded shadow">
+                            <div class="d-flex align-items-center">
+                                <div class="loading-spinner me-2"></div>
+                                <span>Loading...</span>
+                            </div>
+                        </div>
+                    `;
+                    document.body.appendChild(loadingDiv);
+                }
+            } else {
+                if (loadingDiv) {
+                    loadingDiv.remove();
+                }
+            }
+        }
+    </script>
+</body>
+</html>

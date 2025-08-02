@@ -1,0 +1,292 @@
+{% extends "mobile/base.html" %}
+
+{% block title %}CellStorage Mobile - Add Vial{% endblock %}
+{% block page_title %}Add New Vial{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-3">
+    <!-- Quick Info -->
+    <div class="card card-mobile mb-3 bg-light">
+        <div class="card-body p-3">
+            <div class="row text-center">
+                <div class="col-6">
+                    <strong>Next Batch ID</strong><br>
+                    <span class="badge bg-primary">{{ next_batch_id }}</span>
+                </div>
+                <div class="col-6">
+                    <strong>Next Vial ID</strong><br>
+                    <span class="badge bg-success">{{ next_vial_id }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Vial Form -->
+    <div class="card card-mobile">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-plus me-2"></i>Vial Information
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="POST" action="{{ url_for('cell_storage.add_cryovial') }}">
+                {{ form.hidden_tag() }}
+                
+                <!-- Batch Information -->
+                <div class="mobile-form-group">
+                    <label for="batch_name">Batch Name *</label>
+                    {{ form.batch_name(class="form-control", required=True) }}
+                </div>
+
+                <div class="mobile-form-group">
+                    <label for="cell_line">Cell Line *</label>
+                    {{ form.cell_line(class="form-control", required=True) }}
+                </div>
+
+                <div class="row">
+                    <div class="col-6">
+                        <div class="mobile-form-group">
+                            <label for="passage_number">Passage #</label>
+                            {{ form.passage_number(class="form-control") }}
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="mobile-form-group">
+                            <label for="quantity">Quantity *</label>
+                            {{ form.quantity(class="form-control", value="1", required=True) }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Optional Information -->
+                <div class="accordion mb-3" id="optionalAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" 
+                                    data-bs-toggle="collapse" data-bs-target="#optionalCollapse">
+                                <i class="fas fa-plus-circle me-2"></i>Optional Information
+                            </button>
+                        </h2>
+                        <div id="optionalCollapse" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                                <div class="mobile-form-group">
+                                    <label for="volume_ml">Volume (μL)</label>
+                                    {{ form.volume_ml(class="form-control") }}
+                                </div>
+
+                                <div class="mobile-form-group">
+                                    <label for="concentration">Concentration</label>
+                                    {{ form.concentration(class="form-control") }}
+                                </div>
+
+                                <div class="mobile-form-group">
+                                    <label for="fluorescence_tag">Fluorescence Tag</label>
+                                    {{ form.fluorescence_tag(class="form-control") }}
+                                </div>
+
+                                <div class="mobile-form-group">
+                                    <label for="resistance">Resistance</label>
+                                    {{ form.resistance(class="form-control") }}
+                                </div>
+
+                                <div class="mobile-form-group">
+                                    <label for="parental_cell_line">Parental Cell Line</label>
+                                    {{ form.parental_cell_line(class="form-control") }}
+                                </div>
+
+                                <div class="mobile-form-group">
+                                    <label for="notes">Notes</label>
+                                    {{ form.notes(class="form-control", rows="3") }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Storage Location -->
+                <div class="card bg-light mb-3">
+                    <div class="card-header">
+                        <h6 class="mb-0">Storage Location</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="mobile-form-group">
+                            <label for="tower">Tower *</label>
+                            {{ form.tower(class="form-control", required=True) }}
+                        </div>
+
+                        <div class="mobile-form-group">
+                            <label for="drawer">Drawer *</label>
+                            {{ form.drawer(class="form-control", required=True) }}
+                        </div>
+
+                        <div class="mobile-form-group">
+                            <label for="box">Box *</label>
+                            {{ form.box(class="form-control", required=True) }}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="mobile-form-group">
+                                    <label for="row">Row</label>
+                                    {{ form.row(class="form-control") }}
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="mobile-form-group">
+                                    <label for="col">Column</label>
+                                    {{ form.col(class="form-control") }}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-success btn-mobile">
+                        <i class="fas fa-save me-2"></i>Save Vial
+                    </button>
+                    <a href="{{ url_for('mobile.index') }}" class="btn btn-outline-secondary btn-mobile">
+                        <i class="fas fa-times me-2"></i>Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="card card-mobile mt-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-info-circle me-2"></i>Quick Tips
+            </h6>
+        </div>
+        <div class="card-body">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <i class="fas fa-asterisk text-danger me-2" style="font-size: 0.5rem;"></i>
+                    <small>Fields marked with * are required</small>
+                </li>
+                <li class="mb-2">
+                    <i class="fas fa-vial text-primary me-2"></i>
+                    <small>Batch and vial IDs are auto-generated</small>
+                </li>
+                <li class="mb-2">
+                    <i class="fas fa-map-marker-alt text-success me-2"></i>
+                    <small>Select storage location carefully</small>
+                </li>
+                <li>
+                    <i class="fas fa-save text-info me-2"></i>
+                    <small>All information can be edited later</small>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-calculate suggestions
+    const cellLineInput = document.getElementById('cell_line');
+    const batchNameInput = document.getElementById('batch_name');
+    
+    if (cellLineInput && batchNameInput) {
+        cellLineInput.addEventListener('blur', function() {
+            if (this.value && !batchNameInput.value) {
+                const date = new Date().toISOString().split('T')[0].replace(/-/g, '');
+                batchNameInput.value = `${this.value}_${date}`;
+            }
+        });
+    }
+    
+    // Dependent dropdown updates
+    const towerSelect = document.getElementById('tower');
+    const drawerSelect = document.getElementById('drawer');
+    const boxSelect = document.getElementById('box');
+    
+    if (towerSelect && drawerSelect) {
+        towerSelect.addEventListener('change', function() {
+            // Update drawer options based on tower selection
+            // This would need to be implemented with AJAX calls to the server
+            console.log('Tower changed:', this.value);
+        });
+    }
+    
+    if (drawerSelect && boxSelect) {
+        drawerSelect.addEventListener('change', function() {
+            // Update box options based on drawer selection
+            console.log('Drawer changed:', this.value);
+        });
+    }
+    
+    // Form validation
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const requiredFields = form.querySelectorAll('[required]');
+            let isValid = true;
+            
+            requiredFields.forEach(field => {
+                if (!field.value.trim()) {
+                    isValid = false;
+                    field.classList.add('is-invalid');
+                    
+                    // Add error message if not exists
+                    if (!field.nextElementSibling || !field.nextElementSibling.classList.contains('invalid-feedback')) {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'invalid-feedback';
+                        errorDiv.textContent = 'This field is required';
+                        field.parentNode.insertBefore(errorDiv, field.nextSibling);
+                    }
+                } else {
+                    field.classList.remove('is-invalid');
+                    const errorDiv = field.nextElementSibling;
+                    if (errorDiv && errorDiv.classList.contains('invalid-feedback')) {
+                        errorDiv.remove();
+                    }
+                }
+            });
+            
+            if (!isValid) {
+                e.preventDefault();
+                showMobileAlert('Please fill in all required fields', 'warning');
+                
+                // Scroll to first invalid field
+                const firstInvalid = form.querySelector('.is-invalid');
+                if (firstInvalid) {
+                    firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    firstInvalid.focus();
+                }
+            }
+        });
+    }
+    
+    // Auto-resize textareas
+    document.querySelectorAll('textarea').forEach(textarea => {
+        textarea.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+    });
+    
+    // Input formatting
+    const volumeInput = document.getElementById('volume_ml');
+    if (volumeInput) {
+        volumeInput.addEventListener('input', function() {
+            // Remove non-numeric characters except decimal point
+            this.value = this.value.replace(/[^0-9.]/g, '');
+        });
+    }
+    
+    const passageInput = document.getElementById('passage_number');
+    if (passageInput) {
+        passageInput.addEventListener('input', function() {
+            // Remove non-numeric characters
+            this.value = this.value.replace(/[^0-9]/g, '');
+        });
+    }
+});
+</script>
+{% endblock %}

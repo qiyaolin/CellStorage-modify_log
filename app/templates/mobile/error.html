@@ -1,0 +1,148 @@
+{% extends "mobile/base.html" %}
+
+{% block title %}CellStorage Mobile - Error {{ error_code }}{% endblock %}
+{% block page_title %}Error {{ error_code }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-3">
+    <div class="card card-mobile">
+        <div class="card-body text-center p-4">
+            <!-- Error Icon -->
+            {% if error_code == 404 %}
+                <i class="fas fa-search fa-4x text-warning mb-3"></i>
+                <h4 class="text-warning">Page Not Found</h4>
+                <p class="text-muted">The page you're looking for doesn't exist or has been moved.</p>
+            {% elif error_code == 403 %}
+                <i class="fas fa-lock fa-4x text-danger mb-3"></i>
+                <h4 class="text-danger">Access Denied</h4>
+                <p class="text-muted">You don't have permission to access this page.</p>
+            {% elif error_code == 500 %}
+                <i class="fas fa-exclamation-triangle fa-4x text-danger mb-3"></i>
+                <h4 class="text-danger">Server Error</h4>
+                <p class="text-muted">Something went wrong on our end. Please try again later.</p>
+            {% else %}
+                <i class="fas fa-exclamation-circle fa-4x text-secondary mb-3"></i>
+                <h4 class="text-secondary">Error {{ error_code }}</h4>
+                <p class="text-muted">{{ error_message or 'An unexpected error occurred.' }}</p>
+            {% endif %}
+            
+            <!-- Action Buttons -->
+            <div class="d-grid gap-2 mt-4">
+                <a href="{{ url_for('mobile.index') }}" class="btn btn-primary btn-mobile">
+                    <i class="fas fa-home me-2"></i>Go to Dashboard
+                </a>
+                
+                <button onclick="window.history.back()" class="btn btn-outline-secondary btn-mobile">
+                    <i class="fas fa-arrow-left me-2"></i>Go Back
+                </button>
+                
+                {% if error_code == 404 %}
+                <a href="{{ url_for('mobile.quick_search') }}" class="btn btn-outline-primary btn-mobile">
+                    <i class="fas fa-search me-2"></i>Search Instead
+                </a>
+                {% endif %}
+                
+                {% if error_code == 500 %}
+                <button onclick="window.location.reload()" class="btn btn-outline-warning btn-mobile">
+                    <i class="fas fa-redo me-2"></i>Try Again
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Help Section -->
+    <div class="card card-mobile mt-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-question-circle me-2"></i>Need Help?
+            </h6>
+        </div>
+        <div class="card-body">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <a href="{{ url_for('mobile.cryovial_inventory') }}" class="text-decoration-none">
+                        <i class="fas fa-vials me-2 text-primary"></i>Browse Inventory
+                    </a>
+                </li>
+                <li class="mb-2">
+                    <a href="{{ url_for('mobile.locations_overview') }}" class="text-decoration-none">
+                        <i class="fas fa-map-marker-alt me-2 text-info"></i>View Locations
+                    </a>
+                </li>
+                <li class="mb-2">
+                    <a href="{{ url_for('mobile.quick_search') }}" class="text-decoration-none">
+                        <i class="fas fa-search me-2 text-success"></i>Quick Search
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('mobile.switch_to_desktop') }}" class="text-decoration-none">
+                        <i class="fas fa-desktop me-2 text-secondary"></i>Switch to Desktop View
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- Technical Details (for debugging) -->
+    {% if current_user.is_admin and error_code >= 500 %}
+    <div class="card card-mobile mt-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-bug me-2"></i>Technical Details
+            </h6>
+        </div>
+        <div class="card-body">
+            <small class="text-muted">
+                <strong>Error Code:</strong> {{ error_code }}<br>
+                <strong>Timestamp:</strong> {{ moment().format('YYYY-MM-DD HH:mm:ss') }}<br>
+                <strong>User Agent:</strong> {{ request.headers.get('User-Agent', 'Unknown')[:50] }}...
+            </small>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-redirect after 30 seconds for 500 errors
+    {% if error_code == 500 %}
+    let countdown = 30;
+    const countdownElement = document.createElement('small');
+    countdownElement.className = 'text-muted d-block mt-2';
+    countdownElement.textContent = `Auto-redirecting to dashboard in ${countdown} seconds...`;
+    
+    const card = document.querySelector('.card-mobile .card-body');
+    card.appendChild(countdownElement);
+    
+    const interval = setInterval(() => {
+        countdown--;
+        countdownElement.textContent = `Auto-redirecting to dashboard in ${countdown} seconds...`;
+        
+        if (countdown <= 0) {
+            clearInterval(interval);
+            window.location.href = '{{ url_for("mobile.index") }}';
+        }
+    }, 1000);
+    
+    // Cancel auto-redirect if user interacts with page
+    document.addEventListener('click', () => {
+        clearInterval(interval);
+        countdownElement.remove();
+    });
+    {% endif %}
+    
+    // Report error for analytics (if needed)
+    {% if error_code >= 400 %}
+    if (window.gtag) {
+        gtag('event', 'exception', {
+            'description': 'Error {{ error_code }}: {{ error_message or "Unknown error" }}',
+            'fatal': {{ 'true' if error_code >= 500 else 'false' }}
+        });
+    }
+    {% endif %}
+});
+</script>
+{% endblock %}

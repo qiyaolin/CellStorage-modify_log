@@ -81,6 +81,14 @@ def create_app(config_class=Config):
     from .inventory import routes as inventory_routes
     app.register_blueprint(inventory_routes.bp, url_prefix='/inventory')
     
+    # Register mobile blueprint
+    from .mobile_routes import mobile_bp
+    app.register_blueprint(mobile_bp, url_prefix='/mobile')
+    
+    # Initialize mobile middleware
+    from .mobile_middleware import init_mobile_middleware
+    init_mobile_middleware(app)
+    
     # Register API blueprints
     from .api.printing import printing_api
     app.register_blueprint(printing_api)

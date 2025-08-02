@@ -1,0 +1,569 @@
+{% extends "mobile/base.html" %}
+
+{% block title %}CellStorage Mobile - Print Labels{% endblock %}
+{% block page_title %}Print Labels{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-3">
+    <!-- Print Service Status -->
+    <div class="card card-mobile mb-3">
+        <div class="card-body">
+            <div id="print-service-status">
+                <div class="d-flex align-items-center">
+                    <div class="loading-spinner me-2"></div>
+                    <span>Checking print service...</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Selected Vials for Printing -->
+    {% if selected_vials %}
+    <div class="card card-mobile mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-vials me-2"></i>
+                Selected Vials ({{ selected_vials|length }})
+            </h6>
+        </div>
+        <div class="card-body p-2">
+            {% for vial in selected_vials %}
+            <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
+                <div>
+                    <strong>{{ vial.tag }}</strong><br>
+                    <small class="text-muted">{{ vial.location }}</small>
+                    {% if vial.position %}
+                    <br><small class="text-muted">{{ vial.position }}</small>
+                    {% endif %}
+                </div>
+                <div class="text-end">
+                    <span class="badge bg-{{ 'success' if vial.available else 'secondary' }}">
+                        {{ vial.status }}
+                    </span>
+                    <br>
+                    <button class="btn btn-sm btn-outline-primary mt-1" 
+                            onclick="printSingleVialMobile({{ loop.index0 }})">
+                        <i class="fas fa-print"></i>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="card-footer">
+            <div class="d-grid gap-2">
+                <button class="btn btn-primary btn-mobile" onclick="printAllVialsMobile()" id="print-all-btn" disabled>
+                    <i class="fas fa-print me-2"></i>Print All Labels
+                </button>
+                <a href="{{ url_for('mobile.cryovial_inventory') }}" class="btn btn-outline-secondary btn-mobile">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Inventory
+                </a>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- No vials selected -->
+    <div class="card card-mobile">
+        <div class="card-body text-center p-4">
+            <i class="fas fa-print fa-3x text-muted mb-3"></i>
+            <h6>No Vials Selected</h6>
+            <p class="text-muted">Select vials from the inventory to print labels.</p>
+            <a href="{{ url_for('mobile.cryovial_inventory') }}" class="btn btn-primary btn-mobile">
+                <i class="fas fa-vials me-2"></i>Go to Inventory
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Print Progress -->
+    <div id="print-progress-container" class="card card-mobile" style="display: none;">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-clock me-2"></i>Print Progress
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <span>Progress</span>
+                <span id="progress-text">0 of 0 completed</span>
+            </div>
+            <div class="progress">
+                <div id="print-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                     role="progressbar" style="width: 0%">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Print Job Status List -->
+    <div id="print-jobs-container" style="display: none;">
+        <div class="card card-mobile">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-list me-2"></i>Print Jobs
+                </h6>
+            </div>
+            <div class="card-body p-2" id="print-jobs-list">
+                <!-- Print jobs will be populated here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Error Display -->
+    <div id="print-error-container" class="alert alert-danger" style="display: none;">
+        <h6><i class="fas fa-exclamation-triangle me-2"></i>Print Service Error</h6>
+        <p id="print-error-message">An error occurred while accessing the print service.</p>
+        <button type="button" class="btn btn-outline-danger btn-sm" onclick="retryPrintServiceMobile()">
+            <i class="fas fa-redo me-2"></i>Retry
+        </button>
+    </div>
+
+    <!-- Print Instructions -->
+    <div class="card card-mobile mt-4">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-info-circle me-2"></i>Instructions
+            </h6>
+        </div>
+        <div class="card-body">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <i class="fas fa-check text-success me-2"></i>
+                    Labels are printed on the centralized printer
+                </li>
+                <li class="mb-2">
+                    <i class="fas fa-check text-success me-2"></i>
+                    Each vial gets a separate print job
+                </li>
+                <li class="mb-2">
+                    <i class="fas fa-check text-success me-2"></i>
+                    Monitor print status in real-time
+                </li>
+                <li>
+                    <i class="fas fa-check text-success me-2"></i>
+                    Failed jobs can be retried individually
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Mobile print interface variables
+let mobilePrintData = {
+    vials: {{ selected_vials | tojson if selected_vials else '[]' }},
+    printJobs: [],
+    printServiceAvailable: false
+};
+
+let statusPollingInterval = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    checkPrintServiceAvailabilityMobile();
+});
+
+/**
+ * Check print service availability for mobile
+ */
+async function checkPrintServiceAvailabilityMobile() {
+    try {
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
+        
+        const response = await fetch('/api/print/status', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            mobilePrintData.printServiceAvailable = data.available || false;
+            
+            if (mobilePrintData.printServiceAvailable) {
+                showPrintServiceAvailableMobile();
+            } else {
+                showPrintServiceUnavailableMobile();
+            }
+        } else {
+            // Assume available but show warning
+            mobilePrintData.printServiceAvailable = true;
+            showPrintServiceAvailableMobile();
+            document.getElementById('print-service-status').innerHTML = `
+                <div class="d-flex align-items-center text-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <span>Print service status unknown - please ensure you are logged in</span>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error checking print service:', error);
+        // Fallback: assume available
+        mobilePrintData.printServiceAvailable = true;
+        showPrintServiceAvailableMobile();
+        document.getElementById('print-service-status').innerHTML = `
+            <div class="d-flex align-items-center text-info">
+                <i class="fas fa-info-circle me-2"></i>
+                <span>Print service check failed - will test when printing</span>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Show print service available state
+ */
+function showPrintServiceAvailableMobile() {
+    document.getElementById('print-service-status').innerHTML = `
+        <div class="d-flex align-items-center text-success">
+            <i class="fas fa-check-circle me-2"></i>
+            <span>Print service is ready!</span>
+        </div>
+    `;
+    
+    const printAllBtn = document.getElementById('print-all-btn');
+    if (printAllBtn) {
+        printAllBtn.disabled = false;
+    }
+}
+
+/**
+ * Show print service unavailable state
+ */
+function showPrintServiceUnavailableMobile() {
+    document.getElementById('print-service-status').innerHTML = `
+        <div class="d-flex align-items-center text-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <span>Print service is currently unavailable</span>
+        </div>
+    `;
+}
+
+/**
+ * Show service error
+ */
+function showServiceErrorMobile(message) {
+    document.getElementById('print-service-status').style.display = 'none';
+    const errorContainer = document.getElementById('print-error-container');
+    errorContainer.style.display = 'block';
+    document.getElementById('print-error-message').textContent = message;
+}
+
+/**
+ * Print all vials (mobile version)
+ */
+async function printAllVialsMobile() {
+    if (!mobilePrintData.printServiceAvailable) {
+        showMobileAlert('Print service is not available', 'warning');
+        return;
+    }
+
+    if (mobilePrintData.vials.length === 0) {
+        showMobileAlert('No vials selected for printing', 'warning');
+        return;
+    }
+
+    // Show progress container
+    document.getElementById('print-progress-container').style.display = 'block';
+    document.getElementById('print-jobs-container').style.display = 'block';
+    
+    const printAllBtn = document.getElementById('print-all-btn');
+    if (printAllBtn) {
+        printAllBtn.disabled = true;
+        printAllBtn.innerHTML = '<span class="loading-spinner me-2"></span>Printing...';
+    }
+
+    // Initialize progress
+    updateProgressMobile(0, mobilePrintData.vials.length);
+    initializePrintJobsList();
+
+    // Queue all print jobs
+    for (let i = 0; i < mobilePrintData.vials.length; i++) {
+        await printSingleVialMobile(i, false);
+    }
+
+    // Start status polling
+    startStatusPollingMobile();
+}
+
+/**
+ * Print a single vial (mobile version)
+ */
+async function printSingleVialMobile(index, standalone = true) {
+    const vial = mobilePrintData.vials[index];
+    if (!vial) return;
+
+    // Update job status to printing
+    updatePrintJobStatusMobile(index, 'printing', 'Printing...');
+
+    try {
+        const labelData = {
+            batch_name: vial.batch_name,
+            batch_id: vial.batch_id,
+            vial_number: index + 1,
+            location: vial.location,
+            position: vial.position || '',
+            date_created: new Date().toISOString().split('T')[0]
+        };
+
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
+        
+        const response = await fetch('/api/print/queue-job', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                label_data: labelData,
+                priority: 'normal'
+            })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            mobilePrintData.printJobs[index] = {
+                job_id: result.job_id,
+                status: result.status || 'pending',
+                index: index
+            };
+            updatePrintJobStatusMobile(index, 'pending', `Job #${result.job_id} queued`);
+            
+            if (standalone) {
+                showMobileAlert(`Print job #${result.job_id} queued successfully`, 'success');
+                startStatusPollingMobile();
+            }
+        } else {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+    } catch (error) {
+        console.error(`Error printing vial ${index + 1}:`, error);
+        updatePrintJobStatusMobile(index, 'error', `Print failed: ${error.message}`);
+        
+        if (standalone) {
+            showMobileAlert(`Failed to queue print job: ${error.message}`, 'danger');
+        }
+    }
+}
+
+/**
+ * Initialize print jobs list display
+ */
+function initializePrintJobsList() {
+    const container = document.getElementById('print-jobs-list');
+    container.innerHTML = '';
+
+    mobilePrintData.vials.forEach((vial, index) => {
+        const jobDiv = document.createElement('div');
+        jobDiv.className = 'd-flex justify-content-between align-items-center p-2 border-bottom';
+        jobDiv.innerHTML = `
+            <div>
+                <strong>Vial ${index + 1}</strong><br>
+                <small class="text-muted">${vial.tag}</small>
+            </div>
+            <div class="text-end">
+                <span id="job-status-${index}" class="badge bg-light text-dark">Ready</span>
+                <br>
+                <button class="btn btn-sm btn-outline-primary mt-1" 
+                        onclick="printSingleVialMobile(${index})" 
+                        id="job-btn-${index}">
+                    <i class="fas fa-print"></i>
+                </button>
+            </div>
+        `;
+        container.appendChild(jobDiv);
+    });
+}
+
+/**
+ * Update print job status display
+ */
+function updatePrintJobStatusMobile(index, status, message) {
+    const statusElement = document.getElementById(`job-status-${index}`);
+    if (!statusElement) return;
+
+    let badgeClass = 'bg-light text-dark';
+    
+    switch (status) {
+        case 'pending':
+            badgeClass = 'bg-secondary';
+            break;
+        case 'processing':
+            badgeClass = 'bg-warning';
+            break;
+        case 'completed':
+            badgeClass = 'bg-success';
+            break;
+        case 'failed':
+            badgeClass = 'bg-danger';
+            break;
+        case 'printing':
+            badgeClass = 'bg-warning';
+            break;
+        case 'error':
+            badgeClass = 'bg-danger';
+            break;
+    }
+    
+    statusElement.className = `badge ${badgeClass}`;
+    statusElement.textContent = message;
+    
+    // Update job data
+    if (mobilePrintData.printJobs[index]) {
+        mobilePrintData.printJobs[index].status = status;
+    }
+    
+    // Recalculate progress
+    recalculateProgressMobile();
+}
+
+/**
+ * Update progress bar
+ */
+function updateProgressMobile(completed, total) {
+    const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
+    const progressBar = document.getElementById('print-progress-bar');
+    const progressText = document.getElementById('progress-text');
+    
+    if (progressBar) {
+        progressBar.style.width = `${percentage}%`;
+        progressBar.setAttribute('aria-valuenow', percentage);
+    }
+    
+    if (progressText) {
+        progressText.textContent = `${completed} of ${total} completed`;
+    }
+    
+    if (completed === total && total > 0) {
+        if (progressBar) {
+            progressBar.classList.remove('progress-bar-animated');
+        }
+        if (progressText) {
+            progressText.textContent = `All ${total} print jobs completed!`;
+        }
+        
+        // Stop polling and re-enable button
+        stopStatusPollingMobile();
+        const printAllBtn = document.getElementById('print-all-btn');
+        if (printAllBtn) {
+            printAllBtn.disabled = false;
+            printAllBtn.innerHTML = '<i class="fas fa-print me-2"></i>Print All Labels';
+        }
+        
+        showMobileAlert('All print jobs completed!', 'success');
+    }
+}
+
+/**
+ * Recalculate progress based on job completion
+ */
+function recalculateProgressMobile() {
+    const total = mobilePrintData.printJobs.length;
+    const completed = mobilePrintData.printJobs.filter(job => job && job.status === 'completed').length;
+    updateProgressMobile(completed, total);
+}
+
+/**
+ * Start status polling for mobile
+ */
+function startStatusPollingMobile() {
+    stopStatusPollingMobile();
+    
+    statusPollingInterval = setInterval(async () => {
+        await pollJobStatusesMobile();
+    }, 3000); // Poll every 3 seconds for mobile
+}
+
+/**
+ * Stop status polling
+ */
+function stopStatusPollingMobile() {
+    if (statusPollingInterval) {
+        clearInterval(statusPollingInterval);
+        statusPollingInterval = null;
+    }
+}
+
+/**
+ * Poll job statuses from server
+ */
+async function pollJobStatusesMobile() {
+    try {
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
+
+        for (let i = 0; i < mobilePrintData.printJobs.length; i++) {
+            const job = mobilePrintData.printJobs[i];
+            if (!job || !job.job_id) continue;
+            
+            // Skip if already completed or failed
+            if (job.status === 'completed' || job.status === 'failed') continue;
+
+            try {
+                const response = await fetch(`/api/print/job/${job.job_id}/status`, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+
+                if (response.ok) {
+                    const statusData = await response.json();
+                    const newStatus = statusData.status;
+                    
+                    if (newStatus !== job.status) {
+                        let displayMessage = '';
+                        switch (newStatus) {
+                            case 'pending':
+                                displayMessage = 'Pending';
+                                break;
+                            case 'processing':
+                                displayMessage = 'Printing...';
+                                break;
+                            case 'completed':
+                                displayMessage = 'Completed';
+                                break;
+                            case 'failed':
+                                displayMessage = 'Failed';
+                                break;
+                            default:
+                                displayMessage = newStatus;
+                        }
+                        
+                        updatePrintJobStatusMobile(i, newStatus, displayMessage);
+                    }
+                }
+            } catch (error) {
+                console.error(`Error polling status for job ${job.job_id}:`, error);
+            }
+        }
+    } catch (error) {
+        console.error('Error in pollJobStatusesMobile:', error);
+    }
+}
+
+/**
+ * Retry print service connection
+ */
+function retryPrintServiceMobile() {
+    document.getElementById('print-error-container').style.display = 'none';
+    document.getElementById('print-service-status').style.display = 'block';
+    document.getElementById('print-service-status').innerHTML = `
+        <div class="d-flex align-items-center">
+            <div class="loading-spinner me-2"></div>
+            <span>Retrying connection...</span>
+        </div>
+    `;
+    
+    checkPrintServiceAvailabilityMobile();
+}
+
+// Clean up when leaving page
+window.addEventListener('beforeunload', function() {
+    stopStatusPollingMobile();
+});
+</script>
+{% endblock %}

@@ -61,6 +61,9 @@ def create_app(config_class=Config):
     from .api.printing import printing_api
     app.register_blueprint(printing_api)
     
+    # Disable CSRF protection for printing API endpoints
+    csrf.exempt(printing_api)
+    
     # Initialize Flask-Admin first
     from .admin_interface import init_admin
     init_admin(app)

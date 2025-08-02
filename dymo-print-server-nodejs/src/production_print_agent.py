@@ -211,8 +211,9 @@ class ProductionPrintAgent:
             label_data = job.get('label_data', {}) or {}
             data = {
                 'job_id': str(job_id),
-                'item_name': str(label_data.get('itemName', 'Unknown Item')),
-                'barcode': str(label_data.get('barcode', 'NO_BARCODE')),
+                # 修复字段映射：支持多种字段名称
+                'item_name': str(label_data.get('item_name') or label_data.get('itemName') or label_data.get('batch_name', 'Unknown Item')),
+                'barcode': str(label_data.get('barcode') or label_data.get('batch_id', 'NO_BARCODE')),
                 'custom_text': str(label_data.get('customText', '')),
                 'font_size': str(label_data.get('fontSize', '8')),
                 'is_bold': 'true' if label_data.get('isBold') else 'false',

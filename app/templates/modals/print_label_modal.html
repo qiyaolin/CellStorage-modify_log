@@ -173,28 +173,52 @@ function hideAllContainers() {
  */
 async function checkPrintServiceAvailability() {
   try {
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || 
+                      document.querySelector('input[name=csrf_token]')?.value;
+
     const response = await fetch('/api/print/status', {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
       }
     });
 
     if (response.ok) {
       const data = await response.json();
-      printServiceAvailable = data.available;
+      printServiceAvailable = data.available || false;
       
       if (printServiceAvailable) {
         showPrintJobsTable();
       } else {
         showServiceUnavailable();
       }
+    } else if (response.status === 401 || response.status === 403) {
+      console.warn('Authentication required for print service status check');
+      // Assume service is available but show warning
+      printServiceAvailable = true;
+      showPrintJobsTable();
+      document.getElementById('print-service-status').innerHTML = `
+        <div class="d-flex align-items-center text-warning">
+          <i class="bi bi-exclamation-triangle me-2"></i>
+          <span>Print service status unknown - proceeding with caution. Please ensure you are logged in.</span>
+        </div>
+      `;
     } else {
-      throw new Error('Service check failed');
+      throw new Error(`Service check failed: HTTP ${response.status}`);
     }
   } catch (error) {
     console.error('Error checking print service:', error);
-    showServiceError('Failed to connect to print service. Please check if the print server is running.');
+    // Fallback: assume service is available and let the actual print request handle errors
+    printServiceAvailable = true;
+    showPrintJobsTable();
+    document.getElementById('print-service-status').innerHTML = `
+      <div class="d-flex align-items-center text-info">
+        <i class="bi bi-info-circle me-2"></i>
+        <span>Print service status check failed - will test connectivity when printing.</span>
+      </div>
+    `;
   }
 }
 
@@ -314,10 +338,15 @@ async function printSingleLabel(index) {
       date_created: new Date().toISOString().split('T')[0]
     };
 
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || 
+                      document.querySelector('input[name=csrf_token]')?.value;
+
     const response = await fetch('/api/print/queue-job', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-CSRFToken': csrfToken
       },
       body: JSON.stringify({
         label_data: labelData,
@@ -329,12 +358,18 @@ async function printSingleLabel(index) {
       const result = await response.json();
       modalPrintData.printJobs[index] = result;
       updateVialStatus(index, 'queued', `Job #${result.job_id} queued`);
+      console.log(`Successfully queued print job #${result.job_id} for vial ${vialNumber}`);
     } else {
-      throw new Error(`HTTP ${response.status}`);
+      const errorText = await response.text();
+      console.error(`Print request failed: HTTP ${response.status}`, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
     }
   } catch (error) {
     console.error(`Error printing vial ${vialNumber}:`, error);
-    updateVialStatus(index, 'error', 'Print failed');
+    updateVialStatus(index, 'error', `Print failed: ${error.message}`);
+    
+    // Show detailed error to user
+    alert(`Failed to queue print job for vial ${vialNumber}:\n${error.message}\n\nPlease check:\n- You are logged in\n- Print service is running\n- Check browser console for details`);
   } finally {
     document.getElementById(`print-btn-${index}`).disabled = false;
   }

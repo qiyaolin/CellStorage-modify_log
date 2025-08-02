@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Print API</title>
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+</head>
+<body>
+    <h1>Print API Debug</h1>
+    
+    <div id="results"></div>
+    
+    <button onclick="testStatusAPI()">Test Status API</button>
+    <button onclick="testQueueAPI()">Test Queue API</button>
+    <button onclick="testWithCSRF()">Test with CSRF</button>
+    
+    <script>
+        function log(message) {
+            document.getElementById('results').innerHTML += '<p>' + message + '</p>';
+        }
+        
+        async function testStatusAPI() {
+            log('Testing /api/print/status...');
+            try {
+                const response = await fetch('/api/print/status');
+                log('Status: ' + response.status);
+                log('Response: ' + await response.text());
+            } catch (error) {
+                log('Error: ' + error);
+            }
+        }
+        
+        async function testQueueAPI() {
+            log('Testing /api/print/queue-job...');
+            try {
+                const response = await fetch('/api/print/queue-job', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        label_data: {
+                            batch_name: 'TEST',
+                            batch_id: 'B999',
+                            vial_number: 1
+                        },
+                        priority: 'normal'
+                    })
+                });
+                log('Status: ' + response.status);
+                log('Response: ' + await response.text());
+            } catch (error) {
+                log('Error: ' + error);
+            }
+        }
+        
+        async function testWithCSRF() {
+            log('Testing with CSRF token...');
+            const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
+            log('CSRF Token: ' + (csrfToken ? 'Found' : 'Missing'));
+            
+            try {
+                const response = await fetch('/api/print/queue-job', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: JSON.stringify({
+                        label_data: {
+                            batch_name: 'TEST-WITH-CSRF',
+                            batch_id: 'B999',
+                            vial_number: 1
+                        },
+                        priority: 'normal'
+                    })
+                });
+                log('Status: ' + response.status);
+                log('Response: ' + await response.text());
+            } catch (error) {
+                log('Error: ' + error);
+            }
+        }
+    </script>
+</body>
+</html>

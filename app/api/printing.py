@@ -266,9 +266,9 @@ def fetch_pending_job():
 @printing_api.route('/update-job-status/<int:job_id>', methods=['POST'])
 @require_api_token
 def update_job_status(job_id):
-    """Update job status from print server"""
+    """Update job status from print server, now including batch information."""
     try:
-        from ..cell_storage.models import PrintJob, PrintServer
+        from ..cell_storage.models import PrintJob, PrintServer, Batch
         
         data = request.get_json()
         if not data:
@@ -277,12 +277,26 @@ def update_job_status(job_id):
         server_id = data.get('server_id')
         status = data.get('status')
         error_message = data.get('error_message')
-        
+        batch_id = data.get('batch_id')
+        batch_name = data.get('batch_name')
+
         if not server_id or not status:
-            return jsonify({'error': 'server_id and status required'}), 400
-        
+            return jsonify({'error': 'server_id and status are required'}), 400
+
+        if not batch_id or not batch_name:
+            return jsonify({'error': 'batch_id and batch_name are required'}), 400
+
         job = PrintJob.query.get_or_404(job_id)
         
+        # Link to the batch if not already linked
+        if not job.batch_id:
+            batch = Batch.query.get(batch_id)
+            if batch:
+                job.batch_id = batch.id
+            else:
+                # Optional: handle case where batch_id is invalid
+                logger.warning(f"Batch with ID {batch_id} not found for job {job_id}")
+
         # Update job status
         job.status = status
         job.print_server_id = server_id
@@ -299,19 +313,20 @@ def update_job_status(job_id):
         if server:
             if status == 'completed':
                 server.successful_jobs += 1
-                server.total_jobs_processed += 1
             elif status == 'failed':
                 server.failed_jobs += 1
+            
+            if status in ['completed', 'failed']:
                 server.total_jobs_processed += 1
         
         db.session.commit()
         
-        return jsonify({'message': 'Job status updated', 'job': job.to_dict()})
+        return jsonify({'message': 'Job status updated successfully', 'job': job.to_dict()})
         
     except Exception as e:
-        logger.error(f"Error updating job status: {e}")
+        logger.error(f"Error updating job status for job {job_id}: {e}", exc_info=True)
         db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': 'An internal error occurred', 'details': str(e)}), 500
 
 
 @printing_api.route('/heartbeat', methods=['POST'])

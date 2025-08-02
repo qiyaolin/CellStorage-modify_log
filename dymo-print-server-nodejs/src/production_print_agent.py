@@ -167,29 +167,41 @@ class ProductionPrintAgent:
             logger.error(f"Failed to fetch jobs: {e}")
             return []
 
-    def update_job_status(self, job_id, status, error_message=None):
-        """Update job status on the backend."""
+    def update_job_status(self, job_id, status, job_data, error_message=None):
+        """Update job status on the backend, including batch info."""
         try:
             template = self.config.get('api_endpoints', {}).get('update_status', '/api/print/update-job-status/{job_id}')
             endpoint = template.format(job_id=job_id)
             url = urllib.parse.urljoin(self.backend_url, endpoint)
+            
+            batch_id = job_data.get('batch_id')
+            batch_name = job_data.get('batch_name')
+
+            if not batch_id or not batch_name:
+                logger.warning(f"Job #{job_id} is missing batch_id or batch_name. Status update may fail.")
+
             payload = {
                 'server_id': 'python-print-agent',
-                'status': status
+                'status': status,
+                'batch_id': batch_id,
+                'batch_name': batch_name
             }
             if error_message:
                 payload['error_message'] = error_message
+            
             resp = requests.post(url, json=payload, headers=self.get_auth_headers(), timeout=10)
+            
             if resp.status_code != 200:
                 logger.error(f"Status update failed: HTTP {resp.status_code}")
                 logger.error(f"Request URL: {url}")
                 logger.error(f"Request payload: {payload}")
                 logger.error(f"Response: {resp.text}")
+            
             resp.raise_for_status()
             logger.info(f"Job #{job_id} status updated to {status}")
             return True
         except Exception as e:
-            logger.error(f"Failed to update job status: {e}")
+            logger.error(f"Failed to update job status for job #{job_id}: {e}")
             return False
 
     def extract_print_data(self, job):
@@ -594,7 +606,11 @@ class ProductionPrintAgent:
         """Process a single print job."""
         job_id = job.get('id')
         logger.info(f"Processing job #{job_id}")
-        self.update_job_status(job_id, 'processing')
+        logger.info(f"Full job data received from server: {json.dumps(job, indent=2)}")
+        
+        # Update status to 'processing' with full job data
+        self.update_job_status(job_id, 'processing', job)
+        
         data = self.extract_print_data(job)
         
         # Debug mode: skip real printing and create HTML preview
@@ -602,7 +618,7 @@ class ProductionPrintAgent:
             logger.info(f"Debug mode: Creating HTML preview for job #{job_id}")
             self.create_debug_preview(data)
             # Mark as completed immediately since we're not really printing
-            self.update_job_status(job_id, 'completed')
+            self.update_job_status(job_id, 'completed', job)
             logger.info(f"Job #{job_id} marked as completed (debug mode)")
         else:
             url = self.build_print_url(data)
@@ -612,11 +628,11 @@ class ProductionPrintAgent:
                 # Wait for print to complete, then mark as completed
                 def mark_completed():
                     time.sleep(10)  # Wait 10 seconds for printing to complete
-                    self.update_job_status(job_id, 'completed')
+                    self.update_job_status(job_id, 'completed', job)
                     logger.info(f"Job #{job_id} marked as completed")
                 threading.Thread(target=mark_completed, daemon=True).start()
             else:
-                self.update_job_status(job_id, 'failed', 'Browser print failed')
+                self.update_job_status(job_id, 'failed', job, 'Browser print failed')
 
     def health_check(self):
         """Perform a health check on backend, template, and dymo framework."""

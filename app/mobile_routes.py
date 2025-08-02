@@ -76,13 +76,14 @@ def cryovial_inventory():
     query = VialBatch.query
     
     if search_q:
-        query = query.filter(
+        # For dynamic properties like cell_line, we need to join with vials and cell_lines
+        query = query.outerjoin(CryoVial).outerjoin(CellLine, CryoVial.cell_line_id == CellLine.id).filter(
             db.or_(
                 VialBatch.name.contains(search_q),
-                VialBatch.cell_line.contains(search_q),
-                VialBatch.tag.contains(search_q)
+                CellLine.name.contains(search_q),  # Search in actual cell line names
+                VialBatch.name.contains(search_q)  # Use batch name as tag equivalent
             )
-        )
+        ).distinct()
     
     if search_creator:
         creator_user = User.query.filter_by(username=search_creator).first()
@@ -90,13 +91,20 @@ def cryovial_inventory():
             query = query.filter_by(created_by_id=creator_user.id)
     
     if search_fluorescence:
-        query = query.filter_by(fluorescence_tag=search_fluorescence)
+        # Join with vials to filter by fluorescence tag
+        query = query.join(CryoVial).filter(CryoVial.fluorescence_tag == search_fluorescence)
     
     if search_resistance:
-        query = query.filter_by(resistance=search_resistance)
+        # Join with vials to filter by resistance (only join if not already joined)
+        if not search_fluorescence:
+            query = query.join(CryoVial)
+        query = query.filter(CryoVial.resistance == search_resistance)
     
     # Execute query with pagination
     if search_q or search_creator or search_fluorescence or search_resistance or view_all:
+        # Add distinct to avoid duplicate batches when joining with vials
+        if search_fluorescence or search_resistance:
+            query = query.distinct()
         batches = query.paginate(
             page=page, per_page=per_page, error_out=False
         )
@@ -128,8 +136,9 @@ def cryovial_inventory():
     
     # Get filter options
     all_creators = User.query.distinct().all()
-    all_fluorescence_tags = db.session.query(VialBatch.fluorescence_tag).distinct().all()
-    all_resistances = db.session.query(VialBatch.resistance).distinct().all()
+    # Get filter options from vials instead of batches since batch properties are dynamic
+    all_fluorescence_tags = db.session.query(CryoVial.fluorescence_tag).distinct().all()
+    all_resistances = db.session.query(CryoVial.resistance).distinct().all()
     
     # Clean up filter options
     all_fluorescence_tags = [tag[0] for tag in all_fluorescence_tags if tag[0]]
@@ -249,13 +258,13 @@ def quick_search():
     results = []
     
     if query:
-        # Search in vials and batches
-        vials = CryoVial.query.join(VialBatch).filter(
+        # Search in vials and batches - join with CellLine for cell_line property
+        vials = CryoVial.query.join(VialBatch).outerjoin(CellLine, CryoVial.cell_line_id == CellLine.id).filter(
             db.or_(
                 CryoVial.unique_vial_id_tag.contains(query),
                 VialBatch.name.contains(query),
-                VialBatch.cell_line.contains(query),
-                VialBatch.tag.contains(query)
+                CellLine.name.contains(query),  # Search actual cell line names
+                VialBatch.name.contains(query)  # Use batch name as tag equivalent
             )
         ).limit(20).all()
         

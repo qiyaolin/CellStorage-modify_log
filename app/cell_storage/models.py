@@ -118,22 +118,55 @@ class VialBatch(db.Model):
     name = db.Column(db.String(128), nullable=False)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    
-    # Batch-level properties
-    cell_line = db.Column(db.String(128))
-    passage_number = db.Column(db.String(64))
-    date_frozen = db.Column(db.Date)
-    fluorescence_tag = db.Column(db.String(128))
-    resistance = db.Column(db.String(128))
-    parental_cell_line = db.Column(db.String(128))
-    notes = db.Column(db.Text)
-    tag = db.Column(db.String(128))  # For search functionality
 
     vials = db.relationship('CryoVial', backref='batch', lazy='dynamic')
     created_by = db.relationship('User', backref='batches_created', lazy='select')
 
     def __repr__(self):
         return f'<VialBatch {self.id}: {self.name}>'
+    
+    # Dynamic properties that get data from the first vial in the batch
+    @property
+    def cell_line(self):
+        first_vial = self.vials.first()
+        if first_vial and first_vial.cell_line_info:
+            return first_vial.cell_line_info.name
+        return 'Unknown'
+    
+    @property
+    def passage_number(self):
+        first_vial = self.vials.first()
+        return getattr(first_vial, 'passage_number', '') if first_vial else ''
+    
+    @property
+    def date_frozen(self):
+        first_vial = self.vials.first()
+        return getattr(first_vial, 'date_frozen', None) if first_vial else None
+    
+    @property
+    def fluorescence_tag(self):
+        first_vial = self.vials.first()
+        return getattr(first_vial, 'fluorescence_tag', '') if first_vial else ''
+    
+    @property
+    def resistance(self):
+        first_vial = self.vials.first()
+        return getattr(first_vial, 'resistance', '') if first_vial else ''
+    
+    @property
+    def parental_cell_line(self):
+        first_vial = self.vials.first()
+        return getattr(first_vial, 'parental_cell_line', '') if first_vial else ''
+    
+    @property
+    def notes(self):
+        first_vial = self.vials.first()
+        return getattr(first_vial, 'notes', '') if first_vial else ''
+    
+    @property
+    def tag(self):
+        # For search functionality, we can use the batch name or generate from vials
+        return self.name
 
 class CryoVial(db.Model):
     __tablename__ = 'cryovials'

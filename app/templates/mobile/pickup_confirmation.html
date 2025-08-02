@@ -78,11 +78,78 @@
         </div>
     </div>
 
+    <!-- Visual Box Layouts -->
+    <div class="card card-mobile mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-th me-2"></i>Visual Box Layouts
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="text-muted small mb-3">
+                <i class="fas fa-info-circle me-1"></i>
+                Red highlighted cells show vials to pick up
+            </div>
+            
+            {% set box_layouts = {} %}
+            {% for vial in vials %}
+                {% set box_key = vial.location %}
+                {% if box_key not in box_layouts %}
+                    {% set _ = box_layouts.update({box_key: {'vials': [], 'box_info': None}}) %}
+                {% endif %}
+                {% set _ = box_layouts[box_key]['vials'].append(vial) %}
+            {% endfor %}
+            
+            {% for location, layout_data in box_layouts.items() %}
+            <div class="mb-4">
+                <h6 class="text-primary mb-2">📦 {{ location }}</h6>
+                
+                <!-- Box Grid Visualization -->
+                <div class="box-visualization" data-location="{{ location }}">
+                    <div class="d-flex justify-content-center">
+                        <div class="mobile-box-grid" style="display: inline-block;">
+                            <!-- Grid will be loaded via JavaScript -->
+                            <div class="text-center p-3">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Loading box layout...</span>
+                                </div>
+                                <div class="small text-muted mt-2">Loading grid...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Vial Details for this Box -->
+                <div class="mt-3">
+                    <div class="row">
+                        {% for vial in layout_data.vials %}
+                        <div class="col-6 mb-2">
+                            <div class="card border-danger">
+                                <div class="card-body p-2">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <strong class="text-danger">{{ vial.tag }}</strong><br>
+                                            <small class="text-muted">{{ vial.position }}</small>
+                                        </div>
+                                        <span class="badge bg-danger">PICK</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% if not loop.last %}<hr>{% endif %}
+            {% endfor %}
+        </div>
+    </div>
+
     <!-- Location Summary -->
     <div class="card card-mobile mb-3">
         <div class="card-header">
             <h6 class="mb-0">
-                <i class="fas fa-map-marker-alt me-2"></i>Locations Summary
+                <i class="fas fa-map-marker-alt me-2"></i>Quick Reference
             </h6>
         </div>
         <div class="card-body">
@@ -154,6 +221,131 @@
 {% block extra_js %}
 <script>
 let confirmationCallback = null;
+
+// Load box grid visualizations
+function loadBoxGrids() {
+    // Get unique box IDs from vials
+    const vialData = [
+        {% for vial in vials %}
+        {
+            id: {{ vial.id }},
+            location: '{{ vial.location|e }}',
+            position: '{{ vial.position|e }}',
+            tag: '{{ vial.tag|e }}',
+            box_id: {{ vial.box_id if vial.get('box_id') else 'null' }}
+        }{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+    
+    // Group vials by box ID
+    const vialsByBox = {};
+    vialData.forEach(vial => {
+        if (vial.box_id) {
+            if (!vialsByBox[vial.box_id]) {
+                vialsByBox[vial.box_id] = [];
+            }
+            vialsByBox[vial.box_id].push(vial);
+        }
+    });
+    
+    // Load each box grid
+    Object.keys(vialsByBox).forEach(boxId => {
+        loadBoxGrid(boxId, vialsByBox[boxId]);
+    });
+}
+
+// Load individual box grid
+function loadBoxGrid(boxId, vialsInBox) {
+    fetch(`/mobile/api/box/${boxId}/details`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                renderBoxGrid(data, vialsInBox);
+            } else {
+                console.error('Failed to load box details:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading box grid:', error);
+        });
+}
+
+// Render box grid visualization
+function renderBoxGrid(boxData, vialsToPickup) {
+    // Find the corresponding visualization container
+    const visualizations = document.querySelectorAll('.box-visualization');
+    let targetContainer = null;
+    
+    // Match by box name in location
+    visualizations.forEach(container => {
+        const location = container.dataset.location;
+        if (location && location.includes(boxData.box_name)) {
+            targetContainer = container;
+        }
+    });
+    
+    if (!targetContainer) return;
+    
+    const gridContainer = targetContainer.querySelector('.mobile-box-grid');
+    if (!gridContainer) return;
+    
+    // Create pickup position set for quick lookup
+    const pickupPositions = new Set();
+    vialsToPickup.forEach(vial => {
+        if (vial.position) {
+            // Extract row and column from position (format: R1C2)
+            const match = vial.position.match(/R(\d+)C(\d+)/);
+            if (match) {
+                const row = parseInt(match[1]);
+                const col = parseInt(match[2]);
+                pickupPositions.add(`${row}-${col}`);
+            }
+        }
+    });
+    
+    // Generate grid HTML
+    let gridHTML = '<table class="mobile-box-table">';
+    
+    for (let r = 1; r <= boxData.rows; r++) {
+        gridHTML += '<tr>';
+        for (let c = 1; c <= boxData.columns; c++) {
+            const key = `${r}-${c}`;
+            const vial = boxData.vials[key];
+            const isPickup = pickupPositions.has(key);
+            
+            let cellClass = 'mobile-box-cell';
+            let cellContent = `<span class="position-label">R${r}C${c}</span>`;
+            
+            if (vial) {
+                cellClass += ' occupied';
+                if (isPickup) {
+                    cellClass += ' pickup-target';
+                    cellContent = `<div class="vial-info pickup"><strong>B${vial.batch_id}</strong><br><span class="position-label">R${r}C${c}</span></div>`;
+                } else {
+                    cellContent = `<div class="vial-info"><span class="batch-id">B${vial.batch_id}</span><br><span class="position-label">R${r}C${c}</span></div>`;
+                }
+            } else if (isPickup) {
+                // This shouldn't happen, but handle edge case
+                cellClass += ' pickup-target empty';
+                cellContent = `<div class="vial-info pickup"><strong>PICK</strong><br><span class="position-label">R${r}C${c}</span></div>`;
+            } else {
+                cellClass += ' empty';
+            }
+            
+            gridHTML += `<td class="${cellClass}">${cellContent}</td>`;
+        }
+        gridHTML += '</tr>';
+    }
+    
+    gridHTML += '</table>';
+    gridHTML += `<div class="grid-legend mt-2 text-center small">
+        <span class="legend-item"><span class="legend-box pickup"></span> Pick Up</span>
+        <span class="legend-item"><span class="legend-box occupied"></span> Occupied</span>
+        <span class="legend-item"><span class="legend-box empty"></span> Empty</span>
+    </div>`;
+    
+    gridContainer.innerHTML = gridHTML;
+}
 
 // Show confirmation modal
 function showConfirmation(message, callback) {
@@ -290,8 +482,11 @@ function clearPickupList(showConfirmation = true) {
     }
 }
 
-// Auto-save pickup progress
+// Load box visualizations and auto-save pickup progress
 document.addEventListener('DOMContentLoaded', function() {
+    // Load box grid visualizations
+    loadBoxGrids();
+    
     // Save current pickup state to localStorage
     const pickupData = {
         vials: [{% for vial in vials %}{{ vial.id }}{% if not loop.last %}, {% endif %}{% endfor %}],
@@ -335,4 +530,131 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
+
+<style>
+/* Mobile Box Grid Styles */
+.mobile-box-table {
+    border-collapse: collapse;
+    margin: 0 auto;
+    background: white;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.mobile-box-cell {
+    width: 45px;
+    height: 45px;
+    border: 1px solid #dee2e6;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 9px;
+    line-height: 1.1;
+    padding: 2px;
+    position: relative;
+}
+
+.mobile-box-cell.empty {
+    background-color: #f8f9fa;
+    color: #6c757d;
+}
+
+.mobile-box-cell.occupied {
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.mobile-box-cell.pickup-target {
+    background-color: #ffebee !important;
+    border: 2px solid #d32f2f !important;
+    color: #d32f2f !important;
+    font-weight: bold;
+    animation: pulse-pickup 2s infinite;
+}
+
+@keyframes pulse-pickup {
+    0% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0.7); }
+    70% { box-shadow: 0 0 0 3px rgba(211, 47, 47, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(211, 47, 47, 0); }
+}
+
+.vial-info {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    word-break: break-all;
+}
+
+.vial-info.pickup {
+    color: #d32f2f !important;
+    font-weight: bold;
+}
+
+.batch-id {
+    font-weight: 600;
+    font-size: 8px;
+}
+
+.position-label {
+    font-size: 7px;
+    opacity: 0.8;
+}
+
+.grid-legend {
+    margin-top: 8px;
+    padding: 8px;
+    background: #f8f9fa;
+    border-radius: 4px;
+}
+
+.legend-item {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 8px;
+    font-size: 11px;
+}
+
+.legend-box {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 1px solid #dee2e6;
+    margin-right: 4px;
+    border-radius: 2px;
+}
+
+.legend-box.pickup {
+    background-color: #ffebee;
+    border-color: #d32f2f;
+}
+
+.legend-box.occupied {
+    background-color: #e3f2fd;
+    border-color: #1976d2;
+}
+
+.legend-box.empty {
+    background-color: #f8f9fa;
+    border-color: #6c757d;
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .mobile-box-cell {
+        width: 35px;
+        height: 35px;
+        font-size: 8px;
+    }
+    
+    .batch-id {
+        font-size: 7px;
+    }
+    
+    .position-label {
+        font-size: 6px;
+    }
+}
+</style>
 {% endblock %}

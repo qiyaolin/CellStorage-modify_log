@@ -25,6 +25,50 @@ from .shared.decorators import admin_required
 mobile_bp = Blueprint('mobile', __name__, url_prefix='/mobile')
 
 
+def find_available_positions_mobile(quantity):
+    """Find available positions across all boxes for mobile vial creation"""
+    allocated_positions = []
+    
+    # Get all boxes ordered by preference (numbered 1-5 first, then others)
+    def box_priority_key(box):
+        try:
+            return (0, int(box.name))  # Numbered boxes come first
+        except ValueError:
+            return (1, box.name)  # Non-numbered boxes come after
+    
+    all_boxes = Box.query.join(Drawer).join(Tower).order_by(Tower.name, Drawer.name, Box.name).all()
+    all_boxes_sorted = sorted(all_boxes, key=box_priority_key)
+    
+    # Try to find available positions
+    for box in all_boxes_sorted:
+        if len(allocated_positions) >= quantity:
+            break
+            
+        # Get occupied positions in this box
+        occupied_slots = {
+            (v.row_in_box, v.col_in_box)
+            for v in CryoVial.query.filter_by(box_id=box.id, status='Available').all()
+        }
+        
+        # Find available positions in this box
+        remaining_needed = quantity - len(allocated_positions)
+        for r in range(1, box.rows + 1):
+            for c in range(1, box.columns + 1):
+                if (r, c) not in occupied_slots:
+                    allocated_positions.append({
+                        'box_id': box.id,
+                        'row': r,
+                        'col': c
+                    })
+                    remaining_needed -= 1
+                    if remaining_needed <= 0:
+                        break
+            if remaining_needed <= 0:
+                break
+    
+    return allocated_positions[:quantity]
+
+
 
 @mobile_bp.before_request
 def before_mobile_request():
@@ -421,18 +465,104 @@ def print_interface():
 def add_cryovial():
     """Mobile add vial interface"""
     if request.method == 'POST':
-        # Forward form data to desktop add_cryovial for processing
-        form_data = request.form.to_dict()
-        form_data['mobile_redirect'] = 'true'
+        # Process the form directly instead of redirecting to desktop
+        form = CryoVialForm(request.form)
+        form.cell_line_id.choices = [(cl.id, cl.name) for cl in CellLine.query.order_by(CellLine.name).all()]
         
-        # Create a new request to the desktop route with the form data
-        from werkzeug.wrappers import Request
-        from flask import redirect, url_for
-        
-        # Simply redirect with form data preserved through session
-        session['mobile_form_data'] = form_data
-        return redirect(url_for('cell_storage.add_cryovial'))
+        if form.validate():
+            try:
+                from ..shared.utils import get_next_batch_id, log_audit
+                from ..cell_storage.models import VialBatch, CryoVial
+                from datetime import datetime
+                
+                # Create batch
+                batch_id = get_next_batch_id(auto_commit=False)
+                batch = VialBatch(
+                    id=batch_id,
+                    name=form.batch_name.data,
+                    created_by_user_id=current_user.id,
+                )
+                db.session.add(batch)
+                db.session.flush()
+                
+                # Find available position automatically for mobile
+                quantity = form.quantity_to_add.data or 1
+                positions = find_available_positions_mobile(quantity)
+                
+                if not positions or len(positions) < quantity:
+                    flash('Not enough available storage positions. Please contact an administrator.', 'danger')
+                    db.session.rollback()
+                    return render_template('mobile/add_vial.html',
+                                         form=form,
+                                         next_batch_id=get_next_batch_id(),
+                                         next_vial_id=get_next_vial_id(),
+                                         device_info=get_device_info())
+                
+                # Create vials with auto-assigned positions
+                created_vials = []
+                for i, position in enumerate(positions[:quantity]):
+                    # Generate unique vial tag
+                    base_tag = f"B{batch.id}"
+                    unique_tag_suffix = f"-{i+1}" if quantity > 1 else ""
+                    unique_tag = f"{base_tag}{unique_tag_suffix}"
+                    
+                    vial = CryoVial(
+                        unique_vial_id_tag=unique_tag,
+                        batch_id=batch.id,
+                        cell_line_id=form.cell_line_id.data,
+                        box_id=position['box_id'],
+                        row_in_box=position['row'],
+                        col_in_box=position['col'],
+                        passage_number=form.passage_number.data,
+                        date_frozen=form.date_frozen.data,
+                        frozen_by_user_id=current_user.id,
+                        volume_ml=form.volume_ml.data,
+                        concentration=form.concentration.data,
+                        fluorescence_tag=form.fluorescence_tag.data,
+                        resistance=form.resistance.data,
+                        parental_cell_line=form.parental_cell_line.data,
+                        status='Available',
+                        notes=form.notes.data,
+                        date_created=datetime.utcnow()
+                    )
+                    db.session.add(vial)
+                    created_vials.append({
+                        'tag': unique_tag,
+                        'position': f"R{position['row']}C{position['col']}",
+                        'box_id': position['box_id']
+                    })
+                
+                db.session.commit()
+                
+                # Store success data in session for success page
+                session['last_batch_id'] = batch.id
+                session['last_batch_name'] = batch.name
+                session['last_vial_count'] = len(created_vials)
+                session['last_vial_positions'] = created_vials
+                
+                # Log the action
+                log_audit(
+                    current_user.id,
+                    'CREATE_CRYOVIAL',
+                    target_type='VialBatch',
+                    target_id=batch.id,
+                    details=f'Mobile: Created batch {batch.name} with {len(created_vials)} vials'
+                )
+                
+                flash(f'Successfully added {len(created_vials)} vial(s) to batch {batch.name}!', 'success')
+                return redirect(url_for('mobile.vials_saved_success'))
+                
+            except Exception as e:
+                db.session.rollback()
+                current_app.logger.error(f'Error creating vials via mobile: {str(e)}', exc_info=True)
+                flash('An error occurred while creating the vials. Please try again.', 'danger')
+        else:
+            # Form validation failed
+            for field, errors in form.errors.items():
+                for error in errors:
+                    flash(f'{field}: {error}', 'danger')
     
+    # GET request or form validation failed
     form = CryoVialForm()
     # Set choices for select fields
     form.cell_line_id.choices = [(cl.id, cl.name) for cl in CellLine.query.order_by(CellLine.name).all()]
@@ -479,8 +609,16 @@ def pickup_selected_vials():
         flash('No vials selected for pickup.', 'warning')
         return redirect(url_for('mobile.cryovial_inventory'))
     
-    vials = CryoVial.query.filter(CryoVial.id.in_(selected_ids)).all()
-    formatted_vials = [format_mobile_search_result(vial) for vial in vials]
+    # Get vials with full relationship data for box information
+    vials = CryoVial.query.filter(CryoVial.id.in_(selected_ids)).join(Box).join(Drawer).join(Tower).all()
+    
+    # Format vials with enhanced data including box_id
+    formatted_vials = []
+    for vial in vials:
+        formatted_vial = format_mobile_search_result(vial)
+        # Add box_id for grid visualization
+        formatted_vial['box_id'] = vial.box_id
+        formatted_vials.append(formatted_vial)
     
     return render_template('mobile/pickup_confirmation.html',
                          vials=formatted_vials,

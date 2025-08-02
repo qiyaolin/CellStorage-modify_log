@@ -118,8 +118,11 @@ class PrintingService:
         
         for i, position in enumerate(vial_positions, 1):
             label_data = {
-                'batch_name': batch_name,
-                'batch_id': f"B{batch_id}",
+                # 修复字段映射：item_name应该是batch_name，barcode应该是batch_id
+                'item_name': batch_name,  # 打印端期望的字段名
+                'barcode': f"B{batch_id}",  # 打印端期望的字段名
+                'batch_name': batch_name,  # 保留原字段以向后兼容
+                'batch_id': f"B{batch_id}",  # 保留原字段以向后兼容
                 'vial_number': i,
                 'location': f"{position.get('tower_name', '')}/{position.get('drawer_name', '')}/{position.get('box_name', '')}",
                 'position': f"R{position.get('row', '')}C{position.get('col', '')}",
@@ -131,7 +134,7 @@ class PrintingService:
             jobs.append(job)
             
             if job:
-                logger.info(f"Queued print job for vial {i}: Job ID {job.job_id}")
+                logger.info(f"Queued print job for vial {i}: Job ID {job.id}")
             else:
                 logger.error(f"Failed to queue print job for vial {i}")
         

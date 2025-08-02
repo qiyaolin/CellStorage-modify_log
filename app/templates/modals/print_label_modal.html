@@ -127,6 +127,7 @@ let modalPrintData = {
 };
 
 let printServiceAvailable = false;
+let statusPollingInterval = null;
 
 /**
  * Show the print label modal with batch and vial data
@@ -302,18 +303,17 @@ async function printAllLabels() {
   document.getElementById('print-all-labels-btn').disabled = true;
   
   const total = modalPrintData.vialPositions.length;
-  let completed = 0;
+  
+  // Initialize progress - only count when jobs are actually completed
+  updateProgress(0, total);
 
+  // Queue all print jobs
   for (let i = 0; i < modalPrintData.vialPositions.length; i++) {
     await printSingleLabel(i);
-    completed++;
-    updateProgress(completed, total);
   }
 
-  // Re-enable button after completion
-  setTimeout(() => {
-    document.getElementById('print-all-labels-btn').disabled = false;
-  }, 1000);
+  // Start polling for status updates
+  startStatusPolling();
 }
 
 /**
@@ -356,8 +356,12 @@ async function printSingleLabel(index) {
 
     if (response.ok) {
       const result = await response.json();
-      modalPrintData.printJobs[index] = result;
-      updateVialStatus(index, 'queued', `Job #${result.job_id} queued`);
+      modalPrintData.printJobs[index] = {
+        job_id: result.job_id,
+        status: result.status || 'pending',
+        index: index
+      };
+      updateVialStatus(index, 'pending', `Job #${result.job_id} pending`);
       console.log(`Successfully queued print job #${result.job_id} for vial ${vialNumber}`);
     } else {
       const errorText = await response.text();
@@ -383,11 +387,20 @@ function updateVialStatus(index, status, message) {
   let badgeClass = 'bg-light text-dark';
   
   switch (status) {
-    case 'printing':
+    case 'pending':
+      badgeClass = 'bg-secondary';
+      break;
+    case 'processing':
       badgeClass = 'bg-warning';
       break;
-    case 'queued':
+    case 'completed':
       badgeClass = 'bg-success';
+      break;
+    case 'failed':
+      badgeClass = 'bg-danger';
+      break;
+    case 'printing':
+      badgeClass = 'bg-warning';
       break;
     case 'error':
       badgeClass = 'bg-danger';
@@ -395,6 +408,14 @@ function updateVialStatus(index, status, message) {
   }
   
   statusElement.innerHTML = `<span class="badge ${badgeClass}">${message}</span>`;
+  
+  // Update the job status in our data
+  if (modalPrintData.printJobs[index]) {
+    modalPrintData.printJobs[index].status = status;
+  }
+  
+  // Recalculate progress whenever status changes
+  recalculateProgress();
 }
 
 /**
@@ -407,11 +428,113 @@ function updateProgress(completed, total) {
   
   progressBar.style.width = `${percentage}%`;
   progressBar.setAttribute('aria-valuenow', percentage);
-  progressText.textContent = `${completed} of ${total} jobs queued`;
+  progressText.textContent = `${completed} of ${total} jobs completed`;
   
-  if (completed === total) {
+  if (completed === total && total > 0) {
     progressBar.classList.remove('progress-bar-animated');
     progressText.textContent = `All ${total} print jobs completed!`;
+    
+    // Stop polling when all jobs are completed
+    stopStatusPolling();
+    
+    // Re-enable button
+    document.getElementById('print-all-labels-btn').disabled = false;
+  }
+}
+
+/**
+ * Recalculate progress based on actual job completion status
+ */
+function recalculateProgress() {
+  const total = modalPrintData.printJobs.length;
+  const completed = modalPrintData.printJobs.filter(job => job && job.status === 'completed').length;
+  
+  updateProgress(completed, total);
+}
+
+/**
+ * Start polling for job status updates
+ */
+function startStatusPolling() {
+  // Stop any existing polling
+  stopStatusPolling();
+  
+  // Poll every 2 seconds
+  statusPollingInterval = setInterval(async () => {
+    await pollJobStatuses();
+  }, 2000);
+  
+  console.log('Started status polling');
+}
+
+/**
+ * Stop status polling
+ */
+function stopStatusPolling() {
+  if (statusPollingInterval) {
+    clearInterval(statusPollingInterval);
+    statusPollingInterval = null;
+    console.log('Stopped status polling');
+  }
+}
+
+/**
+ * Poll all job statuses from the server
+ */
+async function pollJobStatuses() {
+  try {
+    const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content') || 
+                      document.querySelector('input[name=csrf_token]')?.value;
+
+    for (let i = 0; i < modalPrintData.printJobs.length; i++) {
+      const job = modalPrintData.printJobs[i];
+      if (!job || !job.job_id) continue;
+      
+      // Skip checking if already completed or failed
+      if (job.status === 'completed' || job.status === 'failed') continue;
+
+      try {
+        const response = await fetch(`/api/print/job/${job.job_id}/status`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrfToken
+          }
+        });
+
+        if (response.ok) {
+          const statusData = await response.json();
+          const newStatus = statusData.status;
+          
+          // Update status if it has changed
+          if (newStatus !== job.status) {
+            let displayMessage = '';
+            switch (newStatus) {
+              case 'pending':
+                displayMessage = `Job #${job.job_id} pending`;
+                break;
+              case 'processing':
+                displayMessage = `Job #${job.job_id} printing...`;
+                break;
+              case 'completed':
+                displayMessage = `Job #${job.job_id} completed`;
+                break;
+              case 'failed':
+                displayMessage = `Job #${job.job_id} failed`;
+                break;
+              default:
+                displayMessage = `Job #${job.job_id} ${newStatus}`;
+            }
+            
+            updateVialStatus(i, newStatus, displayMessage);
+          }
+        }
+      } catch (error) {
+        console.error(`Error polling status for job ${job.job_id}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('Error in pollJobStatuses:', error);
   }
 }
 
@@ -430,4 +553,9 @@ function retryPrintService() {
   
   checkPrintServiceAvailability();
 }
+
+// Clean up polling when modal is closed
+document.getElementById('printLabelModal').addEventListener('hidden.bs.modal', function () {
+  stopStatusPolling();
+});
 </script>

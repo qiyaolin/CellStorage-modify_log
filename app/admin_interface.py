@@ -43,7 +43,7 @@ class CustomAdminIndexView(AdminIndexView):
     
     @expose('/')
     def index(self):
-        from app.cell_storage.models import User, CellLine, Tower, Drawer, Box, VialBatch, CryoVial
+        from app.cell_storage.models import User, CellLine, Tower, Drawer, Box, VialBatch, CryoVial, PrintJob, PrintServer
         
         # Calculate stats
         stats = {
@@ -54,7 +54,13 @@ class CustomAdminIndexView(AdminIndexView):
             'cell_lines': CellLine.query.count(),
             'towers': Tower.query.count(),
             'drawers': Drawer.query.count(),
-            'boxes': Box.query.count()
+            'boxes': Box.query.count(),
+            # 打印系统统计
+            'print_jobs_total': PrintJob.query.count(),
+            'print_jobs_pending': PrintJob.query.filter_by(status='pending').count(),
+            'print_jobs_failed': PrintJob.query.filter_by(status='failed').count(),
+            'print_servers_total': PrintServer.query.count(),
+            'print_servers_online': PrintServer.query.filter_by(status='online').count()
         }
         
         return self.render('admin/index.html', stats=stats)
@@ -197,6 +203,152 @@ class InventoryItemAdmin(BaseModelView):
     column_sortable_list = ['name', 'current_quantity', 'created_at']
 
 
+class PrintJobAdmin(BaseModelView):
+    """打印任务管理 - 支持查看、删除和状态修改"""
+    
+    column_list = ['id', 'label_data_preview', 'priority', 'status', 'requested_by', 
+                   'created_at', 'started_at', 'completed_at', 'error_message', 'retry_count']
+    column_searchable_list = ['label_data', 'error_message']
+    column_filters = ['status', 'priority', 'created_at', 'requested_by']
+    column_sortable_list = ['id', 'priority', 'status', 'created_at', 'retry_count']
+    column_labels = {
+        'id': '任务ID',
+        'label_data_preview': '标签数据预览',
+        'priority': '优先级',
+        'status': '状态',
+        'requested_by': '请求用户ID',
+        'created_at': '创建时间',
+        'started_at': '开始时间',
+        'completed_at': '完成时间',
+        'error_message': '错误消息',
+        'retry_count': '重试次数'
+    }
+    
+    # 默认按创建时间倒序排序，最新的在前面
+    column_default_sort = ('created_at', True)
+    
+    # 允许删除，禁用创建，允许编辑状态相关字段
+    can_create = False
+    can_edit = True
+    can_delete = True
+    can_view_details = True
+    
+    # 只允许编辑状态相关字段
+    form_columns = ['status', 'error_message', 'retry_count']
+    
+    def _label_data_preview(view, context, model, name):
+        """显示标签数据的简短预览"""
+        if model.label_data:
+            # 尝试解析JSON并显示关键信息
+            import json
+            try:
+                data = json.loads(model.label_data)
+                if isinstance(data, dict):
+                    # 提取关键字段进行预览
+                    preview_parts = []
+                    for key in ['batch_name', 'vial_id', 'cell_line', 'location']:
+                        if key in data:
+                            preview_parts.append(f"{key}: {data[key]}")
+                    return " | ".join(preview_parts[:2]) if preview_parts else "JSON数据"
+                return f"数据长度: {len(str(data))}"
+            except:
+                return f"数据长度: {len(model.label_data)}"
+        return "无数据"
+    
+    column_formatters = {
+        'label_data_preview': _label_data_preview
+    }
+    
+    @action('reset_to_pending', '重置为待处理', '确定要将选中的任务重置为待处理状态吗？')
+    def action_reset_to_pending(self, ids):
+        """将选中的任务状态重置为待处理，用于重新处理失败的任务"""
+        try:
+            int_ids = [int(id_str) for id_str in ids]
+            
+            # 使用原生SQL更新状态
+            update_query = text("""
+                UPDATE print_jobs 
+                SET status = 'pending', 
+                    error_message = NULL, 
+                    started_at = NULL, 
+                    completed_at = NULL 
+                WHERE id = ANY(:ids)
+            """)
+            result = self.session.execute(update_query, {'ids': int_ids})
+            self.session.commit()
+            
+            flash(f'成功重置 {result.rowcount} 个打印任务为待处理状态', 'success')
+            
+        except Exception as e:
+            self.session.rollback()
+            flash(f'重置任务状态失败: {str(e)}', 'error')
+        
+        return redirect(url_for('.index_view'))
+    
+    @action('delete', '删除', '确定要删除选中的打印任务吗？')
+    def action_delete(self, ids):
+        """删除选中的打印任务"""
+        try:
+            int_ids = [int(id_str) for id_str in ids]
+            
+            # 先删除相关的历史记录
+            delete_history_query = text("DELETE FROM print_job_history WHERE print_job_id = ANY(:ids)")
+            history_result = self.session.execute(delete_history_query, {'ids': int_ids})
+            
+            # 再删除打印任务
+            delete_query = text("DELETE FROM print_jobs WHERE id = ANY(:ids)")
+            job_result = self.session.execute(delete_query, {'ids': int_ids})
+            self.session.commit()
+            
+            flash(f'成功删除 {job_result.rowcount} 个打印任务（同时删除了 {history_result.rowcount} 条历史记录）', 'success')
+            
+        except Exception as e:
+            self.session.rollback()
+            flash(f'删除失败: {str(e)}', 'error')
+        
+        return redirect(url_for('.index_view'))
+
+class PrintServerAdmin(BaseModelView):
+    """打印服务器管理"""
+    
+    column_list = ['id', 'server_id', 'name', 'location', 'status', 'last_heartbeat', 
+                   'total_jobs_processed', 'successful_jobs', 'failed_jobs', 'success_rate']
+    column_searchable_list = ['server_id', 'name', 'location']
+    column_filters = ['status', 'last_heartbeat']
+    column_sortable_list = ['id', 'server_id', 'name', 'status', 'last_heartbeat', 'total_jobs_processed']
+    column_labels = {
+        'id': 'ID',
+        'server_id': '服务器ID',
+        'name': '服务器名称',
+        'location': '位置',
+        'status': '状态',
+        'last_heartbeat': '最后心跳',
+        'total_jobs_processed': '总处理任务数',
+        'successful_jobs': '成功任务数',
+        'failed_jobs': '失败任务数',
+        'success_rate': '成功率'
+    }
+    
+    # 默认按最后心跳时间倒序排序
+    column_default_sort = ('last_heartbeat', True)
+    
+    # 允许编辑和删除
+    can_create = True
+    can_edit = True
+    can_delete = True
+    can_view_details = True
+    
+    def _success_rate(view, context, model, name):
+        """计算成功率"""
+        if model.total_jobs_processed > 0:
+            rate = (model.successful_jobs / model.total_jobs_processed) * 100
+            return f"{rate:.1f}%"
+        return "0%"
+    
+    column_formatters = {
+        'success_rate': _success_rate
+    }
+
 class AppConfigAdmin(BaseModelView):
     """应用配置管理，包括Batch ID和Vial ID计数器"""
     
@@ -276,7 +428,7 @@ def init_admin(app):
     )
     
     # 导入模型
-    from app.cell_storage.models import User, CellLine, Box, VialBatch, CryoVial, Tower, Drawer, AppConfig
+    from app.cell_storage.models import User, CellLine, Box, VialBatch, CryoVial, Tower, Drawer, AppConfig, PrintJob, PrintServer
     from app.inventory.models import Location, InventoryItem, InventoryType, Supplier
     
     # 注册模型视图 - 按层级组织
@@ -291,6 +443,10 @@ def init_admin(app):
     # 样品管理
     admin.add_view(VialBatchAdmin(VialBatch, db.session, name='样品批次管理'))
     admin.add_view(CryoVialAdmin(CryoVial, db.session, name='冷冻管管理'))
+    
+    # 打印系统管理
+    admin.add_view(PrintJobAdmin(PrintJob, db.session, name='打印任务管理'))
+    admin.add_view(PrintServerAdmin(PrintServer, db.session, name='打印服务器管理'))
     
     # 库存管理
     admin.add_view(StorageLocationAdmin(Location, db.session, name='存储位置管理'))

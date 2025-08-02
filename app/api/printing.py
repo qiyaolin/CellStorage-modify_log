@@ -123,7 +123,7 @@ def queue_print_job():
         
         if job:
             return jsonify({
-                'job_id': job.job_id,
+                'job_id': job.id,
                 'status': job.status,
                 'message': 'Print job queued successfully'
             }), 201

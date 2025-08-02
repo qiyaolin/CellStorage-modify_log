@@ -180,6 +180,11 @@ class ProductionPrintAgent:
             if error_message:
                 payload['error_message'] = error_message
             resp = requests.post(url, json=payload, headers=self.get_auth_headers(), timeout=10)
+            if resp.status_code != 200:
+                logger.error(f"Status update failed: HTTP {resp.status_code}")
+                logger.error(f"Request URL: {url}")
+                logger.error(f"Request payload: {payload}")
+                logger.error(f"Response: {resp.text}")
             resp.raise_for_status()
             logger.info(f"Job #{job_id} status updated to {status}")
             return True

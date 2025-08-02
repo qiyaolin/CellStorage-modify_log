@@ -279,10 +279,16 @@ def quick_search():
 @mobile_bp.route('/locations')
 @login_required
 def locations_overview():
-    """Mobile locations overview with simplified navigation"""
+    """Mobile locations overview with detailed box contents"""
     towers = Tower.query.all()
     
-    # Build simplified location structure for mobile
+    # Create batch color mapping (consistent with desktop)
+    all_batches = VialBatch.query.all()
+    batch_color_map = {}
+    for i, batch in enumerate(all_batches):
+        batch_color_map[batch.id] = i % 12  # Use 12 different colors
+    
+    # Build detailed location structure for mobile (similar to desktop Browse by Location)
     location_data = []
     for tower in towers:
         tower_info = {
@@ -297,15 +303,38 @@ def locations_overview():
             }
             
             for box in drawer.boxes:
-                # Count vials in box
+                # Get all vials in this box
+                vials_in_box = CryoVial.query.filter_by(box_id=box.id).all()
+                
+                # Create a grid of vials
+                vial_grid = {}
+                for vial in vials_in_box:
+                    if vial.row_in_box and vial.col_in_box:
+                        key = f"{vial.row_in_box}-{vial.col_in_box}"
+                        vial_grid[key] = {
+                            'id': vial.id,
+                            'tag': vial.unique_vial_id_tag,
+                            'batch_id': vial.batch_id,
+                            'batch_name': vial.batch.name if vial.batch else 'Unknown',
+                            'cell_line': vial.batch.cell_line if vial.batch else 'Unknown',
+                            'status': vial.status,
+                            'row': vial.row_in_box,
+                            'col': vial.col_in_box,
+                            'batch_color': batch_color_map.get(vial.batch_id, 0)
+                        }
+                
                 total_positions = box.rows * box.columns
-                occupied_positions = CryoVial.query.filter_by(box_id=box.id).count()
+                occupied_positions = len(vial_grid)
                 
                 box_info = {
+                    'id': box.id,
                     'name': box.name,
+                    'rows': box.rows,
+                    'columns': box.columns,
                     'occupied': occupied_positions,
                     'total': total_positions,
-                    'occupancy_rate': (occupied_positions / total_positions * 100) if total_positions > 0 else 0
+                    'occupancy_rate': (occupied_positions / total_positions * 100) if total_positions > 0 else 0,
+                    'vials': vial_grid
                 }
                 drawer_info['boxes'].append(box_info)
             
@@ -335,10 +364,14 @@ def print_interface():
                          device_info=get_device_info())
 
 
-@mobile_bp.route('/add-vial')
+@mobile_bp.route('/add-vial', methods=['GET', 'POST'])
 @login_required
 def add_cryovial():
     """Mobile add vial interface"""
+    if request.method == 'POST':
+        # Redirect to desktop add_cryovial for processing, then back to mobile success page
+        return redirect(url_for('cell_storage.add_cryovial', mobile_redirect=True))
+    
     form = CryoVialForm()
     
     # Get next IDs for form defaults
@@ -349,6 +382,28 @@ def add_cryovial():
                          form=form,
                          next_batch_id=next_batch_id,
                          next_vial_id=next_vial_id,
+                         device_info=get_device_info())
+
+
+@mobile_bp.route('/vials-saved-success')
+@login_required
+def vials_saved_success():
+    """Mobile success page after adding vials"""
+    # Get data from session that was set by desktop route
+    batch_id = session.get('last_batch_id')
+    batch_name = session.get('last_batch_name')
+    vial_count = session.get('last_vial_count')
+    vial_positions = session.get('last_vial_positions', [])
+    
+    if not batch_id:
+        flash('No recent vial creation found.', 'warning')
+        return redirect(url_for('mobile.index'))
+    
+    return render_template('mobile/vials_saved_success.html',
+                         batch_id=batch_id,
+                         batch_name=batch_name,
+                         vial_count=vial_count,
+                         vial_positions=vial_positions,
                          device_info=get_device_info())
 
 

@@ -1,0 +1,422 @@
+{% extends "mobile/base.html" %}
+
+{% block title %}CellStorage Mobile - Vials Saved{% endblock %}
+{% block page_title %}Vials Saved Successfully{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-3">
+    <!-- Success Message -->
+    <div class="alert alert-success alert-mobile alert-dismissible fade show">
+        <h5 class="alert-heading">
+            <i class="fas fa-check-circle"></i> Success!
+        </h5>
+        <p class="mb-2">
+            <strong>Batch #{{ batch_id }} "{{ batch_name }}"</strong> has been created with 
+            <strong>{{ vial_count }} vial(s)</strong>.
+        </p>
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+
+    <!-- Print Labels Card -->
+    <div class="card card-mobile mb-3 border-primary">
+        <div class="card-body text-center">
+            <div class="mb-3">
+                <i class="fas fa-print fa-3x text-primary"></i>
+            </div>
+            <h5 class="card-title">Print Vial Labels</h5>
+            <p class="card-text">
+                Print individual labels for each vial with location and batch information.
+            </p>
+            <button type="button" class="btn btn-primary btn-mobile" onclick="showMobilePrintModal()">
+                <i class="fas fa-print me-2"></i>Print Labels Now
+            </button>
+        </div>
+    </div>
+
+    <!-- Vial Locations (if any) -->
+    {% if vial_positions %}
+    <div class="card card-mobile mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-map-marker-alt me-2"></i>Vial Locations
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="row g-2">
+                {% for position in vial_positions %}
+                <div class="col-6">
+                    <div class="small">
+                        <strong>Vial {{ loop.index }}</strong><br>
+                        <span class="text-muted">{{ position.tower_name }}/{{ position.drawer_name }}/{{ position.box_name }}</span><br>
+                        <span class="badge bg-info">R{{ position.row }}C{{ position.col }}</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="row g-3">
+        <div class="col-6">
+            <div class="card card-mobile">
+                <div class="card-body text-center p-3">
+                    <i class="fas fa-vials text-success fa-2x mb-2"></i>
+                    <h6 class="card-title">View Inventory</h6>
+                    <a href="{{ url_for('mobile.cryovial_inventory') }}" class="btn btn-success btn-sm">
+                        <i class="fas fa-list me-1"></i>Go to Inventory
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-6">
+            <div class="card card-mobile">
+                <div class="card-body text-center p-3">
+                    <i class="fas fa-plus-circle text-info fa-2x mb-2"></i>
+                    <h6 class="card-title">Add More</h6>
+                    <a href="{{ url_for('mobile.add_cryovial') }}" class="btn btn-info btn-sm">
+                        <i class="fas fa-plus me-1"></i>Add More Vials
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Return to Dashboard -->
+    <div class="text-center mt-4">
+        <a href="{{ url_for('mobile.index') }}" class="btn btn-outline-secondary btn-mobile">
+            <i class="fas fa-home me-2"></i>Return to Dashboard
+        </a>
+    </div>
+</div>
+
+<!-- Mobile Print Modal -->
+<div class="modal fade" id="mobilePrintModal" tabindex="-1" aria-labelledby="mobilePrintModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen-sm-down">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="mobilePrintModalLabel">
+                    <i class="fas fa-print"></i> Print Vial Labels
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Batch Information -->
+                <div class="card mb-3">
+                    <div class="card-header bg-light">
+                        <h6 class="mb-0">Batch Information</h6>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0">
+                            <dt class="col-sm-4">Batch:</dt>
+                            <dd class="col-sm-8" id="mobile-modal-batch-name">{{ batch_name }}</dd>
+                            <dt class="col-sm-4">Batch ID:</dt>
+                            <dd class="col-sm-8" id="mobile-modal-batch-id">B{{ batch_id }}</dd>
+                            <dt class="col-sm-4">Vials:</dt>
+                            <dd class="col-sm-8" id="mobile-modal-vial-count">{{ vial_count }}</dd>
+                        </dl>
+                    </div>
+                </div>
+
+                <!-- Print Service Status -->
+                <div class="alert alert-info" id="mobile-print-status">
+                    <div class="d-flex align-items-center">
+                        <div class="spinner-border spinner-border-sm me-2"></div>
+                        <span>Checking print service...</span>
+                    </div>
+                </div>
+
+                <!-- Vial List -->
+                <div id="mobile-vial-list" style="display: none;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">Vials to Print</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div id="mobile-vials-container">
+                                <!-- Will be populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Print Progress -->
+                <div id="mobile-print-progress" style="display: none;">
+                    <div class="mt-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="fw-bold">Print Progress</span>
+                            <span id="mobile-progress-text">0 of 0 jobs</span>
+                        </div>
+                        <div class="progress">
+                            <div id="mobile-progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                 style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="mobile-print-all-btn" onclick="printAllMobileLabels()" disabled>
+                    <i class="fas fa-print"></i> Print All
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Mobile print data
+const mobilePrintData = {
+    batchName: "{{ batch_name }}",
+    batchId: {{ batch_id }},
+    vialPositions: {{ vial_positions | tojson | safe }},
+    printJobs: []
+};
+
+let mobilePrintServiceAvailable = false;
+
+/**
+ * Show mobile print modal
+ */
+function showMobilePrintModal() {
+    // Reset modal state
+    document.getElementById('mobile-print-status').style.display = 'block';
+    document.getElementById('mobile-vial-list').style.display = 'none';
+    document.getElementById('mobile-print-progress').style.display = 'none';
+    document.getElementById('mobile-print-all-btn').disabled = true;
+    
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('mobilePrintModal'));
+    modal.show();
+    
+    // Check print service
+    checkMobilePrintService();
+}
+
+/**
+ * Check mobile print service availability
+ */
+async function checkMobilePrintService() {
+    try {
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
+        
+        const response = await fetch('/api/print/status', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            mobilePrintServiceAvailable = data.available || false;
+            
+            if (mobilePrintServiceAvailable) {
+                showMobileVialList();
+            } else {
+                showMobileServiceUnavailable();
+            }
+        } else {
+            // Assume available and let print requests handle errors
+            mobilePrintServiceAvailable = true;
+            showMobileVialList();
+        }
+    } catch (error) {
+        console.error('Error checking mobile print service:', error);
+        // Assume available and let print requests handle errors
+        mobilePrintServiceAvailable = true;
+        showMobileVialList();
+    }
+}
+
+/**
+ * Show vial list when service is available
+ */
+function showMobileVialList() {
+    document.getElementById('mobile-print-status').innerHTML = `
+        <div class="d-flex align-items-center text-success">
+            <i class="fas fa-check-circle me-2"></i>
+            <span>Print service ready!</span>
+        </div>
+    `;
+    
+    document.getElementById('mobile-vial-list').style.display = 'block';
+    document.getElementById('mobile-print-all-btn').disabled = false;
+    
+    // Populate vial list
+    populateMobileVialList();
+}
+
+/**
+ * Show service unavailable
+ */
+function showMobileServiceUnavailable() {
+    document.getElementById('mobile-print-status').innerHTML = `
+        <div class="d-flex align-items-center text-warning">
+            <i class="fas fa-exclamation-triangle me-2"></i>
+            <span>Print service unavailable</span>
+        </div>
+    `;
+}
+
+/**
+ * Populate mobile vial list
+ */
+function populateMobileVialList() {
+    const container = document.getElementById('mobile-vials-container');
+    container.innerHTML = '';
+
+    mobilePrintData.vialPositions.forEach((position, index) => {
+        const vialDiv = document.createElement('div');
+        vialDiv.className = 'list-group-item';
+        vialDiv.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h6 class="mb-1">Vial ${index + 1}</h6>
+                    <p class="mb-1 small">${position.tower_name}/${position.drawer_name}/${position.box_name}</p>
+                    <small class="text-muted">R${position.row}C${position.col}</small>
+                </div>
+                <div class="text-end">
+                    <div id="mobile-status-${index}" class="mb-2">
+                        <span class="badge bg-light text-dark">Ready</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-primary" onclick="printMobileSingleLabel(${index})" id="mobile-print-btn-${index}">
+                        <i class="fas fa-print"></i> Print
+                    </button>
+                </div>
+            </div>
+        `;
+        container.appendChild(vialDiv);
+    });
+}
+
+/**
+ * Print all mobile labels
+ */
+async function printAllMobileLabels() {
+    if (!mobilePrintServiceAvailable) {
+        showMobileAlert('Print service is not available', 'warning');
+        return;
+    }
+
+    document.getElementById('mobile-print-progress').style.display = 'block';
+    document.getElementById('mobile-print-all-btn').disabled = true;
+    
+    const total = mobilePrintData.vialPositions.length;
+    updateMobileProgress(0, total);
+
+    // Queue all print jobs
+    for (let i = 0; i < mobilePrintData.vialPositions.length; i++) {
+        await printMobileSingleLabel(i);
+    }
+}
+
+/**
+ * Print a single mobile label
+ */
+async function printMobileSingleLabel(index) {
+    const position = mobilePrintData.vialPositions[index];
+    const vialNumber = index + 1;
+    
+    // Update status
+    updateMobileVialStatus(index, 'printing', 'Printing...');
+    document.getElementById(`mobile-print-btn-${index}`).disabled = true;
+
+    try {
+        const labelData = {
+            batch_name: mobilePrintData.batchName,
+            batch_id: mobilePrintData.batchId,
+            vial_number: vialNumber,
+            location: `${position.tower_name}/${position.drawer_name}/${position.box_name}`,
+            position: `R${position.row}C${position.col}`,
+            date_created: new Date().toISOString().split('T')[0]
+        };
+
+        const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
+
+        const response = await fetch('/api/print/queue-job', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            body: JSON.stringify({
+                label_data: labelData,
+                priority: 'normal'
+            })
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            mobilePrintData.printJobs[index] = {
+                job_id: result.job_id,
+                status: 'pending',
+                index: index
+            };
+            updateMobileVialStatus(index, 'pending', `Job #${result.job_id}`);
+            
+            // Update progress
+            updateMobileProgress(index + 1, mobilePrintData.vialPositions.length);
+        } else {
+            throw new Error(`HTTP ${response.status}`);
+        }
+    } catch (error) {
+        console.error(`Error printing vial ${vialNumber}:`, error);
+        updateMobileVialStatus(index, 'error', 'Failed');
+        showMobileAlert(`Failed to print vial ${vialNumber}`, 'danger');
+    } finally {
+        document.getElementById(`mobile-print-btn-${index}`).disabled = false;
+    }
+}
+
+/**
+ * Update mobile vial status
+ */
+function updateMobileVialStatus(index, status, message) {
+    const statusElement = document.getElementById(`mobile-status-${index}`);
+    let badgeClass = 'bg-light text-dark';
+    
+    switch (status) {
+        case 'pending':
+            badgeClass = 'bg-secondary';
+            break;
+        case 'printing':
+            badgeClass = 'bg-warning';
+            break;
+        case 'completed':
+            badgeClass = 'bg-success';
+            break;
+        case 'error':
+            badgeClass = 'bg-danger';
+            break;
+    }
+    
+    statusElement.innerHTML = `<span class="badge ${badgeClass}">${message}</span>`;
+}
+
+/**
+ * Update mobile progress
+ */
+function updateMobileProgress(completed, total) {
+    const percentage = Math.round((completed / total) * 100);
+    const progressBar = document.getElementById('mobile-progress-bar');
+    const progressText = document.getElementById('mobile-progress-text');
+    
+    progressBar.style.width = `${percentage}%`;
+    progressText.textContent = `${completed} of ${total} jobs`;
+    
+    if (completed === total) {
+        progressBar.classList.remove('progress-bar-animated');
+        progressText.textContent = `All ${total} jobs completed!`;
+        document.getElementById('mobile-print-all-btn').disabled = false;
+    }
+}
+</script>
+{% endblock %}

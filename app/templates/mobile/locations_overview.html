@@ -40,28 +40,88 @@
                 </div>
                 
                 {% if drawer.boxes %}
-                <div class="row g-2">
+                <div class="accordion mb-3" id="drawer-{{ tower.name|replace(' ', '-') }}-{{ drawer.name|replace(' ', '-') }}">
                     {% for box in drawer.boxes %}
-                    <div class="col-6 col-md-4">
-                        <div class="card">
-                            <div class="card-body p-2 text-center">
-                                <h6 class="card-title mb-1" style="font-size: 0.875rem;">{{ box.name }}</h6>
-                                
-                                <!-- Occupancy Bar -->
-                                <div class="progress mb-2" style="height: 8px;">
-                                    <div class="progress-bar 
-                                        {% if box.occupancy_rate >= 80 %}bg-danger
-                                        {% elif box.occupancy_rate >= 60 %}bg-warning
-                                        {% else %}bg-success{% endif %}" 
-                                         style="width: {{ box.occupancy_rate }}%">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" 
+                                    data-bs-toggle="collapse" 
+                                    data-bs-target="#box-{{ box.id }}" 
+                                    aria-expanded="false">
+                                <div class="d-flex justify-content-between align-items-center w-100 me-3">
+                                    <div>
+                                        <strong>{{ box.name }}</strong>
+                                        <small class="text-muted ms-2">{{ box.occupied }}/{{ box.total }} ({{ "%.0f"|format(box.occupancy_rate) }}%)</small>
+                                    </div>
+                                    <div class="progress me-2" style="width: 60px; height: 8px;">
+                                        <div class="progress-bar 
+                                            {% if box.occupancy_rate >= 80 %}bg-danger
+                                            {% elif box.occupancy_rate >= 60 %}bg-warning
+                                            {% else %}bg-success{% endif %}" 
+                                             style="width: {{ box.occupancy_rate }}%">
+                                        </div>
                                     </div>
                                 </div>
+                            </button>
+                        </h2>
+                        <div id="box-{{ box.id }}" class="accordion-collapse collapse">
+                            <div class="accordion-body">
+                                {% if box.occupied > 0 %}
+                                <!-- Box Grid -->
+                                <div class="table-responsive">
+                                    <table class="table table-bordered table-sm" style="font-size: 0.75rem;">
+                                        <thead>
+                                            <tr>
+                                                <th style="width: 30px;">#</th>
+                                                {% for c in range(1, box.columns + 1) %}
+                                                <th class="text-center" style="width: 40px;">{{ c }}</th>
+                                                {% endfor %}
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for r in range(1, box.rows + 1) %}
+                                            <tr>
+                                                <th class="text-center bg-light">{{ r }}</th>
+                                                {% for c in range(1, box.columns + 1) %}
+                                                    {% set key = r ~ '-' ~ c %}
+                                                    {% set vial = box.vials.get(key) %}
+                                                    <td class="text-center p-1 batch-browse-{{ vial.batch_color if vial else '0' }}"
+                                                        {% if not vial %}style="background-color: #f8f9fa !important; color: #6c757d !important;"{% endif %}
+                                                        {% if vial %}
+                                                        style="cursor: pointer;"
+                                                        data-bs-toggle="modal" 
+                                                        data-bs-target="#mobileVialModal"
+                                                        data-vial-id="{{ vial.id }}"
+                                                        data-vial-tag="{{ vial.tag }}"
+                                                        data-batch-name="{{ vial.batch_name }}"
+                                                        data-cell-line="{{ vial.cell_line }}"
+                                                        data-status="{{ vial.status }}"
+                                                        data-position="R{{ r }}C{{ c }}"
+                                                        {% endif %}>
+                                                        {% if vial %}
+                                                            <small>{{ vial.batch_id }}</small>
+                                                        {% else %}
+                                                            <small class="text-muted">-</small>
+                                                        {% endif %}
+                                                    </td>
+                                                {% endfor %}
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
                                 
-                                <small class="text-muted">
-                                    {{ box.occupied }}/{{ box.total }}
-                                    <br>
-                                    ({{ "%.0f"|format(box.occupancy_rate) }}%)
-                                </small>
+                                <!-- Legend -->
+                                <div class="mt-2">
+                                    <small class="text-muted">
+                                        <i class="fas fa-info-circle me-1"></i>
+                                        Different colors represent different batches. Click on any vial for details.
+                                        <span class="badge bg-light text-dark ms-2">Empty positions are gray</span>
+                                    </small>
+                                </div>
+                                {% else %}
+                                <p class="text-muted mb-0">This box is empty</p>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -150,6 +210,50 @@
             </div>
         </div>
     </div>
+
+    <!-- Mobile Vial Details Modal -->
+    <div class="modal fade" id="mobileVialModal" tabindex="-1" aria-labelledby="mobileVialModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen-sm-down">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title" id="mobileVialModalLabel">
+                        <i class="fas fa-vial"></i> Vial Details
+                    </h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                
+                <div class="modal-body">
+                    <div class="card">
+                        <div class="card-body">
+                            <dl class="row">
+                                <dt class="col-sm-4">Vial ID:</dt>
+                                <dd class="col-sm-8" id="modal-vial-tag">-</dd>
+                                
+                                <dt class="col-sm-4">Batch:</dt>
+                                <dd class="col-sm-8" id="modal-batch-name">-</dd>
+                                
+                                <dt class="col-sm-4">Cell Line:</dt>
+                                <dd class="col-sm-8" id="modal-cell-line">-</dd>
+                                
+                                <dt class="col-sm-4">Status:</dt>
+                                <dd class="col-sm-8" id="modal-status">-</dd>
+                                
+                                <dt class="col-sm-4">Position:</dt>
+                                <dd class="col-sm-8" id="modal-position">-</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="view-in-inventory-btn">
+                        <i class="fas fa-search"></i> View in Inventory
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -180,6 +284,55 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 100);
         });
     }, 300);
+    
+    // Handle vial modal
+    const vialModal = document.getElementById('mobileVialModal');
+    let currentVialId = null;
+    
+    vialModal.addEventListener('show.bs.modal', function(event) {
+        const button = event.relatedTarget;
+        
+        // Extract data from the clicked cell
+        currentVialId = button.getAttribute('data-vial-id');
+        const vialTag = button.getAttribute('data-vial-tag');
+        const batchName = button.getAttribute('data-batch-name');
+        const cellLine = button.getAttribute('data-cell-line');
+        const status = button.getAttribute('data-status');
+        const position = button.getAttribute('data-position');
+        
+        // Update modal content
+        document.getElementById('modal-vial-tag').textContent = vialTag || '-';
+        document.getElementById('modal-batch-name').textContent = batchName || '-';
+        document.getElementById('modal-cell-line').textContent = cellLine || '-';
+        document.getElementById('modal-position').textContent = position || '-';
+        
+        // Update status with appropriate badge
+        const statusElement = document.getElementById('modal-status');
+        let statusBadge = '';
+        switch (status) {
+            case 'Available':
+                statusBadge = '<span class="badge bg-success">Available</span>';
+                break;
+            case 'Used':
+                statusBadge = '<span class="badge bg-secondary">Used</span>';
+                break;
+            default:
+                statusBadge = `<span class="badge bg-warning">${status}</span>`;
+        }
+        statusElement.innerHTML = statusBadge;
+    });
+    
+    // Handle "View in Inventory" button
+    document.getElementById('view-in-inventory-btn').addEventListener('click', function() {
+        if (currentVialId) {
+            // Close modal and navigate to inventory with search for this vial
+            bootstrap.Modal.getInstance(vialModal).hide();
+            
+            // Navigate to inventory with vial search
+            const vialTag = document.getElementById('modal-vial-tag').textContent;
+            window.location.href = `{{ url_for('mobile.cryovial_inventory') }}?q=${encodeURIComponent(vialTag)}`;
+        }
+    });
 });
 </script>
 {% endblock %}

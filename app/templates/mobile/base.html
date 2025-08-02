@@ -26,11 +26,25 @@
     {% block extra_css %}{% endblock %}
     
     <style>
+        /* CSS Variables for mobile layout */
+        :root {
+            --mobile-nav-height: 70px;
+            --mobile-header-height: 80px;
+            --mobile-safe-area-bottom: max(20px, env(safe-area-inset-bottom));
+            --mobile-content-padding: calc(var(--mobile-nav-height) + var(--mobile-safe-area-bottom) + 20px);
+        }
+        
         /* Mobile-optimized base styles */
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+        }
+        
         body {
             font-size: 16px; /* Prevent zoom on iOS */
             -webkit-text-size-adjust: 100%;
             touch-action: manipulation;
+            padding-bottom: env(safe-area-inset-bottom); /* iOS safe area */
         }
         
         /* Mobile navigation */
@@ -43,6 +57,9 @@
             border-top: 1px solid #dee2e6;
             z-index: 1000;
             padding: 0.5rem 0;
+            height: var(--mobile-nav-height);
+            padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
         }
         
         .mobile-nav-item {
@@ -54,10 +71,17 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            transition: color 0.2s ease;
         }
         
         .mobile-nav-item.active {
             color: #007bff;
+            font-weight: 600;
+        }
+        
+        .mobile-nav-item:hover {
+            color: #007bff;
+            text-decoration: none;
         }
         
         .mobile-nav-item i {
@@ -65,9 +89,46 @@
             margin-bottom: 0.25rem;
         }
         
-        /* Content spacing for fixed bottom nav */
+        /* Content spacing for fixed bottom nav - systematic solution */
         .mobile-content {
-            padding-bottom: 80px;
+            min-height: calc(100vh - var(--mobile-header-height));
+            padding-bottom: var(--mobile-content-padding);
+            box-sizing: border-box;
+        }
+        
+        /* Ensure all mobile containers have proper spacing */
+        .container-fluid.p-3 {
+            padding-bottom: calc(1rem + var(--mobile-content-padding)) !important;
+        }
+        
+        /* Browse by location batch colors - consistent with desktop */
+        .batch-browse-0 { background-color: #42a5f5 !important; color: white !important; } /* Blue */
+        .batch-browse-1 { background-color: #ab47bc !important; color: white !important; } /* Purple */
+        .batch-browse-2 { background-color: #66bb6a !important; color: white !important; } /* Green */
+        .batch-browse-3 { background-color: #ff7043 !important; color: white !important; } /* Orange */
+        .batch-browse-4 { background-color: #ec407a !important; color: white !important; } /* Pink */
+        .batch-browse-5 { background-color: #26a69a !important; color: white !important; } /* Teal */
+        .batch-browse-6 { background-color: #9ccc65 !important; color: black !important; } /* Lime */
+        .batch-browse-7 { background-color: #ffb74d !important; color: black !important; } /* Amber */
+        .batch-browse-8 { background-color: #29b6f6 !important; color: white !important; } /* Cyan */
+        .batch-browse-9 { background-color: #f06292 !important; color: white !important; } /* Rose */
+        .batch-browse-10 { background-color: #7e57c2 !important; color: white !important; } /* Indigo */
+        .batch-browse-11 { background-color: #8d6e63 !important; color: white !important; } /* Brown */
+        
+        /* Additional mobile optimizations */
+        .modal-fullscreen-sm-down {
+            margin-bottom: var(--mobile-safe-area-bottom);
+        }
+        
+        /* Ensure forms and buttons have proper spacing */
+        .d-grid.gap-2 {
+            margin-bottom: 1rem;
+        }
+        
+        /* Fix for any remaining scroll issues */
+        .mobile-scroll-container {
+            max-height: calc(100vh - var(--mobile-header-height) - var(--mobile-nav-height) - var(--mobile-safe-area-bottom));
+            overflow-y: auto;
         }
         
         /* Mobile-friendly buttons */
@@ -287,12 +348,6 @@
                     <a href="{{ url_for('mobile.locations_overview') }}" class="mobile-nav-item {{ 'active' if 'locations' in request.endpoint }}">
                         <i class="fas fa-map-marker-alt"></i>
                         <span>Locations</span>
-                    </a>
-                </div>
-                <div class="col">
-                    <a href="{{ url_for('mobile.print_interface') }}" class="mobile-nav-item {{ 'active' if 'print' in request.endpoint }}">
-                        <i class="fas fa-print"></i>
-                        <span>Print</span>
                     </a>
                 </div>
             </div>

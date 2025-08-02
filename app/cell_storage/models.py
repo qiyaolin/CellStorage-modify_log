@@ -118,8 +118,19 @@ class VialBatch(db.Model):
     name = db.Column(db.String(128), nullable=False)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Batch-level properties
+    cell_line = db.Column(db.String(128))
+    passage_number = db.Column(db.String(64))
+    date_frozen = db.Column(db.Date)
+    fluorescence_tag = db.Column(db.String(128))
+    resistance = db.Column(db.String(128))
+    parental_cell_line = db.Column(db.String(128))
+    notes = db.Column(db.Text)
+    tag = db.Column(db.String(128))  # For search functionality
 
     vials = db.relationship('CryoVial', backref='batch', lazy='dynamic')
+    created_by = db.relationship('User', backref='batches_created', lazy='select')
 
     def __repr__(self):
         return f'<VialBatch {self.id}: {self.name}>'

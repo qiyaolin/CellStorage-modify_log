@@ -94,25 +94,26 @@ def render_mobile_template(template_name, mobile_template_name=None, **context):
 
 def get_mobile_navigation_items():
     """Get navigation items optimized for mobile"""
+    from flask import url_for
     mobile_nav_items = [
         {
             'name': 'Dashboard',
-            'url': get_mobile_url('cell_storage.index'),
+            'url': url_for('mobile.index'),
             'icon': 'fas fa-home'
         },
         {
             'name': 'Inventory',
-            'url': get_mobile_url('cell_storage.cryovial_inventory'),
+            'url': url_for('mobile.cryovial_inventory'),
             'icon': 'fas fa-vials'
         },
         {
             'name': 'Locations',
-            'url': get_mobile_url('cell_storage.locations_overview'),
+            'url': url_for('mobile.locations_overview'),
             'icon': 'fas fa-map-marker-alt'
         },
         {
             'name': 'Add Vial',
-            'url': get_mobile_url('cell_storage.add_cryovial'),
+            'url': url_for('mobile.add_cryovial'),
             'icon': 'fas fa-plus'
         }
     ]
@@ -122,16 +123,17 @@ def get_mobile_navigation_items():
 
 def get_mobile_quick_actions():
     """Get quick action items for mobile interface"""
+    from flask import url_for
     quick_actions = [
         {
             'name': 'Quick Search',
-            'url': get_mobile_url('cell_storage.cryovial_inventory'),
+            'url': url_for('mobile.cryovial_inventory'),
             'icon': 'fas fa-search',
             'color': 'primary'
         },
         {
             'name': 'Add Vial',
-            'url': get_mobile_url('cell_storage.add_cryovial'),
+            'url': url_for('mobile.add_cryovial'),
             'icon': 'fas fa-plus',
             'color': 'success'
         },
@@ -144,7 +146,7 @@ def get_mobile_quick_actions():
         },
         {
             'name': 'Locations',
-            'url': get_mobile_url('cell_storage.locations_overview'),
+            'url': url_for('mobile.locations_overview'),
             'icon': 'fas fa-map',
             'color': 'warning'
         }
@@ -161,8 +163,8 @@ def format_mobile_search_result(vial):
         'tag': vial.unique_vial_id_tag,
         'batch_name': getattr(vial.batch, 'name', 'Unknown'),
         'cell_line': getattr(vial.batch, 'cell_line', 'Unknown'),
-        'location': f"{vial.box.drawer.tower.name}/{vial.box.drawer.name}/{vial.box.name}" if vial.box else 'Unknown',
-        'position': f"R{vial.row}C{vial.col}" if vial.row and vial.col else '',
+        'location': f"{vial.box_location.drawer_info.tower_info.name}/{vial.box_location.drawer_info.name}/{vial.box_location.name}" if vial.box_location else 'Unknown',
+        'position': f"R{vial.row_in_box}C{vial.col_in_box}" if vial.row_in_box and vial.col_in_box else '',
         'status': vial.status,
         'date_frozen': vial.date_frozen.strftime('%Y-%m-%d') if vial.date_frozen else '',
         'available': vial.status == 'Available'
@@ -241,12 +243,12 @@ def is_mobile_user_agent(user_agent_string):
 
 def get_simplified_location_path(vial):
     """Get simplified location path for mobile display"""
-    if not vial.box:
+    if not vial.box_location:
         return 'Unknown Location'
     
-    tower = vial.box.drawer.tower.name if vial.box.drawer.tower else '?'
-    drawer = vial.box.drawer.name if vial.box.drawer else '?'
-    box = vial.box.name if vial.box else '?'
+    tower = vial.box_location.drawer_info.tower_info.name if vial.box_location.drawer_info.tower_info else '?'
+    drawer = vial.box_location.drawer_info.name if vial.box_location.drawer_info else '?'
+    box = vial.box_location.name if vial.box_location else '?'
     
     return f"{tower}/{drawer}/{box}"
 

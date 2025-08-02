@@ -53,15 +53,16 @@ class MobileDetectionMiddleware:
         re.IGNORECASE
     )
     
-    def __init__(self, app=None):
+    def __init__(self, app=None, auto_redirect=True):
         """Initialize middleware"""
         self.app = app
+        self.auto_redirect = auto_redirect
         if app is not None:
             self.init_app(app)
     
     def init_app(self, app):
         """Initialize Flask application"""
-        app.before_request(self.detect_mobile_device)
+        app.before_request(self.before_request_handler)
         app.context_processor(self.inject_mobile_context)
         
         # Register template global functions
@@ -71,6 +72,11 @@ class MobileDetectionMiddleware:
             get_device_type=self.get_device_type,
             should_use_mobile_template=self.should_use_mobile_template
         )
+    
+    def before_request_handler(self):
+        """Handle before request processing"""
+        self.detect_mobile_device()
+        return self._handle_mobile_redirection()
     
     def detect_mobile_device(self):
         """Detect mobile device before each request"""
@@ -101,6 +107,53 @@ class MobileDetectionMiddleware:
         else:
             g.force_view_mode = None
     
+    def _handle_mobile_redirection(self):
+        """Handle automatic redirection for mobile devices"""
+        # Don't redirect if auto-redirection is disabled
+        if not self.auto_redirect:
+            return
+            
+        # Only redirect if mobile device is detected and not manually overridden to desktop
+        if not (getattr(g, 'is_mobile', False) or getattr(g, 'is_tablet', False)):
+            return
+        
+        # Don't redirect if user forced desktop mode
+        if session.get('view_mode') == 'desktop':
+            return
+        
+        # Don't redirect if already on mobile routes
+        if request.endpoint and request.endpoint.startswith('mobile.'):
+            return
+        
+        # Don't redirect API calls, static files, or auth routes
+        if (request.endpoint and 
+            (request.endpoint.startswith('api.') or 
+             request.endpoint.startswith('auth.') or
+             request.endpoint.startswith('static') or
+             request.path.startswith('/static/'))):
+            return
+        
+        # Define mobile route mappings for automatic redirection
+        mobile_redirects = {
+            'cell_storage.cryovial_inventory': 'mobile.cryovial_inventory',
+            'cell_storage.index': 'mobile.index',
+            'main.index': 'mobile.index',
+            'cell_storage.add_cryovial': 'mobile.add_cryovial',
+            'cell_storage.locations_overview': 'mobile.locations_overview',
+        }
+        
+        # Check if current endpoint should be redirected
+        if request.endpoint in mobile_redirects:
+            mobile_endpoint = mobile_redirects[request.endpoint]
+            # Preserve query parameters
+            args = request.args.to_dict()
+            try:
+                mobile_url = url_for(mobile_endpoint, **args)
+                return redirect(mobile_url)
+            except Exception:
+                # If mobile route doesn't exist or has different parameters, continue normally
+                pass
+    
     def inject_mobile_context(self):
         """Inject mobile device related context variables into templates"""
         return {
@@ -128,19 +181,26 @@ class MobileDetectionMiddleware:
     
     @staticmethod
     def get_current_view_mode():
-        """Get current view mode - but never auto-redirect to maintain desktop functionality"""
+        """Get current view mode with automatic mobile detection"""
         force_mode = getattr(g, 'force_view_mode', None)
         if force_mode:
             return force_mode
         
-        # Always default to desktop to preserve existing functionality
+        # Auto-detect mobile devices (unless manually overridden to desktop)
+        if getattr(g, 'is_mobile', False) or getattr(g, 'is_tablet', False):
+            # Check if user manually forced desktop mode
+            session_mode = session.get('view_mode')
+            if session_mode == 'desktop':
+                return 'desktop'
+            return 'mobile'
+        
         return 'desktop'
     
     @staticmethod
     def should_use_mobile_template():
-        """Determine if mobile template should be used - only when explicitly requested"""
-        force_mode = getattr(g, 'force_view_mode', None)
-        return force_mode == 'mobile'
+        """Determine if mobile template should be used based on current view mode"""
+        current_mode = MobileDetectionMiddleware.get_current_view_mode()
+        return current_mode == 'mobile'
     
     @staticmethod
     def get_mobile_route_name(route_name):
@@ -172,9 +232,9 @@ class MobileDetectionMiddleware:
         return base_template
 
 
-def init_mobile_middleware(app):
+def init_mobile_middleware(app, auto_redirect=True):
     """Convenience function to initialize mobile middleware"""
-    middleware = MobileDetectionMiddleware(app)
+    middleware = MobileDetectionMiddleware(app, auto_redirect=auto_redirect)
     return middleware
 
 

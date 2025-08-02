@@ -95,7 +95,7 @@
         <div class="card-body">
             <small class="text-muted">
                 <strong>Error Code:</strong> {{ error_code }}<br>
-                <strong>Timestamp:</strong> {{ moment().format('YYYY-MM-DD HH:mm:ss') }}<br>
+                <strong>Timestamp:</strong> {{ current_time or 'Unknown' }}<br>
                 <strong>User Agent:</strong> {{ request.headers.get('User-Agent', 'Unknown')[:50] }}...
             </small>
         </div>

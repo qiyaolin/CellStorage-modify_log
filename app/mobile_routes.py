@@ -24,6 +24,7 @@ from .shared.decorators import admin_required
 mobile_bp = Blueprint('mobile', __name__, url_prefix='/mobile')
 
 
+
 @mobile_bp.before_request
 def before_mobile_request():
     """Ensure mobile view mode is set for all mobile routes"""
@@ -370,8 +371,8 @@ def mobile_vial_details(vial_id):
         'unique_vial_id_tag': vial.unique_vial_id_tag,
         'batch_name': vial.batch.name if vial.batch else 'Unknown',
         'cell_line': vial.batch.cell_line if vial.batch else 'Unknown',
-        'location': f"{vial.box.drawer.tower.name}/{vial.box.drawer.name}/{vial.box.name}" if vial.box else 'Unknown',
-        'position': f"R{vial.row}C{vial.col}" if vial.row and vial.col else '',
+        'location': f"{vial.box_location.drawer_info.tower_info.name}/{vial.box_location.drawer_info.name}/{vial.box_location.name}" if vial.box_location else 'Unknown',
+        'position': f"R{vial.row_in_box}C{vial.col_in_box}" if vial.row_in_box and vial.col_in_box else '',
         'passage_number': vial.batch.passage_number if vial.batch else '',
         'date_frozen': vial.date_frozen.strftime('%Y-%m-%d') if vial.date_frozen else '',
         'frozen_by': vial.batch.created_by.username if vial.batch and vial.batch.created_by else 'Unknown',
@@ -403,6 +404,13 @@ def switch_to_desktop():
     return redirect(url_for('cell_storage.index'))
 
 
+@mobile_bp.route('/switch-to-mobile')  
+def switch_to_mobile():
+    """Switch to mobile view (usually not needed as this is default for mobile devices)"""
+    session['view_mode'] = 'mobile'
+    return redirect(url_for('mobile.index'))
+
+
 # Error handlers for mobile blueprint
 @mobile_bp.errorhandler(404)
 def mobile_not_found(error):
@@ -410,6 +418,7 @@ def mobile_not_found(error):
     return render_template('mobile/error.html', 
                          error_code=404,
                          error_message="Page not found",
+                         current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                          device_info=get_device_info()), 404
 
 
@@ -419,4 +428,5 @@ def mobile_internal_error(error):
     return render_template('mobile/error.html',
                          error_code=500,
                          error_message="Internal server error",
+                         current_time=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                          device_info=get_device_info()), 500

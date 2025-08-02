@@ -622,8 +622,14 @@ class ProductionPrintAgent:
                 headers=self.get_auth_headers(),
                 timeout=5
             )
-            backend_ok = resp.status_code == 200
-        except:
+            # Accept both 200 and 404 as valid responses (404 means no jobs available)
+            backend_ok = resp.status_code in [200, 404]
+            if backend_ok:
+                data = resp.json()
+                # Verify the response format is correct
+                backend_ok = 'job' in data
+        except Exception as e:
+            logger.error(f"Health check error: {e}")
             backend_ok = False
         # Template file
         template_ok = os.path.exists(self.template_path)
@@ -637,10 +643,16 @@ class ProductionPrintAgent:
             'dymo_framework': framework_ok,
             'timestamp': datetime.now().isoformat()
         }
-        if all(status.values()):
-            logger.info("Health check passed")
+        if all([backend_ok, template_ok, framework_ok]):
+            logger.info(f"Health check passed: {status}")
         else:
             logger.warning(f"Health check failed: {status}")
+            if not backend_ok:
+                logger.error("Backend API connection failed - print jobs cannot be retrieved")
+            if not template_ok:
+                logger.error(f"Template file not found: {self.template_path}")
+            if not framework_ok:
+                logger.error(f"DYMO framework file not found: {framework_file}")
         return status
 
     def run(self):

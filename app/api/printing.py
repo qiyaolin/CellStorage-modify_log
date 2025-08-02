@@ -269,7 +269,7 @@ def fetch_pending_job():
 def update_job_status(job_id):
     """Update job status from print server, now including batch information."""
     try:
-        from ..cell_storage.models import PrintJob, PrintServer, Batch
+        from ..cell_storage.models import PrintJob, PrintServer, VialBatch
         
         data = request.get_json()
         if not data:
@@ -291,12 +291,12 @@ def update_job_status(job_id):
         
         # Link to the batch if not already linked
         if not job.batch_id:
-            batch = Batch.query.get(batch_id)
+            batch = VialBatch.query.get(batch_id)
             if batch:
                 job.batch_id = batch.id
             else:
                 # Optional: handle case where batch_id is invalid
-                logger.warning(f"Batch with ID {batch_id} not found for job {job_id}")
+                logger.warning(f"VialBatch with ID {batch_id} not found for job {job_id}")
 
         # Update job status
         job.status = status

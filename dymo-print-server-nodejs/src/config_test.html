@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>DYMO Configuration Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #f5f5f5;
+        }
+        .container { 
+            max-width: 800px; 
+            margin: auto; 
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .config-section {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        .btn {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        .btn:hover {
+            background: #0056b3;
+        }
+        .btn.success {
+            background: #28a745;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            font-weight: bold;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        select, input {
+            padding: 8px;
+            margin: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        label {
+            font-weight: bold;
+            margin-right: 10px;
+        }
+    </style>
+    <script src="dymo.connect.framework.js" type="text/javascript" charset="UTF-8"></script>
+</head>
+<body>
+
+<div class="container">
+    <h1>DYMO Configuration Test</h1>
+    <p>Test different printer selection configurations before deploying to production.</p>
+    
+    <div class="config-section">
+        <h3>Printer Configuration</h3>
+        
+        <div>
+            <label for="modeSelect">Selection Mode:</label>
+            <select id="modeSelect" onchange="updateConfigOptions()">
+                <option value="auto">Auto (Default)</option>
+                <option value="specific">Specific Printer</option>
+                <option value="type">Type (specific with preferred)</option>
+                <option value="label">Prefer Label Printer</option>
+                <option value="tape">Prefer Tape Printer</option>
+            </select>
+        </div>
+        
+        <div id="specificOptions" style="display: none; margin-top: 10px;">
+            <label for="printerSelect">Choose Printer:</label>
+            <select id="printerSelect">
+                <option value="">-- Select Printer --</option>
+            </select>
+        </div>
+        
+        <div style="margin-top: 15px;">
+            <button class="btn" onclick="detectPrinters()">🔍 Detect Printers</button>
+            <button class="btn" onclick="testConfiguration()">🧪 Test Configuration</button>
+        </div>
+    </div>
+    
+    <div id="status" class="status info">
+        Click "Detect Printers" to load available printers, then test your configuration.
+    </div>
+    
+    <div id="results-section" style="display: none;">
+        <h3>Test Results</h3>
+        <div id="results-content"></div>
+        
+        <div style="margin-top: 15px;">
+            <button class="btn success" onclick="simulatePrint()">🖨️ Simulate Print Job</button>
+        </div>
+    </div>
+    
+    <div id="config-output-section" style="display: none;">
+        <h3>Generated Configuration</h3>
+        <p>Change this part in your <code>print_agent_config.json</code>:</p>
+        <pre id="config-output" style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto;"></pre>
+    </div>
+</div>
+
+<script>
+let availablePrinters = [];
+
+function showStatus(message, type) {
+    const statusDiv = document.getElementById('status');
+    statusDiv.textContent = message;
+    statusDiv.className = 'status ' + type;
+}
+
+function updateConfigOptions() {
+    const mode = document.getElementById('modeSelect').value;
+    const specificOptions = document.getElementById('specificOptions');
+    
+    if (mode === 'specific' || mode === 'type') {
+        specificOptions.style.display = 'block';
+    } else {
+        specificOptions.style.display = 'none';
+    }
+}
+
+function detectPrinters() {
+    showStatus('Detecting DYMO printers...', 'info');
+    
+    // Check DYMO framework
+    if (typeof dymo === 'undefined' || typeof dymo.label === 'undefined') {
+        showStatus('DYMO Label Framework not loaded', 'error');
+        return;
+    }
+
+    dymo.label.framework.checkEnvironment(
+        function(result) {
+            if (!result.isFrameworkInstalled || !result.isWebServicePresent) {
+                showStatus('DYMO environment not ready', 'error');
+                return;
+            }
+
+            const printersPromise = dymo.label.framework.getPrintersAsync();
+            printersPromise.then(function(printers) {
+                availablePrinters = printers;
+                populatePrinterSelect(printers);
+                showStatus(`Found ${printers.length} printer(s)`, 'success');
+            }).catch(function(error) {
+                showStatus('Failed to detect printers: ' + error, 'error');
+            });
+        },
+        function(error) {
+            showStatus('DYMO environment error: ' + error, 'error');
+        }
+    );
+}
+
+function populatePrinterSelect(printers) {
+    const select = document.getElementById('printerSelect');
+    select.innerHTML = '<option value="">-- Select Printer --</option>';
+    
+    printers.forEach(function(printer) {
+        const option = document.createElement('option');
+        option.value = printer.name;
+        option.textContent = `${printer.name} (${printer.isConnected ? 'Connected' : 'Disconnected'})`;
+        option.disabled = !printer.isConnected;
+        select.appendChild(option);
+    });
+}
+
+function testConfiguration() {
+    if (availablePrinters.length === 0) {
+        showStatus('Please detect printers first', 'error');
+        return;
+    }
+
+    const config = getCurrentConfig();
+    const selectedPrinter = selectPrinter(availablePrinters, config);
+    
+    const resultsSection = document.getElementById('results-section');
+    const resultsContent = document.getElementById('results-content');
+    const configOutputSection = document.getElementById('config-output-section');
+    const configOutput = document.getElementById('config-output');
+    
+    resultsSection.style.display = 'block';
+    configOutputSection.style.display = 'block';
+    
+    if (selectedPrinter) {
+        resultsContent.innerHTML = `
+            <div class="status success">
+                ✅ Configuration Test Successful
+                <br><strong>Selected Printer:</strong> ${selectedPrinter.name}
+                <br><strong>Status:</strong> ${selectedPrinter.isConnected ? 'Connected' : 'Disconnected'}
+                <br><strong>Mode:</strong> ${config.mode}
+            </div>
+        `;
+        showStatus('Configuration test passed', 'success');
+    } else {
+        resultsContent.innerHTML = `
+            <div class="status error">
+                ❌ Configuration Test Failed
+                <br>No suitable printer found with current configuration
+            </div>
+        `;
+        showStatus('Configuration test failed', 'error');
+    }
+    
+    // Generate configuration JSON
+    const fullConfig = {
+        "printer_selection": config
+    };
+    configOutput.textContent = JSON.stringify(fullConfig, null, 2);
+}
+
+function getCurrentConfig() {
+    const mode = document.getElementById('modeSelect').value;
+    const config = { mode: mode };
+    
+    if (mode === 'specific' || mode === 'type') {
+        const selectedPrinter = document.getElementById('printerSelect').value;
+        config.preferred_printer = selectedPrinter;
+    }
+    
+    if (mode === 'label') {
+        config.label_printer_keywords = ["Label", "LabelWriter"];
+    }
+    
+    if (mode === 'tape') {
+        config.tape_printer_keywords = ["Tape", "LabelManager"];
+    }
+    
+    return config;
+}
+
+// Copy the selectPrinter function from the main template
+function selectPrinter(printers, printerConfig) {
+    if (!printers || printers.length === 0) {
+        return null;
+    }
+
+    console.log('Available printers:', printers.map(p => `${p.name} (Connected: ${p.isConnected})`));
+
+    const mode = printerConfig ? printerConfig.mode : 'auto';
+    const preferredPrinter = printerConfig ? printerConfig.preferred_printer : '';
+    
+    // Mode 1: Specific printer name
+    if ((mode === 'specific' || mode === 'type') && preferredPrinter) {
+        const specificPrinter = printers.find(p => p.name === preferredPrinter);
+        if (specificPrinter && specificPrinter.isConnected) {
+            console.log(`Using specific printer: ${specificPrinter.name}`);
+            return specificPrinter;
+        } else {
+            console.warn(`Specific printer "${preferredPrinter}" not found or not connected, falling back to auto selection`);
+        }
+    }
+
+    // Mode 2: Label printer preference (for DYMO 450 Duo)
+    if (mode === 'label' && printerConfig && printerConfig.label_printer_keywords) {
+        const labelPrinter = printers.find(p => {
+            const nameUpper = p.name.toUpperCase();
+            return printerConfig.label_printer_keywords.some(keyword => 
+                nameUpper.includes(keyword.toUpperCase())
+            ) && p.isConnected;
+        });
+        if (labelPrinter) {
+            console.log(`Using label printer: ${labelPrinter.name}`);
+            return labelPrinter;
+        }
+    }
+
+    // Mode 3: Tape printer preference (for DYMO 450 Duo)
+    if (mode === 'tape' && printerConfig && printerConfig.tape_printer_keywords) {
+        const tapePrinter = printers.find(p => {
+            const nameUpper = p.name.toUpperCase();
+            return printerConfig.tape_printer_keywords.some(keyword => 
+                nameUpper.includes(keyword.toUpperCase())
+            ) && p.isConnected;
+        });
+        if (tapePrinter) {
+            console.log(`Using tape printer: ${tapePrinter.name}`);
+            return tapePrinter;
+        }
+    }
+
+    // Mode 4: Auto selection (default)
+    const connectedPrinters = printers.filter(p => p.isConnected);
+    if (connectedPrinters.length > 0) {
+        const selectedPrinter = connectedPrinters[0];
+        console.log(`Auto-selected connected printer: ${selectedPrinter.name}`);
+        return selectedPrinter;
+    }
+
+    console.log(`Fallback to first available printer: ${printers[0].name}`);
+    return printers[0];
+}
+
+function simulatePrint() {
+    const config = getCurrentConfig();
+    const selectedPrinter = selectPrinter(availablePrinters, config);
+    
+    if (!selectedPrinter) {
+        showStatus('No printer available for simulation', 'error');
+        return;
+    }
+    
+    if (!selectedPrinter.isConnected) {
+        showStatus(`Printer "${selectedPrinter.name}" is not connected`, 'error');
+        return;
+    }
+    
+    showStatus(`Simulating print job on ${selectedPrinter.name}...`, 'info');
+    
+    // Simulate the print job data that would come from the backend
+    const mockPrintData = {
+        jobId: 'TEST_' + Date.now(),
+        itemName: 'Test Item',
+        barcode: 'TEST123456',
+        customText: 'Configuration Test',
+        use_dynamic_template: false,
+        printer_config: config
+    };
+    
+    // Show what would happen
+    setTimeout(() => {
+        showStatus(`✅ Print simulation completed on ${selectedPrinter.name}`, 'success');
+        console.log('Mock print data:', mockPrintData);
+        console.log('Selected printer:', selectedPrinter);
+    }, 1000);
+}
+
+// Auto-detect on page load
+window.addEventListener('load', function() {
+    setTimeout(detectPrinters, 1000);
+});
+</script>
+
+</body>
+</html>

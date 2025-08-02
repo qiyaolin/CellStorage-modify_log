@@ -1,0 +1,15 @@
+{
+  "backend_url": "https://your-backend-server.com",
+  "api_token": "your-api-token-here",
+  "api_endpoints": {
+    "get_jobs": "/api/printing/api/jobs/",
+    "update_status": "/api/printing/api/jobs/{job_id}/update_status/"
+  },
+  "poll_interval": 3,
+  "template_path": "auto_print_template.html",
+  "max_retry_count": 3,
+  "browser_timeout": 30,
+  "auto_close_browser": true,
+  "concurrent_jobs": 1,
+  "debug_mode": false
+}

@@ -6,6 +6,8 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_login import login_required, current_user
 from datetime import datetime
 import logging
+from functools import wraps
+from .. import db
 
 # Create the services directory if it doesn't exist
 import os
@@ -35,6 +37,30 @@ logger = logging.getLogger(__name__)
 
 # Create blueprint
 printing_api = Blueprint('printing_api', __name__, url_prefix='/api/print')
+
+
+def require_api_token(f):
+    """Decorator to require API token for print server endpoints"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        api_token = current_app.config.get('PRINT_API_TOKEN', '')
+        
+        # If no token is configured, allow access (for development)
+        if not api_token:
+            logger.warning("API token not configured - allowing access")
+            return f(*args, **kwargs)
+        
+        # Check Authorization header
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'error': 'Bearer token required'}), 401
+        
+        token = auth_header[7:]  # Remove 'Bearer ' prefix
+        if token != api_token:
+            return jsonify({'error': 'Invalid token'}), 401
+        
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 @printing_api.route('/status', methods=['GET'])
@@ -211,6 +237,7 @@ def get_print_stats():
 
 # Print server endpoints (for print servers to communicate with backend)
 @printing_api.route('/fetch-pending-job', methods=['GET'])
+@require_api_token
 def fetch_pending_job():
     """Fetch next pending print job for print server"""
     try:
@@ -237,6 +264,7 @@ def fetch_pending_job():
 
 
 @printing_api.route('/update-job-status/<int:job_id>', methods=['POST'])
+@require_api_token
 def update_job_status(job_id):
     """Update job status from print server"""
     try:
@@ -287,6 +315,7 @@ def update_job_status(job_id):
 
 
 @printing_api.route('/heartbeat', methods=['POST'])
+@require_api_token
 def print_server_heartbeat():
     """Receive heartbeat from print server"""
     try:
@@ -327,6 +356,7 @@ def print_server_heartbeat():
 
 
 @printing_api.route('/register-server', methods=['POST'])
+@require_api_token
 def register_print_server():
     """Register a new print server"""
     try:

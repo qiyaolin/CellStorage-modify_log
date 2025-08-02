@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <title>DYMO Auto Print Template</title>
+    <style>
+        body { 
+            font-family: sans-serif; 
+            padding: 20px; 
+            background: #f5f5f5;
+        }
+        .container { 
+            max-width: 600px; 
+            margin: auto; 
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status { 
+            margin-top: 20px; 
+            padding: 15px; 
+            border-radius: 5px; 
+            font-weight: bold;
+        }
+        .status.success { 
+            background-color: #d4edda; 
+            color: #155724; 
+            border: 1px solid #c3e6cb;
+        }
+        .status.error { 
+            background-color: #f8d7da; 
+            color: #721c24; 
+            border: 1px solid #f5c6cb;
+        }
+        .status.info { 
+            background-color: #d1ecf1; 
+            color: #0c5460; 
+            border: 1px solid #bee5eb;
+        }
+        .print-info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .print-info h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .auto-print-notice {
+            background: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border: 1px solid #ffeaa7;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+    <script src="dymo.connect.framework.js" type="text/javascript" charset="UTF-8"></script>
+</head>
+<body>
+
+<div class="container">
+    <h1>DYMO Auto Print System</h1>
+    
+    <div class="auto-print-notice">
+        ⚡ Auto Print Mode: textbox → text content, labelbox → barcode
+    </div>
+
+    <div class="print-info">
+        <h3>Print Job Information</h3>
+        <p><strong>Item Name:</strong> <span id="itemName">--</span></p>
+        <p><strong>Custom Text:</strong> <span id="customTextDisplay">--</span></p>
+        <p><strong>Final Display Text:</strong> <span id="finalText" style="color: red; font-weight: bold;">--</span></p>
+        <p><strong>Barcode:</strong> <span id="barcodeValue">--</span></p>
+        <p><strong>Job ID:</strong> <span id="jobId">--</span></p>
+        <p><strong>Template Mode:</strong> <span id="templateMode" style="color: blue; font-weight: bold;">--</span></p>
+        <p><strong>Printer Mode:</strong> <span id="printerMode" style="color: green; font-weight: bold;">--</span></p>
+        <p><strong>Selected Printer:</strong> <span id="selectedPrinter" style="color: green;">--</span></p>
+        <p><strong>Time:</strong> <span id="timestamp">--</span></p>
+    </div>
+
+    <div id="statusMessage" class="status info">
+        Initializing print system...
+    </div>
+    
+    <div id="manualPrintSection" style="display: none; margin-top: 20px;">
+        <button onclick="manualPrint()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px;">
+            🖨️ Manual Print
+        </button>
+    </div>
+</div>
+
+<script>
+(function() {
+    // Get print data - prioritize embedded data, fallback to URL parameters
+    function getUrlParams() {
+        // Priority 1: Check for embedded data
+        if (window.EMBEDDED_PRINT_DATA) {
+            return {
+                itemName: window.EMBEDDED_PRINT_DATA.item_name || 'Test Item',
+                barcode: window.EMBEDDED_PRINT_DATA.barcode || 'TEST123456',
+                jobId: window.EMBEDDED_PRINT_DATA.job_id || '0',
+                customText: window.EMBEDDED_PRINT_DATA.custom_text || null,
+                fontSize: parseInt(window.EMBEDDED_PRINT_DATA.font_size) || 8,
+                isBold: window.EMBEDDED_PRINT_DATA.is_bold === 'true',
+                autoPrint: true, // Embedded data always auto prints
+                auto_close_browser: window.EMBEDDED_PRINT_DATA.auto_close_browser,
+                use_dynamic_template: window.EMBEDDED_PRINT_DATA.use_dynamic_template,
+                dynamic_label_xml: window.EMBEDDED_PRINT_DATA.dynamic_label_xml,
+                printer_config: window.EMBEDDED_PRINT_DATA.printer_config
+            };
+        }
+        
+        // Fallback: Get print data from URL parameters
+        const params = new URLSearchParams(window.location.search);
+        
+        return {
+            itemName: params.get('itemName') || 'Test Item',
+            barcode: params.get('barcode') || 'TEST123456',
+            jobId: params.get('jobId') || '0',
+            customText: params.get('customText'),
+            fontSize: parseInt(params.get('fontSize')) || 8,
+            isBold: params.get('isBold') === 'true',
+            autoPrint: params.get('autoPrint') !== 'false'
+        };
+    }
+
+    // Update page display
+    function updateDisplay(params) {
+        const finalDisplayText = params.customText || params.itemName;
+        
+        document.getElementById('itemName').textContent = params.itemName;
+        document.getElementById('customTextDisplay').textContent = params.customText || '(None)';
+        document.getElementById('finalText').textContent = finalDisplayText;
+        document.getElementById('barcodeValue').textContent = params.barcode;
+        document.getElementById('jobId').textContent = params.jobId;
+        document.getElementById('templateMode').textContent = params.use_dynamic_template ? 'Dynamic (.label file)' : 'Hardcoded Fallback';
+        document.getElementById('printerMode').textContent = params.printer_config ? params.printer_config.mode : 'auto';
+        document.getElementById('selectedPrinter').textContent = '--';
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+    }
+
+    // Generate label XML
+    function generateLabelXml(params) {
+        // Check if we have dynamic template XML
+        if (params.use_dynamic_template && params.dynamic_label_xml) {
+            console.log('Using dynamic label template from configured .label file');
+            console.log('textbox filled with:', params.customText || params.itemName);
+            console.log('labelbox filled with:', params.barcode);
+            return params.dynamic_label_xml;
+        }
+        
+        // Fallback to hardcoded template
+        console.log('Using hardcoded fallback template');
+        let displayText = params.customText || params.itemName;
+        
+        // Ensure display text is not empty
+        if (!displayText || displayText.trim() === '') {
+            displayText = params.itemName || 'UNKNOWN_ITEM';
+        }
+        
+        return `<?xml version="1.0" encoding="utf-8"?>
+<DieCutLabel Version="8.0" Units="twips" MediaType="Default">
+    <PaperOrientation>Portrait</PaperOrientation>
+    <Id>Small30334</Id>
+    <IsOutlined>false</IsOutlined>
+    <PaperName>30334 2-1/4 in x 1-1/4 in</PaperName>
+    <DrawCommands>
+        <RoundRectangle X="0" Y="0" Width="3240" Height="1800" Rx="270" Ry="270" />
+    </DrawCommands>
+    <ObjectInfo>
+        <TextObject>
+            <Name>textbox</Name>
+            <ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
+            <BackColor Alpha="0" Red="255" Green="255" Blue="255" />
+            <LinkedObjectName />
+            <Rotation>Rotation0</Rotation>
+            <IsMirrored>False</IsMirrored>
+            <IsVariable>False</IsVariable>
+            <GroupID>-1</GroupID>
+            <IsOutlined>False</IsOutlined>
+            <HorizontalAlignment>Center</HorizontalAlignment>
+            <VerticalAlignment>Top</VerticalAlignment>
+            <TextFitMode>ShrinkToFit</TextFitMode>
+            <UseFullFontHeight>True</UseFullFontHeight>
+            <Verticalized>False</Verticalized>
+            <StyledText>
+                <Element>
+                    <String xml:space="preserve">${displayText}</String>
+                    <Attributes>
+                        <Font Family="Arial" Size="${params.fontSize}" Bold="${params.isBold ? 'True' : 'False'}" Italic="False" Underline="False" Strikeout="False" />
+                        <ForeColor Alpha="255" Red="0" Green="0" Blue="0" HueScale="100" />
+                    </Attributes>
+                </Element>
+            </StyledText>
+        </TextObject>
+        <Bounds X="58" Y="86" Width="3125" Height="765" />
+    </ObjectInfo>
+    <ObjectInfo>
+        <BarcodeObject>
+            <Name>labelbox</Name>
+            <ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
+            <BackColor Alpha="0" Red="255" Green="255" Blue="255" />
+            <LinkedObjectName />
+            <Rotation>Rotation0</Rotation>
+            <IsMirrored>False</IsMirrored>
+            <IsVariable>True</IsVariable>
+            <GroupID>-1</GroupID>
+            <IsOutlined>False</IsOutlined>
+            <Text>${params.barcode}</Text>
+            <Type>Code128Auto</Type>
+            <Size>Small</Size>
+            <TextPosition>None</TextPosition>
+            <TextFont Family="Arial" Size="8" Bold="False" Italic="False" Underline="False" Strikeout="False" />
+            <CheckSumFont Family="Arial" Size="8" Bold="False" Italic="False" Underline="False" Strikeout="False" />
+            <TextEmbedding>None</TextEmbedding>
+            <ECLevel>0</ECLevel>
+            <HorizontalAlignment>Center</HorizontalAlignment>
+            <QuietZonesPadding Left="0" Top="0" Right="0" Bottom="0" />
+        </BarcodeObject>
+        <Bounds X="58" Y="948.5" Width="3125" Height="607" />
+    </ObjectInfo>
+</DieCutLabel>`;
+    }
+
+    // Show status message
+    function showStatus(message, type) {
+        var statusDiv = document.getElementById('statusMessage');
+        statusDiv.textContent = message;
+        statusDiv.className = 'status ' + type;
+    }
+
+    // Notify backend print result - CORS blocked, handled by Python backend
+    function notifyPrintResult(jobId, success, error = null) {
+        // CORS policy blocks direct API calls from file:// protocol
+        // Status updates are handled by the Python backend instead
+        console.log(`Print result: Job ${jobId} - ${success ? 'SUCCESS' : 'FAILED'}${error ? ': ' + error : ''}`);
+    }
+
+    // Global parameters storage
+    let globalParams = null;
+
+    // Manual print function
+    window.manualPrint = function() {
+        if (globalParams) {
+            globalParams.autoPrint = true;
+            executePrint(globalParams);
+        }
+    };
+
+    // Auto print function
+    function autoPrint(params) {
+        globalParams = params;
+        
+        if (!params.autoPrint) {
+            showStatus('Waiting for manual trigger...', 'info');
+            document.getElementById('manualPrintSection').style.display = 'block';
+            return;
+        }
+
+        executePrint(params);
+    }
+
+    // Execute print function
+    function executePrint(params) {
+        showStatus('Starting print process...', 'info');
+
+        // Check if DYMO Label Framework is loaded
+        if (typeof dymo === 'undefined' || typeof dymo.label === 'undefined') {
+            const error = 'DYMO Label Framework not loaded';
+            showStatus(error, 'error');
+            notifyPrintResult(params.jobId, false, error);
+            return;
+        }
+
+        // Check environment
+        dymo.label.framework.checkEnvironment(
+            function(result) {
+                if (!result.isFrameworkInstalled) {
+                    const error = 'DYMO Label Framework not installed';
+                    showStatus(error, 'error');
+                    notifyPrintResult(params.jobId, false, error);
+                    return;
+                }
+
+                if (!result.isWebServicePresent) {
+                    const error = 'DYMO Web Service not running';
+                    showStatus(error, 'error');
+                    notifyPrintResult(params.jobId, false, error);
+                    return;
+                }
+
+                showStatus('DYMO environment check passed, getting printers...', 'info');
+                loadPrintersAndPrint(params);
+            },
+            function(error) {
+                const errorMsg = 'DYMO environment check failed: ' + error;
+                showStatus(errorMsg, 'error');
+                notifyPrintResult(params.jobId, false, errorMsg);
+            }
+        );
+    }
+
+    // Select appropriate printer based on configuration
+    function selectPrinter(printers, printerConfig) {
+        if (!printers || printers.length === 0) {
+            console.log('❌ No printers available for selection');
+            return null;
+        }
+
+        // Log available printers
+        console.log('🖨️ Available printers:', printers.map(p => `${p.name} (Connected: ${p.isConnected})`));
+        console.log('⚙️ Printer configuration:', printerConfig);
+
+        const mode = printerConfig ? printerConfig.mode : 'auto';
+        const preferredPrinter = printerConfig ? printerConfig.preferred_printer : '';
+        
+        console.log(`🎯 Selection mode: ${mode}`);
+        console.log(`🎯 Preferred printer: "${preferredPrinter}"`);
+        
+        // Mode 1: Specific printer name
+        if ((mode === 'specific' || mode === 'type') && preferredPrinter) {
+            console.log(`🔍 Looking for specific printer: "${preferredPrinter}"`);
+            const specificPrinter = printers.find(p => p.name === preferredPrinter);
+            if (specificPrinter && specificPrinter.isConnected) {
+                console.log(`✅ SELECTED: Using specific printer: ${specificPrinter.name}`);
+                return specificPrinter;
+            } else if (specificPrinter && !specificPrinter.isConnected) {
+                console.warn(`⚠️ Specific printer "${preferredPrinter}" found but NOT CONNECTED`);
+            } else {
+                console.warn(`❌ Specific printer "${preferredPrinter}" NOT FOUND`);
+            }
+            console.warn(`⚠️ Falling back to auto selection`);
+        }
+
+        // Mode 2: Label printer preference (for DYMO 450 Duo)
+        const labelKeywords = printerConfig && (printerConfig.label_keywords || printerConfig.label_printer_keywords);
+        if (mode === 'label' && labelKeywords) {
+            console.log(`🏷️ Searching for label printer with keywords:`, labelKeywords);
+            const labelPrinter = printers.find(p => {
+                const nameUpper = p.name.toUpperCase();
+                const hasKeyword = labelKeywords.some(keyword => 
+                    nameUpper.includes(keyword.toUpperCase())
+                );
+                console.log(`  📋 Checking ${p.name}: hasKeyword=${hasKeyword}, connected=${p.isConnected}`);
+                return hasKeyword && p.isConnected;
+            });
+            if (labelPrinter) {
+                console.log(`✅ SELECTED: Using label printer: ${labelPrinter.name}`);
+                return labelPrinter;
+            } else {
+                console.log(`❌ No connected label printer found with matching keywords`);
+            }
+        }
+
+        // Mode 3: Tape printer preference (for DYMO 450 Duo)
+        const tapeKeywords = printerConfig && (printerConfig.tape_keywords || printerConfig.tape_printer_keywords);
+        if (mode === 'tape' && tapeKeywords) {
+            console.log(`📼 Searching for tape printer with keywords:`, tapeKeywords);
+            const tapePrinter = printers.find(p => {
+                const nameUpper = p.name.toUpperCase();
+                const hasKeyword = tapeKeywords.some(keyword => 
+                    nameUpper.includes(keyword.toUpperCase())
+                );
+                console.log(`  📋 Checking ${p.name}: hasKeyword=${hasKeyword}, connected=${p.isConnected}`);
+                return hasKeyword && p.isConnected;
+            });
+            if (tapePrinter) {
+                console.log(`✅ SELECTED: Using tape printer: ${tapePrinter.name}`);
+                return tapePrinter;
+            } else {
+                console.log(`❌ No connected tape printer found with matching keywords`);
+            }
+        }
+
+        // Mode 4: Auto selection (default)
+        console.log(`🔄 Using auto selection fallback`);
+        // First try connected printers
+        const connectedPrinters = printers.filter(p => p.isConnected);
+        if (connectedPrinters.length > 0) {
+            const selectedPrinter = connectedPrinters[0];
+            console.log(`⚠️ AUTO-SELECTED: Using first connected printer: ${selectedPrinter.name}`);
+            return selectedPrinter;
+        }
+
+        // Fallback to first available printer
+        console.log(`⚠️ FALLBACK: Using first available printer: ${printers[0].name}`);
+        return printers[0];
+    }
+
+    // Load printers and execute print
+    function loadPrintersAndPrint(params) {
+        var printersPromise = dymo.label.framework.getPrintersAsync();
+        
+        printersPromise.then(function(printers) {
+            if (printers.length === 0) {
+                const error = 'No DYMO printers found';
+                showStatus(error, 'error');
+                notifyPrintResult(params.jobId, false, error);
+                return;
+            }
+
+            // Select appropriate printer
+            const selectedPrinter = selectPrinter(printers, params.printer_config);
+            if (!selectedPrinter) {
+                const error = 'No suitable printer found';
+                showStatus(error, 'error');
+                notifyPrintResult(params.jobId, false, error);
+                return;
+            }
+
+            // Update UI
+            document.getElementById('selectedPrinter').textContent = selectedPrinter.name;
+            showStatus(`Using printer: ${selectedPrinter.name}, preparing to print...`, 'info');
+
+            try {
+                // Generate and load label
+                const labelXml = generateLabelXml(params);
+                const label = dymo.label.framework.openLabelXml(labelXml);
+                
+                if (!label) {
+                    throw new Error('Label creation failed');
+                }
+
+                // Execute print
+                label.print(selectedPrinter.name);
+                
+                showStatus(`✅ Job #${params.jobId} printed successfully!`, 'success');
+                notifyPrintResult(params.jobId, true);
+                
+                // Auto close window after successful print
+                setTimeout(() => {
+                    if (params.autoPrint && params.auto_close_browser !== false) {
+                        console.log('Auto-closing browser window...');
+                        window.close();
+                    } else {
+                        console.log('Auto-close disabled, keeping window open');
+                    }
+                }, 2000);
+                
+            } catch (printError) {
+                const error = 'Print failed: ' + printError.message;
+                showStatus(error, 'error');
+                notifyPrintResult(params.jobId, false, error);
+            }
+        });
+        
+        // Compatible error handling
+        if (printersPromise && typeof printersPromise.catch === 'function') {
+            printersPromise.catch(function(error) {
+                const errorMsg = 'Get printers failed: ' + error;
+                showStatus(errorMsg, 'error');
+                notifyPrintResult(params.jobId, false, errorMsg);
+            });
+        }
+    }
+
+    // Initialize function
+    function init() {
+        const params = getUrlParams();
+        console.log('🔧 Print parameters loaded:', params);
+        console.log('🔧 Auto close browser setting:', params.auto_close_browser);
+        updateDisplay(params);
+        
+        // Start print process after 500ms delay to ensure page is fully loaded
+        setTimeout(() => {
+            autoPrint(params);
+        }, 500);
+    }
+
+    // Initialize after page load
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
+
+})();
+</script>
+
+</body>
+</html>

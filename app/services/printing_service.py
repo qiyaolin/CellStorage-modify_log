@@ -143,16 +143,12 @@ class PrintingService:
             return None
             
         try:
-            response = requests.get(
-                f"{self.print_server_url}/api/jobs/{job_id}",
-                headers={'Authorization': f'Bearer {self.api_token}'},
-                timeout=5
-            )
+            from ..cell_storage.models import PrintJob as PrintJobModel
             
-            if response.status_code == 200:
-                return response.json()
+            job = PrintJobModel.query.get(job_id)
+            if job:
+                return job.to_dict()
             else:
-                logger.error(f"Failed to get job status: {response.status_code}")
                 return None
                 
         except Exception as e:
@@ -165,16 +161,35 @@ class PrintingService:
             return None
             
         try:
-            response = requests.get(
-                f"{self.print_server_url}/api/stats",
-                headers={'Authorization': f'Bearer {self.api_token}'},
-                timeout=5
-            )
+            from ..cell_storage.models import PrintJob as PrintJobModel, PrintServer
             
-            if response.status_code == 200:
-                return response.json()
-            else:
-                return None
+            # Get job statistics
+            total_jobs = PrintJobModel.query.count()
+            pending_jobs = PrintJobModel.query.filter_by(status='pending').count()
+            processing_jobs = PrintJobModel.query.filter_by(status='processing').count()
+            completed_jobs = PrintJobModel.query.filter_by(status='completed').count()
+            failed_jobs = PrintJobModel.query.filter_by(status='failed').count()
+            
+            # Get server statistics
+            total_servers = PrintServer.query.count()
+            online_servers = PrintServer.query.filter_by(status='online').all()
+            online_count = len([s for s in online_servers if s.is_online])
+            
+            return {
+                'jobs': {
+                    'total': total_jobs,
+                    'pending': pending_jobs,
+                    'processing': processing_jobs,
+                    'completed': completed_jobs,
+                    'failed': failed_jobs,
+                    'success_rate': round((completed_jobs / total_jobs * 100), 2) if total_jobs > 0 else 0
+                },
+                'servers': {
+                    'total': total_servers,
+                    'online': online_count,
+                    'offline': total_servers - online_count
+                }
+            }
                 
         except Exception as e:
             logger.error(f"Error getting print stats: {e}")

@@ -15,3 +15,4 @@ env_variables:
   
   # Centralized Printing Configuration
   CENTRALIZED_PRINTING_ENABLED: "true"
+  PRINT_API_TOKEN: "zWCcDs_VmMWYVs6xWudyOZlRCwwC4Q-PAmKmrNpZ_kI"

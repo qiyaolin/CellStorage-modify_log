@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import UserMixin
 from .. import db  # Import db object from app package's __init__.py
@@ -373,6 +373,42 @@ class PrintJob(db.Model):
             'print_server_id': self.print_server_id
         }
     
+    def mark_processing(self, server_id=None, notes=None):
+        """Mark job as processing"""
+        old_status = self.status
+        self.status = 'processing'
+        self.started_at = datetime.utcnow()
+        if server_id:
+            self.print_server_id = server_id
+        self._record_status_change(old_status, 'processing', notes)
+        
+    def mark_completed(self, notes=None):
+        """Mark job as completed"""
+        old_status = self.status
+        self.status = 'completed'
+        self.completed_at = datetime.utcnow()
+        self._record_status_change(old_status, 'completed', notes)
+        
+    def mark_failed(self, error_message=None, notes=None):
+        """Mark job as failed and increment retry count"""
+        old_status = self.status
+        self.status = 'failed'
+        self.retry_count += 1
+        if error_message:
+            self.error_message = error_message
+        self._record_status_change(old_status, 'failed', notes or error_message)
+        
+    def _record_status_change(self, status_from, status_to, notes=None):
+        """Record status change in history"""
+        from . import db  # Import here to avoid circular imports
+        history = PrintJobHistory(
+            print_job_id=self.id,
+            status_from=status_from,
+            status_to=status_to,
+            notes=notes
+        )
+        db.session.add(history)
+    
     def __repr__(self):
         return f'<PrintJob {self.id}: {self.status}>'
 
@@ -441,3 +477,32 @@ class PrintServer(db.Model):
     
     def __repr__(self):
         return f'<PrintServer {self.server_id}: {self.status}>'
+
+
+class PrintJobHistory(db.Model):
+    """Print job status change history for audit tracking"""
+    __tablename__ = 'print_job_history'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    print_job_id = db.Column(db.Integer, db.ForeignKey('print_jobs.id', ondelete='CASCADE'), nullable=False)
+    status_from = db.Column(db.String(20), nullable=True)  # Previous status
+    status_to = db.Column(db.String(20), nullable=False)   # New status
+    changed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    notes = db.Column(db.Text, nullable=True)  # Additional notes about the change
+    
+    # Relationships
+    print_job = db.relationship('PrintJob', backref=db.backref('history', lazy='dynamic', cascade='all, delete-orphan'))
+    
+    def to_dict(self):
+        """Convert to dictionary for JSON serialization"""
+        return {
+            'id': self.id,
+            'print_job_id': self.print_job_id,
+            'status_from': self.status_from,
+            'status_to': self.status_to,
+            'changed_at': self.changed_at.isoformat() if self.changed_at else None,
+            'notes': self.notes
+        }
+    
+    def __repr__(self):
+        return f'<PrintJobHistory {self.print_job_id}: {self.status_from} -> {self.status_to}>'

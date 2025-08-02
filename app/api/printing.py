@@ -425,12 +425,7 @@ def register_print_server():
         return jsonify({'error': str(e)}), 500
 
 
-# Error handlers
-@printing_api.errorhandler(400)
-def bad_request(error):
-    return jsonify({'error': 'Bad request'}), 400
-
-
+# Error handlers - removed 400 handler to allow specific error messages
 @printing_api.errorhandler(401)
 def unauthorized(error):
     return jsonify({'error': 'Authentication required'}), 401

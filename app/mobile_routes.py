@@ -20,6 +20,8 @@ from .mobile_utils import (
 )
 from .shared.utils import get_next_batch_id, get_next_vial_id, log_audit
 from .shared.decorators import admin_required
+from .cell_storage.models import VialBatch, CryoVial
+from datetime import datetime
 
 # Create mobile blueprint
 mobile_bp = Blueprint('mobile', __name__, url_prefix='/mobile')
@@ -471,10 +473,6 @@ def add_cryovial():
         
         if form.validate():
             try:
-                from ..shared.utils import get_next_batch_id, log_audit
-                from ..cell_storage.models import VialBatch, CryoVial
-                from datetime import datetime
-                
                 # Create batch
                 batch_id = get_next_batch_id(auto_commit=False)
                 batch = VialBatch(

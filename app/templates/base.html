@@ -110,11 +110,22 @@
                                 Cell Storage
                             </a>
                             <ul class="dropdown-menu" aria-labelledby="cellStorageDropdown">
-                                                        <li><a class="dropdown-item" href="{{ url_for('cell_storage.index') }}">Dashboard</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('cell_storage.cryovial_inventory') }}">Cryovial Inventory</a></li>
-                        <li><a class="dropdown-item" href="{{ url_for('cell_storage.list_cell_lines') }}">Cell Lines</a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="{{ url_for('cell_storage.locations_overview') }}">Storage Locations</a></li>
+                                <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.index') }}" style="color: #212529;">
+                                    <i class="bi bi-speedometer2 me-2 text-primary"></i>Dashboard
+                                </a></li>
+                                <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.cryovial_inventory') }}" style="color: #212529;">
+                                    <i class="bi bi-snow2 me-2 text-info"></i>Cryovial Inventory
+                                </a></li>
+                                <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.list_cell_lines') }}" style="color: #212529;">
+                                    <i class="bi bi-diagram-3 me-2 text-success"></i>Cell Lines
+                                </a></li>
+                                <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.history_tree') }}" style="color: #212529;">
+                                    <i class="bi bi-diagram-2 me-2 text-warning"></i>History Tree
+                                </a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.locations_overview') }}" style="color: #212529;">
+                                    <i class="bi bi-building me-2 text-secondary"></i>Storage Locations
+                                </a></li>
                             </ul>
                         </li>
                         

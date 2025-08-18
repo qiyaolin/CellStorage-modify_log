@@ -128,20 +128,29 @@ class VialBatch(db.Model):
     # Dynamic properties that get data from the first vial in the batch
     @property
     def cell_line(self):
-        first_vial = self.vials.first()
-        if first_vial and first_vial.cell_line_info:
-            return first_vial.cell_line_info.name
-        return 'Unknown'
+        try:
+            first_vial = self.vials.first()
+            if first_vial and first_vial.cell_line_info:
+                return first_vial.cell_line_info.name
+            return 'Unknown'
+        except Exception:
+            return 'Unknown'
     
     @property
     def passage_number(self):
-        first_vial = self.vials.first()
-        return getattr(first_vial, 'passage_number', '') if first_vial else ''
+        try:
+            first_vial = self.vials.first()
+            return getattr(first_vial, 'passage_number', '') if first_vial else ''
+        except Exception:
+            return ''
     
     @property
     def date_frozen(self):
-        first_vial = self.vials.first()
-        return getattr(first_vial, 'date_frozen', None) if first_vial else None
+        try:
+            first_vial = self.vials.first()
+            return getattr(first_vial, 'date_frozen', None) if first_vial else None
+        except Exception:
+            return None
     
     @property
     def fluorescence_tag(self):
@@ -155,8 +164,11 @@ class VialBatch(db.Model):
     
     @property
     def parental_cell_line(self):
-        first_vial = self.vials.first()
-        return getattr(first_vial, 'parental_cell_line', '') if first_vial else ''
+        try:
+            first_vial = self.vials.first()
+            return getattr(first_vial, 'parental_cell_line', '') if first_vial else ''
+        except Exception:
+            return ''
     
     @property
     def notes(self):
@@ -167,6 +179,130 @@ class VialBatch(db.Model):
     def tag(self):
         # For search functionality, we can use the batch name or generate from vials
         return self.name
+    
+    def get_parent_batches(self):
+        """获取父代批次列表，基于parental_cell_line字段匹配"""
+        if not self.parental_cell_line:
+            return []
+        
+        # 找到所有名称匹配parental_cell_line的batch
+        parent_batches = VialBatch.query.filter_by(name=self.parental_cell_line).all()
+        
+        # 同时也考虑那些cell_line名称匹配的batch（通过第一个vial的cell_line）
+        cell_line_matches = VialBatch.query.join(CryoVial).join(CellLine).filter(
+            CellLine.name == self.parental_cell_line
+        ).all()
+        
+        # 合并并去重
+        all_parents = list(set(parent_batches + cell_line_matches))
+        # 排除自己
+        return [batch for batch in all_parents if batch.id != self.id]
+    
+    def get_child_batches(self):
+        """获取子代批次列表，基于其他batch的parental_cell_line指向当前batch"""
+        # 找到所有parental_cell_line等于当前batch名称的batch
+        name_children = VialBatch.query.join(CryoVial).filter(
+            CryoVial.parental_cell_line == self.name
+        ).distinct().all()
+        
+        # 同时考虑parental_cell_line等于当前batch关联cell_line名称的batch
+        cell_line_children = []
+        if self.cell_line != 'Unknown':
+            cell_line_children = VialBatch.query.join(CryoVial).filter(
+                CryoVial.parental_cell_line == self.cell_line
+            ).distinct().all()
+        
+        # 合并并去重
+        all_children = list(set(name_children + cell_line_children))
+        # 排除自己
+        return [batch for batch in all_children if batch.id != self.id]
+    
+    def get_lineage_tree(self, max_depth=5):
+        """
+        获取完整的家谱树（包括祖先和后代）
+        返回格式：{
+            'current': batch_info,
+            'ancestors': [ancestors_tree],
+            'descendants': [descendants_tree]
+        }
+        """
+        def build_ancestor_tree(batch, depth=0):
+            if depth >= max_depth:
+                return None
+            
+            batch_info = {
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'depth': depth,
+                'parents': []
+            }
+            
+            parents = batch.get_parent_batches()
+            for parent in parents:
+                parent_tree = build_ancestor_tree(parent, depth + 1)
+                if parent_tree:
+                    batch_info['parents'].append(parent_tree)
+            
+            return batch_info
+        
+        def build_descendant_tree(batch, depth=0):
+            if depth >= max_depth:
+                return None
+            
+            batch_info = {
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'depth': depth,
+                'children': []
+            }
+            
+            children = batch.get_child_batches()
+            for child in children:
+                child_tree = build_descendant_tree(child, depth + 1)
+                if child_tree:
+                    batch_info['children'].append(child_tree)
+            
+            return batch_info
+        
+        # 构建当前batch信息
+        current_info = {
+            'id': self.id,
+            'name': self.name,
+            'cell_line': self.cell_line,
+            'passage_number': self.passage_number,
+            'date_frozen': self.date_frozen.isoformat() if self.date_frozen else None,
+            'parental_cell_line': self.parental_cell_line,
+            'vial_count': self.vials.count()
+        }
+        
+        # 构建祖先树
+        ancestors = []
+        for parent in self.get_parent_batches():
+            ancestor_tree = build_ancestor_tree(parent, 1)
+            if ancestor_tree:
+                ancestors.append(ancestor_tree)
+        
+        # 构建后代树
+        descendants = []
+        for child in self.get_child_batches():
+            descendant_tree = build_descendant_tree(child, 1)
+            if descendant_tree:
+                descendants.append(descendant_tree)
+        
+        return {
+            'current': current_info,
+            'ancestors': ancestors,
+            'descendants': descendants,
+            'has_lineage': len(ancestors) > 0 or len(descendants) > 0
+        }
 
 class CryoVial(db.Model):
     __tablename__ = 'cryovials'

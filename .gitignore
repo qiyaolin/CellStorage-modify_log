@@ -188,3 +188,35 @@ migrations/versions/
 # Local configuration files
 config_local.py
 settings_local.py
+
+# Flask session files
+flask_session/
+
+# SQLAlchemy migration versions (if auto-generated)
+alembic/versions/*.py
+
+# Jupyter notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code specific settings (project level)
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# PyCharm specific files
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/dictionaries/
+.idea/vcs.xml
+.idea/jsLibraryMappings.xml
+
+# Print server specific files
+dymo-print-server-nodejs/src/*.log
+dymo-print-server-nodejs/src/print_agent_*.log
+dymo-print-server-nodejs/src/heartbeat_*.json
+
+# Temporary markdown files (development notes)
+temp_*.md
+debug_*.md
+*_debug.md
+*_notes.md

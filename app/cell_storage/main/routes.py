@@ -3249,3 +3249,309 @@ def get_dashboard_stats():
     except Exception as e:
         current_app.logger.error(f'Dashboard stats error: {e}')
         return jsonify({'success': False, 'message': 'Failed to get dashboard statistics'}), 500
+
+
+# --- Batch Lineage API Endpoints ---
+
+@bp.route('/api/batch/<int:batch_id>/lineage')
+@login_required
+def get_batch_lineage(batch_id):
+    """Get complete batch lineage tree"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        # Check if batch exists first
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({'success': False, 'message': f'Batch {batch_id} not found'}), 404
+        
+        max_depth = request.args.get('max_depth', 5, type=int)
+        lineage = BatchLineageService.get_batch_lineage(batch_id, max_depth)
+        
+        return jsonify({
+            'success': True,
+            'lineage': lineage
+        })
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        current_app.logger.error(f'Batch lineage error for batch {batch_id}: {e}\n{error_details}')
+        return jsonify({
+            'success': False, 
+            'message': f'Failed to get batch lineage: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/batch/<int:batch_id>/lineage/statistics')
+@login_required
+def get_batch_lineage_statistics(batch_id):
+    """获取batch家谱的统计信息"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        stats = BatchLineageService.get_lineage_statistics(batch_id)
+        
+        return jsonify({
+            'success': True,
+            'statistics': stats
+        })
+    except Exception as e:
+        current_app.logger.error(f'Batch lineage statistics error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get lineage statistics'}), 500
+
+
+@bp.route('/api/batch/<int:batch_id>/related')
+@login_required
+def get_related_batches(batch_id):
+    """获取与指定batch相关的batch列表"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        relationship_type = request.args.get('type', 'all')  # parents, children, siblings, all
+        related_batches = BatchLineageService.find_related_batches(batch_id, relationship_type)
+        
+        # 将batch对象转换为JSON格式
+        related_data = []
+        for batch in related_batches:
+            related_data.append({
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'vial_count': batch.vials.count(),
+                'timestamp': batch.timestamp.isoformat() if batch.timestamp else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'related_batches': related_data,
+            'relationship_type': relationship_type,
+            'count': len(related_data)
+        })
+    except Exception as e:
+        current_app.logger.error(f'Related batches error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get related batches'}), 500
+
+
+@bp.route('/api/batch/suggest-parental-lines')
+@login_required
+def suggest_parental_lines():
+    """为新batch建议可能的parental cell line"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        query = request.args.get('q', '')
+        limit = request.args.get('limit', 10, type=int)
+        
+        suggestions = BatchLineageService.suggest_parental_cell_lines(query, limit)
+        
+        return jsonify({
+            'success': True,
+            'suggestions': suggestions
+        })
+    except Exception as e:
+        current_app.logger.error(f'Suggest parental lines error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get suggestions'}), 500
+
+
+@bp.route('/api/batch/<int:batch_id>/lineage/validate')
+@login_required
+def validate_batch_lineage(batch_id):
+    """验证batch家谱的一致性"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        validation_result = BatchLineageService.validate_lineage_consistency(batch_id)
+        
+        return jsonify({
+            'success': True,
+            'validation': validation_result
+        })
+    except Exception as e:
+        current_app.logger.error(f'Batch lineage validation error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to validate lineage'}), 500
+
+
+@bp.route('/api/batch/<int:batch_id>/lineage/paths')
+@login_required
+def get_batch_lineage_paths(batch_id):
+    """获取从根节点到当前batch的所有路径"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        paths = BatchLineageService.find_lineage_paths(batch_id)
+        
+        # 转换路径中的batch对象为JSON格式
+        paths_data = []
+        for path in paths:
+            path_data = []
+            for batch in path:
+                path_data.append({
+                    'id': batch.id,
+                    'name': batch.name,
+                    'cell_line': batch.cell_line,
+                    'passage_number': batch.passage_number,
+                    'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                    'parental_cell_line': batch.parental_cell_line
+                })
+            paths_data.append(path_data)
+        
+        return jsonify({
+            'success': True,
+            'paths': paths_data,
+            'path_count': len(paths_data)
+        })
+    except Exception as e:
+        current_app.logger.error(f'Batch lineage paths error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get lineage paths'}), 500
+
+
+# --- History Tree Standalone Page ---
+
+@bp.route('/history-tree')
+@login_required
+def history_tree():
+    """独立的History Tree页面"""
+    return render_template('main/history_tree.html', title='Batch History Tree')
+
+
+@bp.route('/api/batch/search')
+@login_required
+def search_batches():
+    """搜索batch的API端点"""
+    try:
+        query = request.args.get('q', '').strip()
+        limit = request.args.get('limit', 20, type=int)
+        
+        if not query:
+            return jsonify({
+                'success': True,
+                'batches': []
+            })
+        
+        # 搜索batch - 按名称、cell line或parental cell line
+        batches = VialBatch.query.join(CryoVial).join(CellLine).filter(
+            db.or_(
+                VialBatch.name.ilike(f'%{query}%'),
+                CellLine.name.ilike(f'%{query}%'),
+                CryoVial.parental_cell_line.ilike(f'%{query}%')
+            )
+        ).distinct().limit(limit).all()
+        
+        # 转换为JSON格式
+        batch_data = []
+        for batch in batches:
+            batch_data.append({
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'vial_count': batch.vials.count(),
+                'timestamp': batch.timestamp.isoformat() if batch.timestamp else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'batches': batch_data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Batch search error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to search batches'}), 500
+
+
+@bp.route('/api/batch/recent')
+@login_required
+def get_recent_batches():
+    """获取最近的batch列表"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        
+        # 获取最近创建的batch
+        recent_batches = VialBatch.query.order_by(
+            VialBatch.timestamp.desc()
+        ).limit(limit).all()
+        
+        # 转换为JSON格式
+        batch_data = []
+        for batch in recent_batches:
+            batch_data.append({
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'vial_count': batch.vials.count(),
+                'timestamp': batch.timestamp.isoformat() if batch.timestamp else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'batches': batch_data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Recent batches error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get recent batches'}), 500
+
+
+@bp.route('/api/batch/with-lineage')
+@login_required
+def get_batches_with_lineage():
+    """获取有家谱关系的batch列表"""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        
+        # 获取有parental_cell_line的batch，或者被其他batch引用作为parental的batch
+        batches_with_parents = VialBatch.query.join(CryoVial).filter(
+            CryoVial.parental_cell_line.isnot(None),
+            CryoVial.parental_cell_line != ''
+        ).distinct()
+        
+        # 获取被引用作为parent的batch
+        referenced_names = db.session.query(CryoVial.parental_cell_line).filter(
+            CryoVial.parental_cell_line.isnot(None),
+            CryoVial.parental_cell_line != ''
+        ).distinct().all()
+        
+        # 提取实际的名称列表
+        referenced_name_list = [name[0] for name in referenced_names if name[0]]
+        
+        batches_referenced = VialBatch.query.filter(
+            VialBatch.name.in_(referenced_name_list)
+        ) if referenced_name_list else VialBatch.query.filter(False)
+        
+        # 合并结果
+        all_lineage_batches = batches_with_parents.union(batches_referenced).order_by(
+            VialBatch.timestamp.desc()
+        ).limit(limit).all()
+        
+        # 转换为JSON格式
+        batch_data = []
+        for batch in all_lineage_batches:
+            batch_data.append({
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'vial_count': batch.vials.count(),
+                'timestamp': batch.timestamp.isoformat() if batch.timestamp else None,
+                'has_parents': bool(batch.parental_cell_line),
+                'has_children': len(batch.get_child_batches()) > 0
+            })
+        
+        return jsonify({
+            'success': True,
+            'batches': batch_data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Batches with lineage error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get batches with lineage'}), 500

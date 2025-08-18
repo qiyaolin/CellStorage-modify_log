@@ -159,15 +159,23 @@ instance/config.py
 *.bak
 *.backup
 
-# Development and testing files
-tests/
-test_*.py
-*_test.py
+# Development and testing files - 只忽略临时测试文件，不忽略重要测试
+# tests/  # 注释掉，如果有正式测试目录应该部署
+test_*.csv
+test_*.json
+*_test_output.*
+temporary_test_*
 
-# Documentation
-README.md
-docs/
-*.md
+# Documentation - 只忽略临时文档，保留重要文档
+# README.md  # 注释掉，保留主要文档
+# docs/      # 注释掉，如果有重要文档应该部署
+# *.md       # 注释掉，允许重要的.md文件被部署
+
+# 只忽略临时生成的文档和日志
+temp_*.md
+debug_*.md
+*_debug.md
+*_log.md
 
 # Build outputs and cache files
 dist/

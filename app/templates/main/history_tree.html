@@ -1,0 +1,954 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+        <i class="bi bi-diagram-3 me-2 text-primary"></i>Batch History Tree
+    </h1>
+    <div class="btn-group" role="group">
+        <button class="btn btn-outline-primary" onclick="refreshAll()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+        <button class="btn btn-outline-info" onclick="showHelp()">
+            <i class="bi bi-question-circle"></i> Help
+        </button>
+    </div>
+</div>
+
+<!-- Search and Selection Panel -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-search me-2"></i>Select Batch to View History
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Search Input -->
+                <div class="mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text">
+                            <i class="bi bi-search"></i>
+                        </span>
+                        <input type="text" class="form-control" id="batch-search" 
+                               placeholder="Search by batch name, cell line, or parental line..."
+                               autocomplete="off">
+                    </div>
+                    
+                    <!-- Search Results -->
+                    <div id="search-results" class="mt-2" style="display: none;">
+                        <div class="list-group" id="search-list" style="max-height: 200px; overflow-y: auto;">
+                            <!-- Search results will be populated here -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Quick Access Tabs -->
+                <ul class="nav nav-pills mb-3" id="quick-access-tabs" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" id="recent-tab" data-bs-toggle="pill" 
+                                data-bs-target="#recent-batches" type="button" role="tab">
+                            <i class="bi bi-clock-history me-1"></i>Recent
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" id="lineage-tab" data-bs-toggle="pill" 
+                                data-bs-target="#lineage-batches" type="button" role="tab">
+                            <i class="bi bi-diagram-2 me-1"></i>With Lineage
+                        </button>
+                    </li>
+                </ul>
+                
+                <!-- Quick Access Content -->
+                <div class="tab-content" id="quick-access-content">
+                    <!-- Recent Batches -->
+                    <div class="tab-pane fade show active" id="recent-batches" role="tabpanel">
+                        <div class="row g-2" id="recent-batch-list">
+                            <!-- Recent batches will be loaded here -->
+                        </div>
+                    </div>
+                    
+                    <!-- Batches with Lineage -->
+                    <div class="tab-pane fade" id="lineage-batches" role="tabpanel">
+                        <div class="row g-2" id="lineage-batch-list">
+                            <!-- Lineage batches will be loaded here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Quick Stats Panel -->
+    <div class="col-md-4">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-bar-chart me-2"></i>Lineage Statistics
+                </h5>
+            </div>
+            <div class="card-body" id="global-stats">
+                <div class="text-center py-3 text-muted">
+                    <i class="bi bi-info-circle" style="font-size: 2rem;"></i>
+                    <p class="mt-2 mb-0">Select a batch to view statistics</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Selected Batch Info -->
+<div id="selected-batch-info" class="alert alert-info d-none">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h6 class="alert-heading mb-1">
+                <i class="bi bi-info-circle me-2"></i>Selected Batch: <span id="selected-batch-name"></span>
+            </h6>
+            <p class="mb-0" id="selected-batch-details"></p>
+        </div>
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-primary btn-sm" onclick="generateHistoryTree()">
+                <i class="bi bi-diagram-3 me-1"></i>Generate History Tree
+            </button>
+            <button type="button" class="btn-close" onclick="clearSelection()"></button>
+        </div>
+    </div>
+</div>
+
+<!-- History Tree Visualization -->
+<div id="history-tree-container" class="d-none">
+    <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="bi bi-diagram-3 me-2"></i>History Tree Visualization
+            </h5>
+            <div class="btn-group btn-group-sm" role="group">
+                <button class="btn btn-outline-primary" onclick="refreshLineage()">
+                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                </button>
+                <button class="btn btn-outline-info" onclick="expandAll()">
+                    <i class="bi bi-arrows-expand"></i> Expand All
+                </button>
+                <button class="btn btn-outline-secondary" onclick="collapseAll()">
+                    <i class="bi bi-arrows-collapse"></i> Collapse All
+                </button>
+                <button class="btn btn-outline-success" onclick="exportLineage()">
+                    <i class="bi bi-download"></i> Export
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <!-- Loading Indicator -->
+            <div id="lineage-loading" class="text-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading lineage...</span>
+                </div>
+                <p class="mt-2 text-muted">Loading batch history tree...</p>
+            </div>
+            
+            <!-- No Lineage Message -->
+            <div id="no-lineage" class="text-center py-4" style="display: none;">
+                <i class="bi bi-info-circle text-muted" style="font-size: 3rem;"></i>
+                <h5 class="mt-3 text-muted">No History Tree Available</h5>
+                <p class="text-muted">This batch has no recorded parental relationships.</p>
+            </div>
+            
+            <!-- Lineage Statistics -->
+            <div id="lineage-stats" class="mb-4" style="display: none;">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <div class="bg-light p-3 rounded text-center">
+                            <div class="h4 mb-1 text-primary" id="ancestor-count">0</div>
+                            <small class="text-muted">Ancestors</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="bg-light p-3 rounded text-center">
+                            <div class="h4 mb-1 text-success" id="descendant-count">0</div>
+                            <small class="text-muted">Descendants</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="bg-light p-3 rounded text-center">
+                            <div class="h4 mb-1 text-info" id="generation-span">0</div>
+                            <small class="text-muted">Generation Span</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="bg-light p-3 rounded text-center">
+                            <div class="h4 mb-1 text-warning" id="total-related">0</div>
+                            <small class="text-muted">Total Related</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Lineage Tree Container -->
+            <div id="lineage-tree" style="display: none;">
+                <!-- Ancestors Section -->
+                <div id="ancestors-section" class="mb-4">
+                    <h6 class="text-muted mb-3">
+                        <i class="bi bi-arrow-up-circle me-2"></i>Ancestors (Parent Batches)
+                    </h6>
+                    <div id="ancestors-tree"></div>
+                </div>
+                
+                <!-- Current Batch Section -->
+                <div class="current-batch-section mb-4">
+                    <h6 class="text-muted mb-3">
+                        <i class="bi bi-circle-fill me-2"></i>Current Batch
+                    </h6>
+                    <div class="card bg-primary text-white" id="current-batch-card">
+                        <!-- Current batch info will be populated here -->
+                    </div>
+                </div>
+                
+                <!-- Descendants Section -->
+                <div id="descendants-section">
+                    <h6 class="text-muted mb-3">
+                        <i class="bi bi-arrow-down-circle me-2"></i>Descendants (Child Batches)
+                    </h6>
+                    <div id="descendants-tree"></div>
+                </div>
+            </div>
+            
+            <!-- Lineage Validation -->
+            <div id="lineage-validation" class="mt-4" style="display: none;">
+                <h6 class="text-muted mb-3">
+                    <i class="bi bi-check-circle me-2"></i>Lineage Validation
+                </h6>
+                <div id="validation-results"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Help Modal -->
+<div class="modal fade" id="helpModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-question-circle me-2"></i>History Tree Help
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6>🔍 How to Use History Tree</h6>
+                <ul>
+                    <li><strong>Search:</strong> Type batch name, cell line, or parental line to find batches</li>
+                    <li><strong>Recent:</strong> View recently created batches</li>
+                    <li><strong>With Lineage:</strong> View batches that have parent/child relationships</li>
+                    <li><strong>Click any batch</strong> to view its complete history tree</li>
+                </ul>
+                
+                <h6 class="mt-4">📊 Understanding the Tree</h6>
+                <ul>
+                    <li><strong class="text-info">Blue cards:</strong> Ancestor batches (parents)</li>
+                    <li><strong class="text-primary">Dark blue card:</strong> Currently selected batch</li>
+                    <li><strong class="text-success">Green cards:</strong> Descendant batches (children)</li>
+                    <li><strong>Depth numbers:</strong> Show generation distance</li>
+                </ul>
+                
+                <h6 class="mt-4">⚠️ Validation</h6>
+                <p>The system automatically checks for:</p>
+                <ul>
+                    <li>Circular references (A → B → A)</li>
+                    <li>Missing parent batches</li>
+                    <li>Inconsistent parental relationships</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedBatchId = null;
+let lineageData = null;
+
+// Initialize when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initializeHistoryTree();
+    setupSearchFunctionality();
+    loadRecentBatches();
+    
+    // Listen for tab switches
+    document.getElementById('lineage-tab').addEventListener('shown.bs.tab', function() {
+        loadLineageBatches();
+    });
+});
+
+// Initialize History Tree
+function initializeHistoryTree() {
+    // Check if batch_id exists in URL parameters
+    const urlParams = new URLSearchParams(window.location.search);
+    const batchId = urlParams.get('batch_id');
+    
+    if (batchId) {
+        selectBatch(parseInt(batchId));
+        // Auto-generate tree for URL-loaded batches
+        setTimeout(() => {
+            generateHistoryTree();
+        }, 500);
+    }
+}
+
+// Setup search functionality
+function setupSearchFunctionality() {
+    const searchInput = document.getElementById('batch-search');
+    let searchTimeout;
+    
+    searchInput.addEventListener('input', function() {
+        clearTimeout(searchTimeout);
+        const query = this.value.trim();
+        
+        if (query.length < 2) {
+            hideSearchResults();
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => {
+            searchBatches(query);
+        }, 300);
+    });
+    
+    // Hide search results when clicking elsewhere
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#batch-search') && !e.target.closest('#search-results')) {
+            hideSearchResults();
+        }
+    });
+}
+
+// Search batches
+async function searchBatches(query) {
+    try {
+        const response = await fetch(`/cell-storage/api/batch/search?q=${encodeURIComponent(query)}&limit=10`);
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                displaySearchResults(result.batches);
+            } else {
+                console.error('Search API error:', result.message);
+                showSearchError('Search failed: ' + (result.message || 'Unknown error'));
+            }
+        } else {
+            console.error('Search HTTP error:', response.status);
+            showSearchError(`Search request failed (${response.status})`);
+        }
+    } catch (error) {
+        console.error('Search error:', error);
+        showSearchError('Error occurred during search');
+    }
+}
+
+// Display search results
+function displaySearchResults(batches) {
+    const resultsContainer = document.getElementById('search-results');
+    const listContainer = document.getElementById('search-list');
+    
+    if (batches.length === 0) {
+        hideSearchResults();
+        return;
+    }
+    
+    listContainer.innerHTML = '';
+    
+    batches.forEach(batch => {
+        const item = document.createElement('button');
+        item.className = 'list-group-item list-group-item-action';
+        item.innerHTML = `
+            <div class="d-flex w-100 justify-content-between">
+                <h6 class="mb-1">${batch.name}</h6>
+                <small class="text-muted">ID: ${batch.id}</small>
+            </div>
+            <p class="mb-1">
+                <strong>Cell Line:</strong> ${batch.cell_line}
+                ${batch.passage_number ? ` | <strong>Passage:</strong> ${batch.passage_number}` : ''}
+            </p>
+            <small class="text-muted">
+                ${batch.date_frozen ? `Frozen: ${new Date(batch.date_frozen).toLocaleDateString()}` : ''}
+                ${batch.parental_cell_line ? ` | Parental: ${batch.parental_cell_line}` : ''}
+            </small>
+        `;
+        
+        item.addEventListener('click', () => {
+            selectBatch(batch.id);
+            hideSearchResults();
+            document.getElementById('batch-search').value = batch.name;
+        });
+        
+        listContainer.appendChild(item);
+    });
+    
+    resultsContainer.style.display = 'block';
+}
+
+// Hide search results
+function hideSearchResults() {
+    document.getElementById('search-results').style.display = 'none';
+}
+
+// Load recent batches
+async function loadRecentBatches() {
+    try {
+        const response = await fetch('/cell-storage/api/batch/recent?limit=8');
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                displayBatchList(result.batches, 'recent-batch-list');
+            } else {
+                console.error('Recent batches API error:', result.message);
+                displayBatchList([], 'recent-batch-list');
+            }
+        } else {
+            console.error('Recent batches HTTP error:', response.status);
+            displayBatchList([], 'recent-batch-list');
+        }
+    } catch (error) {
+        console.error('Recent batches error:', error);
+        displayBatchList([], 'recent-batch-list');
+    }
+}
+
+// Load batches with lineage relationships
+async function loadLineageBatches() {
+    try {
+        const response = await fetch('/cell-storage/api/batch/with-lineage?limit=8');
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                displayBatchList(result.batches, 'lineage-batch-list');
+            } else {
+                console.error('Lineage batches API error:', result.message);
+                displayBatchList([], 'lineage-batch-list');
+            }
+        } else {
+            console.error('Lineage batches HTTP error:', response.status);
+            displayBatchList([], 'lineage-batch-list');
+        }
+    } catch (error) {
+        console.error('Lineage batches error:', error);
+        displayBatchList([], 'lineage-batch-list');
+    }
+}
+
+// Display batch list
+function displayBatchList(batches, containerId) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    
+    if (batches.length === 0) {
+        container.innerHTML = '<div class="col-12"><p class="text-muted text-center py-3">No batches found</p></div>';
+        return;
+    }
+    
+    batches.forEach(batch => {
+        const col = document.createElement('div');
+        col.className = 'col-md-6';
+        
+        const hasLineageIndicator = batch.has_parents || batch.has_children ? 
+            '<i class="bi bi-diagram-2 text-success ms-1" title="Has lineage relationships"></i>' : '';
+        
+        col.innerHTML = `
+            <div class="card h-100 batch-card" onclick="selectBatch(${batch.id})" style="cursor: pointer;">
+                <div class="card-body p-3">
+                    <h6 class="card-title mb-2">
+                        ${batch.name}${hasLineageIndicator}
+                        <small class="text-muted">(${batch.id})</small>
+                    </h6>
+                    <p class="card-text small mb-2">
+                        <strong>Cell Line:</strong> ${batch.cell_line}<br>
+                        <strong>Vials:</strong> ${batch.vial_count}
+                        ${batch.passage_number ? ` | <strong>Passage:</strong> ${batch.passage_number}` : ''}
+                    </p>
+                    <small class="text-muted">
+                        ${batch.date_frozen ? new Date(batch.date_frozen).toLocaleDateString() : 'No date'}
+                    </small>
+                </div>
+            </div>
+        `;
+        
+        container.appendChild(col);
+    });
+}
+
+// Select batch
+async function selectBatch(batchId) {
+    selectedBatchId = batchId;
+    
+    // Show selected batch info
+    showSelectedBatchInfo(batchId);
+    
+    // Hide history tree container until user confirms
+    document.getElementById('history-tree-container').classList.add('d-none');
+}
+
+// Show selected batch information
+async function showSelectedBatchInfo(batchId) {
+    try {
+        // Find batch info from existing data or make new request
+        const response = await fetch(`/cell-storage/api/batch/search?q=${batchId}&limit=1`);
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success && result.batches.length > 0) {
+                const batch = result.batches[0];
+                
+                document.getElementById('selected-batch-name').textContent = batch.name;
+                document.getElementById('selected-batch-details').innerHTML = `
+                    <strong>Cell Line:</strong> ${batch.cell_line} | 
+                    <strong>ID:</strong> ${batch.id} | 
+                    <strong>Vials:</strong> ${batch.vial_count}
+                    ${batch.parental_cell_line ? ` | <strong>Parental:</strong> ${batch.parental_cell_line}` : ''}
+                `;
+                
+                document.getElementById('selected-batch-info').classList.remove('d-none');
+                
+                // Update URL
+                const newUrl = new URL(window.location);
+                newUrl.searchParams.set('batch_id', batchId);
+                window.history.replaceState({}, '', newUrl);
+            }
+        }
+    } catch (error) {
+        console.error('Error showing batch info:', error);
+    }
+}
+
+// Clear selection
+function clearSelection() {
+    selectedBatchId = null;
+    lineageData = null;
+    
+    document.getElementById('selected-batch-info').classList.add('d-none');
+    document.getElementById('history-tree-container').classList.add('d-none');
+    document.getElementById('batch-search').value = '';
+    
+    // Clear URL parameters
+    const newUrl = new URL(window.location);
+    newUrl.searchParams.delete('batch_id');
+    window.history.replaceState({}, '', newUrl);
+}
+
+// Generate History Tree (called when user clicks the button)
+async function generateHistoryTree() {
+    if (!selectedBatchId) {
+        alert('No batch selected');
+        return;
+    }
+    
+    // Show history tree container
+    document.getElementById('history-tree-container').classList.remove('d-none');
+    
+    // Load lineage data
+    await loadLineageData(selectedBatchId);
+}
+
+// Load lineage data
+async function loadLineageData(batchId) {
+    try {
+        showLoading();
+        
+        // Load lineage and statistics data in parallel
+        const [lineageResponse, statsResponse] = await Promise.all([
+            fetch(`/cell-storage/api/batch/${batchId}/lineage`),
+            fetch(`/cell-storage/api/batch/${batchId}/lineage/statistics`)
+        ]);
+        
+        if (!lineageResponse.ok || !statsResponse.ok) {
+            throw new Error('Failed to load lineage data');
+        }
+        
+        const lineageResult = await lineageResponse.json();
+        const statsResult = await statsResponse.json();
+        
+        if (lineageResult.success && statsResult.success) {
+            lineageData = lineageResult.lineage;
+            displayLineage(lineageData);
+            displayStatistics(statsResult.statistics);
+            
+            // If lineage data exists, also load validation info
+            if (lineageData.has_lineage) {
+                loadValidationData(batchId);
+            }
+        } else {
+            const errorMsg = lineageResult.message || statsResult.message || 'API returned error';
+            throw new Error(errorMsg);
+        }
+        
+    } catch (error) {
+        console.error('Error loading lineage data:', error);
+        
+        // Show more specific error message
+        let errorMessage = 'Failed to load batch history tree';
+        if (error.message && error.message !== 'Failed to load lineage data') {
+            errorMessage += ': ' + error.message;
+        }
+        
+        showError(errorMessage);
+    }
+}
+
+// Show loading state
+function showLoading() {
+    document.getElementById('lineage-loading').style.display = 'block';
+    document.getElementById('no-lineage').style.display = 'none';
+    document.getElementById('lineage-stats').style.display = 'none';
+    document.getElementById('lineage-tree').style.display = 'none';
+    document.getElementById('lineage-validation').style.display = 'none';
+}
+
+// 显示lineage数据
+function displayLineage(data) {
+    document.getElementById('lineage-loading').style.display = 'none';
+    
+    if (!data.has_lineage) {
+        document.getElementById('no-lineage').style.display = 'block';
+        return;
+    }
+    
+    document.getElementById('lineage-tree').style.display = 'block';
+    
+    // 更新当前batch卡片
+    updateCurrentBatchCard(data.current);
+    
+    // 渲染祖先树
+    renderTree(data.ancestors, 'ancestors-tree', 'ancestor');
+    
+    // 渲染后代树
+    renderTree(data.descendants, 'descendants-tree', 'descendant');
+}
+
+// 更新当前batch卡片
+function updateCurrentBatchCard(batchInfo) {
+    const card = document.getElementById('current-batch-card');
+    card.innerHTML = `
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start">
+                <div>
+                    <h5 class="card-title mb-1">${batchInfo.name}</h5>
+                    <p class="card-text mb-2">
+                        <strong>Cell Line:</strong> ${batchInfo.cell_line}<br>
+                        <strong>Passage:</strong> ${batchInfo.passage_number || 'N/A'}<br>
+                        <strong>Date Frozen:</strong> ${batchInfo.date_frozen ? new Date(batchInfo.date_frozen).toLocaleDateString() : 'N/A'}<br>
+                        <strong>Vials:</strong> ${batchInfo.vial_count}
+                    </p>
+                    ${batchInfo.parental_cell_line ? `<small><strong>Parental Line:</strong> ${batchInfo.parental_cell_line}</small>` : ''}
+                </div>
+                <span class="badge bg-light text-dark">ID: ${batchInfo.id}</span>
+            </div>
+        </div>
+    `;
+}
+
+// 显示统计数据
+function displayStatistics(stats) {
+    if (!stats.has_lineage) return;
+    
+    document.getElementById('lineage-stats').style.display = 'block';
+    document.getElementById('ancestor-count').textContent = stats.ancestor_count;
+    document.getElementById('descendant-count').textContent = stats.descendant_count;
+    document.getElementById('generation-span').textContent = stats.generation_span;
+    document.getElementById('total-related').textContent = stats.total_related_batches;
+    
+    // 更新全局统计面板
+    updateGlobalStats(stats);
+}
+
+// 更新全局统计面板
+function updateGlobalStats(stats) {
+    const globalStatsContainer = document.getElementById('global-stats');
+    globalStatsContainer.innerHTML = `
+        <div class="row g-2">
+            <div class="col-6">
+                <div class="text-center p-2 bg-light rounded">
+                    <div class="h6 mb-1 text-primary">${stats.ancestor_count}</div>
+                    <small class="text-muted">Ancestors</small>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="text-center p-2 bg-light rounded">
+                    <div class="h6 mb-1 text-success">${stats.descendant_count}</div>
+                    <small class="text-muted">Descendants</small>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="text-center p-2 bg-light rounded">
+                    <div class="h6 mb-1 text-info">${stats.generation_span}</div>
+                    <small class="text-muted">Generations</small>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="text-center p-2 bg-light rounded">
+                    <div class="h6 mb-1 text-warning">${stats.total_related_batches}</div>
+                    <small class="text-muted">Related</small>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+// 渲染树结构
+function renderTree(nodes, containerId, type) {
+    const container = document.getElementById(containerId);
+    container.innerHTML = '';
+    
+    if (!nodes || nodes.length === 0) {
+        container.innerHTML = '<p class="text-muted font-italic">No ' + type + 's found</p>';
+        return;
+    }
+    
+    nodes.forEach(node => {
+        const nodeElement = createNodeElement(node, type);
+        container.appendChild(nodeElement);
+    });
+}
+
+// 创建节点元素
+function createNodeElement(node, type) {
+    const div = document.createElement('div');
+    div.className = 'batch-node mb-3';
+    div.innerHTML = `
+        <div class="card border-${getNodeColor(type)}">
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <h6 class="card-title mb-2">
+                            <a href="#" onclick="selectBatch(${node.id}); return false;" class="text-decoration-none">
+                                ${node.name}
+                            </a>
+                            ${node.depth > 0 ? `<small class="text-muted">(Depth: ${node.depth})</small>` : ''}
+                        </h6>
+                        <p class="card-text small mb-2">
+                            <strong>Cell Line:</strong> ${node.cell_line}<br>
+                            <strong>Passage:</strong> ${node.passage_number || 'N/A'}<br>
+                            <strong>Date:</strong> ${node.date_frozen ? new Date(node.date_frozen).toLocaleDateString() : 'N/A'}
+                        </p>
+                        ${node.parental_cell_line ? `<small class="text-muted">Parental: ${node.parental_cell_line}</small>` : ''}
+                    </div>
+                    <span class="badge bg-${getNodeColor(type)}">ID: ${node.id}</span>
+                </div>
+                ${renderChildNodes(node, type)}
+            </div>
+        </div>
+    `;
+    
+    return div;
+}
+
+// 渲染子节点
+function renderChildNodes(node, type) {
+    const childrenKey = type === 'ancestor' ? 'parents' : 'children';
+    const children = node[childrenKey];
+    
+    if (!children || children.length === 0) {
+        return '';
+    }
+    
+    let html = `<div class="mt-3 ms-3 border-start border-2 border-${getNodeColor(type)} ps-3">`;
+    children.forEach(child => {
+        html += createNodeElement(child, type).outerHTML;
+    });
+    html += '</div>';
+    
+    return html;
+}
+
+// 获取节点颜色
+function getNodeColor(type) {
+    switch(type) {
+        case 'ancestor': return 'info';
+        case 'descendant': return 'success';
+        default: return 'secondary';
+    }
+}
+
+// 加载验证数据
+async function loadValidationData(batchId) {
+    try {
+        const response = await fetch(`/cell-storage/api/batch/${batchId}/lineage/validate`);
+        if (response.ok) {
+            const result = await response.json();
+            if (result.success) {
+                displayValidation(result.validation);
+            }
+        }
+    } catch (error) {
+        console.error('Error loading validation data:', error);
+    }
+}
+
+// 显示验证结果
+function displayValidation(validation) {
+    document.getElementById('lineage-validation').style.display = 'block';
+    
+    const container = document.getElementById('validation-results');
+    let html = '';
+    
+    if (validation.is_valid) {
+        html += '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>Lineage validation passed successfully</div>';
+    } else {
+        html += '<div class="alert alert-danger"><i class="bi bi-exclamation-triangle me-2"></i>Lineage validation failed</div>';
+    }
+    
+    if (validation.issues.length > 0) {
+        html += '<div class="alert alert-danger"><strong>Issues:</strong><ul class="mb-0">';
+        validation.issues.forEach(issue => {
+            html += `<li>${issue}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    if (validation.warnings.length > 0) {
+        html += '<div class="alert alert-warning"><strong>Warnings:</strong><ul class="mb-0">';
+        validation.warnings.forEach(warning => {
+            html += `<li>${warning}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    container.innerHTML = html;
+}
+
+// 工具函数
+function refreshAll() {
+    loadRecentBatches();
+    if (selectedBatchId) {
+        loadLineageData(selectedBatchId);
+    }
+}
+
+function refreshLineage() {
+    if (selectedBatchId) {
+        loadLineageData(selectedBatchId);
+    }
+}
+
+function expandAll() {
+    document.querySelectorAll('.batch-node .collapse').forEach(el => {
+        el.classList.add('show');
+    });
+}
+
+function collapseAll() {
+    document.querySelectorAll('.batch-node .collapse').forEach(el => {
+        el.classList.remove('show');
+    });
+}
+
+function exportLineage() {
+    if (!lineageData) {
+        alert('No lineage data to export');
+        return;
+    }
+    
+    const dataStr = JSON.stringify(lineageData, null, 2);
+    const dataBlob = new Blob([dataStr], {type: 'application/json'});
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `batch_${selectedBatchId}_lineage.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function showHelp() {
+    new bootstrap.Modal(document.getElementById('helpModal')).show();
+}
+
+function showError(message) {
+    document.getElementById('lineage-loading').style.display = 'none';
+    console.error(message);
+    
+    // Show error message
+    const container = document.getElementById('lineage-tree');
+    container.style.display = 'block';
+    container.innerHTML = `
+        <div class="alert alert-danger" role="alert">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            <strong>Error:</strong> ${message}
+        </div>
+    `;
+}
+
+function showSearchError(message) {
+    const resultsContainer = document.getElementById('search-results');
+    const listContainer = document.getElementById('search-list');
+    
+    listContainer.innerHTML = `
+        <div class="list-group-item text-danger">
+            <i class="bi bi-exclamation-triangle me-2"></i>
+            ${message}
+        </div>
+    `;
+    resultsContainer.style.display = 'block';
+    
+    // Auto-hide error message after 3 seconds
+    setTimeout(() => {
+        hideSearchResults();
+    }, 3000);
+}
+</script>
+
+<style>
+.batch-card {
+    transition: all 0.3s ease;
+}
+
+.batch-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+    border-color: var(--bs-primary) !important;
+}
+
+.batch-node {
+    transition: all 0.3s ease;
+}
+
+.batch-node:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1) !important;
+}
+
+.current-batch-section .card {
+    position: relative;
+    overflow: hidden;
+}
+
+.current-batch-section .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #fff, rgba(255,255,255,0.5), #fff);
+    animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+#ancestors-tree .card, #descendants-tree .card {
+    border-left-width: 4px !important;
+}
+
+.list-group-item:hover {
+    background-color: var(--bs-light);
+}
+
+#search-results {
+    position: relative;
+    z-index: 1000;
+}
+
+.nav-pills .nav-link {
+    border-radius: 0.375rem;
+}
+</style>
+{% endblock %}

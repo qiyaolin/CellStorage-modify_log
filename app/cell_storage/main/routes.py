@@ -561,6 +561,257 @@ def delete_box(box_id):
     flash(f'Box "{box_name}" and all its contents have been deleted successfully!', 'success')
     return redirect(url_for('cell_storage.locations_overview'))
 
+@bp.route('/cryovial/<int:vial_id>/update_status', methods=['GET', 'POST'])
+@login_required # Normal users can update status (declare usage)
+def update_cryovial_status(vial_id):
+    vial = CryoVial.query.get_or_404(vial_id)
+    form = VialUsageForm(obj=vial) # Pre-populate if form has 'status' or 'notes'
+
+    # If GET request, perhaps just show vial info and form.
+    # If POST, process the form.
+    if form.validate_on_submit():
+        old_status = vial.status
+        vial.status = form.new_status.data
+        if form.notes.data:  # Append usage notes to existing notes or set them
+            vial.notes = (vial.notes + "\n" if vial.notes else "") + f"Usage update ({datetime.utcnow().strftime('%Y-%m-%d')}): {form.notes.data}"
+        vial.last_updated = datetime.utcnow()
+        # Create readable audit log for status update
+        readable_details = create_audit_log(
+            user_id=current_user.id,
+            action='UPDATE_STATUS',
+            target_type='CryoVial',
+            target_id=vial.id,
+            vial_tag=vial.unique_vial_id_tag,
+            batch_id=vial.batch_id,
+            old_status=old_status,
+            new_status=vial.status,
+            notes=form.notes.data
+        )
+        log_audit(
+            current_user.id,
+            'UPDATE_STATUS',
+            target_type='CryoVial',
+            target_id=vial.id,
+            details=readable_details
+        )
+        db.session.commit()
+        flash(f'Status of vial "{vial.unique_vial_id_tag}" updated to {vial.status}.', 'success')
+        return redirect(url_for('cell_storage.cryovial_inventory')) # Or back to where they were (e.g., box view)
+
+    # For GET request, it's better to have a dedicated page to confirm this action.
+    # This simple example directly uses a form, but a confirmation step is good UX.
+    return render_template('main/update_vial_status_form.html', title='Update Vial Status',
+                           form=form, vial=vial,
+                           form_action=url_for('cell_storage.update_cryovial_status', vial_id=vial.id))
+
+# Add Edit/View Detail routes for CryoVials (perhaps admin only for edit, all for view)
+@bp.route('/cryovial/<int:vial_id>/edit', methods=['GET', 'POST'])
+@login_required # Or @admin_required if only admins can edit vial details
+def edit_cryovial(vial_id):
+    vial = CryoVial.query.get_or_404(vial_id)
+    # Permission check: e.g., only admin or the user who froze it can edit.
+    # if not current_user.is_admin and vial.frozen_by_user_id != current_user.id:
+    #     flash('You do not have permission to edit this vial.', 'danger')
+    #     return redirect(url_for('cell_storage.cryovial_inventory'))
+
+    form = CryoVialEditForm(obj=vial)
+    form.cell_line_id.choices = [(cl.id, cl.name) for cl in CellLine.query.order_by(CellLine.name).all()]
+    form.box_id.choices = [
+        (b.id, f"{b.drawer_info.tower_info.name} - {b.drawer_info.name} - {b.name} ({b.rows}x{b.columns})")
+        for b in Box.query.join(Drawer).join(Tower).order_by(Tower.name, Drawer.name, Box.name).all()
+    ]
+
+    # Ensure these fields are correctly populated on GET if obj doesn't do it perfectly for SelectFields after validation fail
+    if request.method == 'GET':
+        form.cell_line_id.data = vial.cell_line_id
+        form.box_id.data = vial.box_id
+        form.resistance.data = vial.resistance.split(',') if vial.resistance else []
+        form.unique_vial_id_tag.data = vial.unique_vial_id_tag
+        form.row_in_box.data = vial.row_in_box
+        form.col_in_box.data = vial.col_in_box
+        form.passage_number.data = vial.passage_number
+        form.date_frozen.data = vial.date_frozen
+        form.number_of_vials_at_creation.data = vial.number_of_vials_at_creation
+        form.volume_ml.data = vial.volume_ml
+        form.concentration.data = vial.concentration
+        form.fluorescence_tag.data = vial.fluorescence_tag
+        form.parental_cell_line.data = vial.parental_cell_line
+        form.status.data = vial.status
+        form.notes.data = vial.notes
+
+    if form.validate_on_submit():
+        # Basic check for position change and occupancy, more complex if vial moves
+        if (form.box_id.data != vial.box_id or \
+            form.row_in_box.data != vial.row_in_box or \
+            form.col_in_box.data != vial.col_in_box):
+            existing_vial_at_new_pos = CryoVial.query.filter(
+                CryoVial.id != vial.id,  # Exclude the current vial
+                CryoVial.box_id == form.box_id.data,
+                CryoVial.row_in_box == form.row_in_box.data,
+                CryoVial.col_in_box == form.col_in_box.data,
+                CryoVial.status == 'Available'
+            ).first()
+            if existing_vial_at_new_pos:
+                flash(f'Error: New position {form.row_in_box.data}-{form.col_in_box.data} in selected box is already occupied by vial {existing_vial_at_new_pos.unique_vial_id_tag}.', 'danger')
+                return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
+
+        selected_box = Box.query.get(form.box_id.data)
+        if not selected_box or not (1 <= form.row_in_box.data <= selected_box.rows and 1 <= form.col_in_box.data <= selected_box.columns):
+            flash(f'Error: Row/Column number is outside the dimensions of the selected box ({selected_box.rows}x{selected_box.columns}).', 'danger')
+            return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
+
+        vial.unique_vial_id_tag = form.unique_vial_id_tag.data
+        vial.cell_line_id = form.cell_line_id.data
+        vial.box_id = form.box_id.data
+        vial.row_in_box = form.row_in_box.data
+        vial.col_in_box = form.col_in_box.data
+        vial.passage_number = form.passage_number.data
+        vial.date_frozen = form.date_frozen.data
+        # frozen_by_user_id should generally not change, or only by admin
+        vial.number_of_vials_at_creation = form.number_of_vials_at_creation.data
+        vial.volume_ml = form.volume_ml.data
+        vial.concentration = form.concentration.data
+        vial.fluorescence_tag = form.fluorescence_tag.data
+        vial.resistance = ','.join(form.resistance.data) if form.resistance.data else None
+        vial.parental_cell_line = form.parental_cell_line.data
+        vial.status = form.status.data
+        vial.notes = form.notes.data
+        vial.last_updated = datetime.utcnow()
+
+        current_details_for_edit = {
+            'general_info': 'vial edited',
+            'vial_id': vial.id,  # Storing the single vial_id being edited
+            'batch_id': vial.batch_id  # Storing the associated batch_id
+            # You could add more specific changed fields here if desired
+            # e.g., 'changed_fields': {'status': vial.status, 'notes': vial.notes}
+        }
+        log_audit(
+            current_user.id,
+            'EDIT_CRYOVIAL',
+            target_type='CryoVial',
+            target_id=vial.id,
+            details=current_details_for_edit
+        )
+        db.session.commit()
+        flash(f'CryoVial "{vial.unique_vial_id_tag}" updated successfully!', 'success')
+        return redirect(get_smart_redirect_url('cell_storage.cryovial_inventory'))
+
+    return render_template('main/edit_cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
+
+
+@bp.route('/box/<int:box_id>/add/<int:row>/<int:col>', methods=['GET', 'POST'], endpoint='add_vial_at_position')
+@login_required
+@admin_required
+def add_vial_at_position(box_id, row, col):
+    box = Box.query.get_or_404(box_id)
+    if not (1 <= row <= box.rows and 1 <= col <= box.columns):
+        flash('Invalid position for this box.', 'danger')
+        return redirect(url_for('cell_storage.cryovial_inventory'))
+
+    existing = CryoVial.query.filter_by(
+        box_id=box.id,
+        row_in_box=row,
+        col_in_box=col,
+        status='Available'
+    ).first()
+    if existing:
+        flash('That position is already occupied.', 'danger')
+        return redirect(url_for('cell_storage.cryovial_inventory'))
+
+    form = ManualVialForm()
+    form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
+
+    if form.validate_on_submit():
+        if form.batch_id.data:
+            batch = VialBatch.query.get(form.batch_id.data)
+            if not batch:
+                flash('Batch ID not found.', 'danger')
+                return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('cell_storage.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
+        else:
+            batch = VialBatch(
+                id=get_next_batch_id(),
+                name=form.batch_name.data,
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(batch)
+            db.session.commit()
+
+        # Use vial counter for unique ID generation
+        # 使用正确的批次标签格式
+        base_tag = f"B{batch.id}"
+        count = batch.vials.count()
+        unique_tag = base_tag if count == 0 else f"{base_tag}-{count + 1}"
+
+        vial = CryoVial(
+            unique_vial_id_tag=unique_tag,
+            batch_id=batch.id,
+            cell_line_id=form.cell_line_id.data,
+            box_id=box.id,
+            row_in_box=row,
+            col_in_box=col,
+            passage_number=form.passage_number.data,
+            date_frozen=form.date_frozen.data,
+            frozen_by_user_id=current_user.id,
+            volume_ml=form.volume_ml.data,
+            concentration=form.concentration.data,
+            fluorescence_tag=form.fluorescence_tag.data,
+            resistance=','.join(form.resistance.data) if form.resistance.data else None,
+            parental_cell_line=form.parental_cell_line.data,
+            status='Available',
+            notes=form.notes.data,
+            date_created=datetime.utcnow(),
+        )
+        db.session.add(vial)
+        db.session.commit()
+        log_audit(current_user.id, 'CREATE_CRYOVIAL', target_type='CryoVial', target_id=vial.id, details=f'box {box.id} R{row}C{col}')
+        flash('Vial added.', 'success')
+        return redirect(url_for('cell_storage.cryovial_inventory'))
+
+    return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('cell_storage.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
+
+
+@bp.route('/cryovial/<int:vial_id>/delete')
+@login_required
+@admin_required
+def delete_cryovial(vial_id):
+    vial = CryoVial.query.get_or_404(vial_id)
+    db.session.delete(vial)
+    db.session.commit()
+    log_audit(current_user.id, 'DELETE_CRYOVIAL', target_type='CryoVial', target_id=vial_id)
+    flash('Vial deleted.', 'success')
+    return redirect(url_for('cell_storage.cryovial_inventory'))
+
+@bp.route('/admin/batch_counter', methods=['POST'])
+@login_required
+@admin_required
+def update_batch_counter():
+    value = request.form.get('batch_counter')
+    try:
+        new_val = int(value)
+        if new_val < 1:
+            raise ValueError
+        set_batch_counter(new_val)
+        flash('Batch counter updated.', 'success')
+    except (TypeError, ValueError):
+        flash('Invalid batch counter value.', 'danger')
+    return redirect(url_for('cell_storage.cryovial_inventory'))
+
+
+@bp.route('/admin/vial_counter', methods=['POST'])
+@login_required
+@admin_required
+def update_vial_counter():
+    value = request.form.get('vial_counter')
+    try:
+        new_val = int(value)
+        if new_val < 1:
+            raise ValueError
+        set_vial_counter(new_val)
+        flash('Vial counter updated.', 'success')
+    except (TypeError, ValueError):
+        flash('Invalid vial counter value.', 'danger')
+    return redirect(url_for('cell_storage.cryovial_inventory'))
+
 @bp.route('/inventory/pickup', methods=['GET', 'POST'])
 @login_required
 def pickup_selected_vials():

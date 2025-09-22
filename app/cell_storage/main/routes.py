@@ -561,6 +561,93 @@ def delete_box(box_id):
     flash(f'Box "{box_name}" and all its contents have been deleted successfully!', 'success')
     return redirect(url_for('cell_storage.locations_overview'))
 
+@bp.route('/inventory/pickup', methods=['GET', 'POST'])
+@login_required
+def pickup_selected_vials():
+    """Show selected vials and their locations for pick up."""
+    selected_ids = session.get('pickup_ids', [])
+    if not selected_ids:
+        flash('No vials selected for pick up.', 'info')
+        return redirect(url_for('cell_storage.cryovial_inventory'))
+
+    vials = CryoVial.query.filter(CryoVial.id.in_(selected_ids)).join(Box).join(Drawer).join(Tower).join(VialBatch).join(CellLine).all()
+
+    batches = {}
+    color_map = {}
+    color_index = 0
+    for v in vials:
+        b = batches.setdefault(v.batch_id, {
+            'batch': v.batch,
+            'cell_line': v.cell_line_info.name,
+            'date_frozen': v.date_frozen,
+            'vials': []
+        })
+        if v.date_frozen < b['date_frozen']:
+            b['date_frozen'] = v.date_frozen
+        b['vials'].append(v)
+
+        if v.batch.name not in color_map:
+            color_map[v.batch.name] = color_index % 7
+            color_index += 1
+
+    if request.method == 'POST':
+        picked_boxes = {}
+        picked_vials = []
+        used_ids = []
+        for bid, info in batches.items():
+            qty = int(request.form.get(f'qty_{bid}', 0))
+            to_use = info['vials'][:qty]
+            for vial in to_use:
+                vial.status = 'Used'
+                vial.last_updated = datetime.utcnow()
+                used_ids.append(vial.id)
+                picked_vials.append(vial)
+                box = vial.box_location
+                pb = picked_boxes.setdefault(
+                    box.id,
+                    {
+                        'box': box,
+                        'rows': box.rows,
+                        'columns': box.columns,
+                        'cells': {},
+                    },
+                )
+                pb['cells'][(vial.row_in_box, vial.col_in_box)] = vial
+        db.session.commit()
+        batch_ids = list({v.batch_id for v in picked_vials})
+        log_audit(
+            current_user.id,
+            'PICKUP_VIALS',
+            target_type='CryoVial',
+            details={'vial_ids': used_ids, 'batch_ids': batch_ids},
+        )
+        session.pop('pickup_ids', None)
+        
+        # 显示拾取结果页面，包含位置信息
+        return render_template('main/pickup_confirmation.html', 
+                             title='Pick Up Confirmation',
+                             picked_boxes=picked_boxes, 
+                             picked_vials=picked_vials,
+                             current_datetime=datetime.now())
+
+    return render_template('main/pickup_selected_vials.html', batches=batches)
+
+
+def find_available_slots_in_box(box, num_slots_needed):
+    """Return up to ``num_slots_needed`` empty slots in ``box``."""
+    occupied_slots = {
+        (v.row_in_box, v.col_in_box)
+        for v in CryoVial.query.filter_by(box_id=box.id, status='Available').all()
+    }
+    available_positions = []
+    for r in range(1, box.rows + 1):
+        for c in range(1, box.columns + 1):
+            if (r, c) not in occupied_slots:
+                available_positions.append({'row': r, 'col': c})
+            if len(available_positions) >= num_slots_needed:
+                return available_positions[:num_slots_needed]
+    return available_positions
+
 @bp.route('/cryovial/add', methods=['GET', 'POST'])
 @login_required
 def add_cryovial():

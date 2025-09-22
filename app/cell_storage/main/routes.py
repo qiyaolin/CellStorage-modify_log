@@ -561,6 +561,252 @@ def delete_box(box_id):
     flash(f'Box "{box_name}" and all its contents have been deleted successfully!', 'success')
     return redirect(url_for('cell_storage.locations_overview'))
 
+@bp.route('/cryovial/add', methods=['GET', 'POST'])
+@login_required
+def add_cryovial():
+    form = CryoVialForm()
+    form.cell_line_id.choices = [(cl.id, cl.name) for cl in CellLine.query.order_by(CellLine.name).all()]
+    
+    if request.method == 'GET':
+        # Pre-select cell line if provided in URL, for workflow improvement
+        cell_line_id = request.args.get('cell_line_id', type=int)
+        if cell_line_id:
+            form.cell_line_id.data = cell_line_id
+
+    if 'proposed_placements' in session and request.method == 'POST' and request.form.get('confirm_placement') == 'yes':
+        # Confirmation step for auto-placed vials
+        placements = session.pop('proposed_placements', [])
+        vial_common_data = session.pop('vial_common_data', {})
+
+        if not placements or not vial_common_data:
+            flash('Placement confirmation data lost. Please try again.', 'danger')
+            return redirect(url_for('cell_storage.add_cryovial'))
+
+        try:
+            batch_id = get_next_batch_id(auto_commit=False)
+            batch = VialBatch(
+                id=batch_id,
+                name=vial_common_data.get('batch_name'),
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(batch)
+            db.session.flush()  # 确保batch ID可用但不提交
+        except Exception as e:
+            current_app.logger.error(f'Error creating batch: {str(e)}', exc_info=True)
+            # If batch creation fails, clean up session and retry with a simple approach
+            db.session.rollback()
+            # Use simple max+1 approach as fallback
+            max_id = db.session.query(db.func.max(VialBatch.id)).scalar() or 0
+            batch = VialBatch(
+                id=max_id + 1,
+                name=vial_common_data.get('batch_name'),
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(batch)
+            db.session.flush()
+        created_vials_info = []
+        quantity_being_added = len(placements) # Get the actual number from placements
+
+        for i, p in enumerate(placements):
+            # Use vial counter for unique ID generation
+            # 使用正确的批次标签格式
+            base_tag = f"B{batch.id}"
+            unique_tag_suffix = f"-{i+1}" if quantity_being_added > 1 else ""
+            unique_tag = f"{base_tag}{unique_tag_suffix}"
+
+            existing_tag_vial = CryoVial.query.filter_by(unique_vial_id_tag=unique_tag).first()
+            if existing_tag_vial:
+                flash(f'Error: Generated vial tag "{unique_tag}" already exists. Please try again.', 'danger')
+                session.pop('proposed_placements', None)
+                session.pop('vial_common_data', None)
+                return redirect(url_for('cell_storage.add_cryovial'))
+
+            vial = CryoVial(
+                unique_vial_id_tag=unique_tag,
+                batch_id=batch.id,
+                cell_line_id=vial_common_data['cell_line_id'],
+                box_id=p['box_id'],
+                row_in_box=p['row'],
+                col_in_box=p['col'],
+                passage_number=vial_common_data['passage_number'],
+                date_frozen=datetime.strptime(vial_common_data['date_frozen_str'], '%Y-%m-%d').date(),
+                frozen_by_user_id=current_user.id,
+                volume_ml=vial_common_data['volume_ml'],
+                concentration=vial_common_data['concentration'],
+                fluorescence_tag=vial_common_data.get('fluorescence_tag'),
+                resistance=vial_common_data.get('resistance'),
+                parental_cell_line=vial_common_data.get('parental_cell_line'),
+                status='Available',
+                notes=vial_common_data['notes'],
+                date_created=datetime.utcnow()
+            )
+            db.session.add(vial)
+            created_vials_info.append(f"Vial {unique_tag} at Box ID {p['box_id']}, R{p['row']}C{p['col']}")
+
+        try:
+            db.session.flush() # Ensure vial IDs are available before commit
+            # Get vial IDs for the audit log - collect them directly from created vials
+            created_vials = db.session.query(CryoVial).filter_by(batch_id=batch.id).all()
+            vial_ids = [v.id for v in created_vials if v.id is not None]
+            
+            # Create human-readable audit log
+            readable_details = create_audit_log(
+                user_id=current_user.id,
+                action='CREATE_CRYOVIAL',
+                target_type='VialBatch',
+                target_id=batch.id,
+                vial_ids=vial_ids,
+                batch_id=batch.id,
+                count=len(placements),
+                batch_name=batch.name if batch.name else f"Batch #{batch.id}"
+            )
+            
+            log_audit(
+                current_user.id,
+                'CREATE_CRYOVIAL',
+                target_type='VialBatch',
+                target_id=batch.id,
+                details=readable_details
+            )
+            db.session.commit()
+            flash(
+                f"Batch #{batch.id} '{batch.name}' added with base ID {base_tag} and {len(placements)} vial(s): "
+                + "; ".join(created_vials_info),
+                'success'
+            )
+            return redirect(url_for('cell_storage.cryovial_inventory'))
+        except Exception as e:
+            db.session.rollback()
+            # Log the full error for debugging
+            current_app.logger.error(f'Error in vial placement confirmation: {str(e)}', exc_info=True)
+            flash(f'Error saving vial(s): {str(e)}. Please try again.', 'danger')
+            # Clear session data to prevent stuck state
+            session.pop('proposed_placements', None)
+            session.pop('vial_common_data', None)
+            return redirect(url_for('cell_storage.add_cryovial'))
+
+    if form.validate_on_submit():
+        quantity = form.quantity_to_add.data # This will be 1 or more
+
+        common_data_for_session = {
+            'batch_name': form.batch_name.data,
+            'cell_line_id': form.cell_line_id.data,
+            'passage_number': form.passage_number.data,
+            'date_frozen_str': form.date_frozen.data.strftime('%Y-%m-%d') if form.date_frozen.data else None,
+            'volume_ml': form.volume_ml.data,
+            'concentration': form.concentration.data,
+            'fluorescence_tag': form.fluorescence_tag.data,
+            'resistance': ','.join(form.resistance.data) if form.resistance.data else None,
+            'parental_cell_line': form.parental_cell_line.data,
+            'notes': form.notes.data
+        }
+
+        # Auto-allocation logic for ANY quantity (1 or more)
+        # Modified logic: First try to find a single box that can accommodate all vials
+        # Priority: boxes with smaller numeric identifiers (1-5) regardless of tower/drawer
+        allocated_positions = []
+        selected_boxes = []
+
+        # Create a custom sorting function to prioritize boxes with numbers 1-5
+        def box_priority_key(box):
+            # Extract numeric part from box name for sorting
+            import re
+            numbers = re.findall(r'\d+', box.name)
+            if numbers:
+                # Convert first number found to integer for sorting
+                first_num = int(numbers[0])
+                # Prioritize boxes 1-5, then others
+                if 1 <= first_num <= 5:
+                    return (0, first_num)  # High priority group, sorted by number
+                else:
+                    return (1, first_num)  # Low priority group, sorted by number
+            else:
+                # Boxes without numbers go to the end
+                return (2, box.name)
+
+        all_boxes = Box.query.join(Drawer).join(Tower).all()
+        # Sort boxes by priority: numbered 1-5 first, then others
+        all_boxes_sorted = sorted(all_boxes, key=box_priority_key)
+
+        # First attempt: try to find a single box that can accommodate all vials
+        for box_candidate in all_boxes_sorted:
+            slots = find_available_slots_in_box(box_candidate, quantity)
+            if len(slots) == quantity:  # Found a box that can fit all vials
+                selected_boxes.append(box_candidate)
+                for slot in slots:
+                    allocated_positions.append({
+                        'box_id': box_candidate.id,
+                        'box_name': box_candidate.name,
+                        'tower_name': box_candidate.drawer_info.tower_info.name,
+                        'drawer_name': box_candidate.drawer_info.name,
+                        'row': slot['row'],
+                        'col': slot['col']
+                    })
+                break  # Found a single box for all vials, stop here
+
+        # If no single box can accommodate all vials, fall back to multiple boxes
+        if len(allocated_positions) < quantity:
+            allocated_positions = []
+            selected_boxes = []
+            for box_candidate in all_boxes_sorted:
+                remaining = quantity - len(allocated_positions)
+                if remaining <= 0:
+                    break
+                slots = find_available_slots_in_box(box_candidate, remaining)
+                if slots:
+                    selected_boxes.append(box_candidate)
+                    for slot in slots:
+                        allocated_positions.append({
+                            'box_id': box_candidate.id,
+                            'box_name': box_candidate.name,
+                            'tower_name': box_candidate.drawer_info.tower_info.name,
+                            'drawer_name': box_candidate.drawer_info.name,
+                            'row': slot['row'],
+                            'col': slot['col']
+                        })
+
+        if len(allocated_positions) == quantity:
+            session['proposed_placements'] = allocated_positions
+            session['vial_common_data'] = common_data_for_session
+
+            boxes_details_for_map = []
+            for b in selected_boxes:
+                boxes_details_for_map.append({
+                    'id': b.id,
+                    'name': b.name,
+                    'tower_name': b.drawer_info.tower_info.name,
+                    'drawer_name': b.drawer_info.name,
+                    'rows': b.rows,
+                    'columns': b.columns,
+                    'occupied': [
+                        {'row': v.row_in_box, 'col': v.col_in_box, 'tag': v.batch_id}
+                        for v in CryoVial.query.filter_by(box_id=b.id, status='Available').all()
+                    ]
+                })
+            cell_line_name_for_confirm = CellLine.query.get(common_data_for_session['cell_line_id']).name
+
+            return render_template(
+                'main/confirm_multi_vial_placement.html',
+                title='Confirm Vial Placement',
+                placements=allocated_positions,
+                common_data=common_data_for_session,
+                cell_line_name_for_confirm=cell_line_name_for_confirm,
+                boxes_details_for_map=boxes_details_for_map,
+                quantity_to_add=quantity
+            )
+        else:
+            flash(
+                f'Could not find enough available slots for {quantity} vial(s).',
+                'danger'
+            )
+
+    if request.method == 'GET' or not form.is_submitted():
+        session.pop('proposed_placements', None)
+        session.pop('vial_common_data', None)
+
+    return render_template('main/cryovial_form.html', title='Add CryoVial(s)', form=form,
+                           form_action=url_for('cell_storage.add_cryovial'))
+
 @bp.route('/inventory', methods=['GET', 'POST'])
 @login_required
 def cryovial_inventory():
@@ -3846,3 +4092,5 @@ def handle_workflow_webhook():
             'success': False,
             'message': f'Failed to process webhook: {str(e)}'
         }), 500
+
+

@@ -31,6 +31,15 @@
 </div>
 {% endif %}
 
+<style>
+    .search-target-group .btn { min-width: 88px; }
+    .recent-searches .badge { font-size: 0.75rem; font-weight: 500; }
+    .match-badge { font-size: 0.75rem; font-weight: 600; margin-right: 0.25rem; }
+    .match-exact { background-color: #d1e7dd; color: #0f5132; }
+    .match-partial { background-color: #fff3cd; color: #664d03; }
+    .match-filter { background-color: #e2e3e5; color: #41464b; }
+</style>
+
 <!-- Nav tabs -->
 <ul class="nav nav-tabs" id="inventoryTab" role="tablist">
     <li class="nav-item" role="presentation">
@@ -46,12 +55,48 @@
     <div class="tab-pane fade show active" id="search" role="tabpanel" aria-labelledby="search-tab">
         <div class="card border-top-0 rounded-0 rounded-bottom">
             <div class="card-body">
-                <form method="get" action="{{ url_for('cell_storage.cryovial_inventory') }}" class="row g-3 align-items-center">
-                    <div class="row g-2">
+                <form method="get" action="{{ url_for('cell_storage.cryovial_inventory') }}" class="cryovial-search-form" id="cryovial-search-form">
+                    <div class="row g-2 mb-2">
+                      <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+                        <span class="text-muted small">Search target</span>
+                        <div class="btn-group btn-group-sm search-target-group" role="group" aria-label="Search target options">
+                          <input type="radio" class="btn-check" name="target" id="target-batch" value="batch" {% if search_target == 'batch' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="target-batch">Batch</label>
+                          <input type="radio" class="btn-check" name="target" id="target-vial" value="vial" {% if search_target == 'vial' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="target-vial">Vial</label>
+                          <input type="radio" class="btn-check" name="target" id="target-cell-line" value="cell_line" {% if search_target == 'cell_line' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="target-cell-line">Cell Line</label>
+                          <input type="radio" class="btn-check" name="target" id="target-tag" value="tag" {% if search_target == 'tag' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="target-tag">Tag</label>
+                        </div>
+                      </div>
+                      {% if recent_searches %}
+                      <div class="col-12">
+                        <div class="d-flex flex-wrap align-items-center gap-2 recent-searches">
+                          <span class="text-muted small">Recent:</span>
+                          {% for item in recent_searches %}
+                            <a class="badge bg-light text-primary border" href="{{ url_for('cell_storage.cryovial_inventory', q=item.q, target=item.target) }}">{{ item.target|capitalize }}: {{ item.q }}</a>
+                          {% endfor %}
+                        </div>
+                      </div>
+                      {% endif %}
+                    </div>
+                    <div class="row g-2 align-items-end">
                       <div class="col-md">
                         <div class="form-floating">
-                          <input type="text" class="form-control" id="q" name="q" placeholder="Search..." value="{{ search_q or '' }}">
-                          <label for="q">Vial/Batch/Cell Line/Tag...</label>
+                          <input type="text" class="form-control" id="q" name="q" placeholder="Keyword" value="{{ search_q or '' }}">
+                          <label for="q">Search keyword</label>
+                        </div>
+                      </div>
+                      <div class="col-md">
+                        <div class="form-floating">
+                          <select class="form-select" id="cell_line_id" name="cell_line_id">
+                            <option value="">Any Cell Line</option>
+                            {% for cl in all_cell_lines %}
+                              <option value="{{ cl.id }}" {% if search_cell_line_id == cl.id %}selected{% endif %}>{{ cl.name }}</option>
+                            {% endfor %}
+                          </select>
+                          <label for="cell_line_id">Cell Line</label>
                         </div>
                       </div>
                       <div class="col-md">
@@ -88,11 +133,32 @@
                         </div>
                       </div>
                       <div class="col-auto d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary me-2">Search</button>
-                        <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}" class="btn btn-primary">View All</a>
+                        <div class="d-flex gap-2">
+                          <button type="submit" class="btn btn-primary">Search</button>
+                          <a href="{{ url_for('cell_storage.cryovial_inventory') }}" class="btn btn-outline-secondary">Reset</a>
+                          <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}" class="btn btn-outline-primary">View All</a>
+                        </div>
                       </div>
                     </div>
                 </form>
+                <div id="search-loading" class="d-none align-items-center gap-2 mt-3">
+                  <div class="spinner-border text-primary" role="status"></div>
+                  <span class="text-muted small">Searching...</span>
+                </div>
+                {% if search_feedback %}
+                <div class="alert alert-info d-flex align-items-center gap-2 mt-3">
+                  <i class="bi bi-info-circle"></i>
+                  <span>{{ search_feedback }}</span>
+                </div>
+                {% endif %}
+                {% if search_suggestion %}
+                <div class="alert alert-warning d-flex align-items-center gap-2 mt-2">
+                  <i class="bi bi-lightbulb"></i>
+                  <span>{{ search_suggestion }}</span>
+                </div>
+                {% endif %}
+
+
             </div>
         </div>
 
@@ -110,9 +176,15 @@
                     <form method="post" class="mb-3">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <input type="hidden" name="q" value="{{ search_q }}">
+                        <input type="hidden" name="target" value="{{ search_target }}">
                         <input type="hidden" name="creator" value="{{ search_creator }}">
+                        <input type="hidden" name="cell_line_id" value="{{ search_cell_line_id }}">
                         <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
                         <input type="hidden" name="resistance" value="{{ search_resistance }}">
+                        <input type="hidden" name="status" value="{{ search_status }}">
+                        <input type="hidden" name="max_passage" value="{{ max_passage }}">
+                        <input type="hidden" name="date_from" value="{{ date_from }}">
+                        <input type="hidden" name="view_all" value="{{ 'true' if view_all else '' }}">
                         <div class="search-results-table-container">
                             <table class="table table-striped table-hover table-sm inventory-table">
                                 <thead>
@@ -121,6 +193,7 @@
                                     <th>Batch ID</th>
                                     <th>Batch Name</th>
                                     <th>Cell Line</th>
+                                    <th class="d-none-mobile">Match</th>
                                     <th class="d-none-mobile">Passage #</th>
                                     <th class="d-none-mobile">Date Frozen</th>
                                     <th>Available</th>
@@ -140,6 +213,7 @@
                                       <td>{{ res.batch.id }}</td>
                                       <td><span class="text-truncate-mobile" title="{{ res.batch.name }}">{{ res.batch.name }}</span></td>
                                       <td><span class="text-truncate-mobile" title="{{ res.cell_line }}">{{ res.cell_line }}</span></td>
+                                      <td class="d-none-mobile">{% if res.match_labels %}{% for label in res.match_labels %}<span class="badge match-badge match-{{ res.match_quality }}">{{ label }}</span>{% endfor %}{% else %}<span class="text-muted small">N/A</span>{% endif %}</td>
                                       <td class="d-none-mobile">{{ res.passage_number }}</td>
                                       <td class="d-none-mobile">{{ res.date_frozen }}</td>
                                       <td>{{ res.available_quantity }}</td>
@@ -153,8 +227,8 @@
                                     {% endfor %}
                                   {% else %}
                                     <tr>
-                                      <td colspan="13" class="text-center text-muted p-4">
-                                        {% if search_q or search_creator or search_fluorescence or search_resistance %}
+                                      <td colspan="14" class="text-center text-muted p-4">
+                                        {% if search_q or search_creator or search_fluorescence or search_resistance or search_cell_line_id or search_status or max_passage or date_from %}
                                           No matching vials found. Try adjusting your search criteria or <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}">view all vials</a>.
                                         {% else %}
                                           Click "Search CryoVials" to find specific vials or <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}">view all vials</a>.
@@ -180,9 +254,15 @@
                     <form method="post" class="mb-3">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <input type="hidden" name="q" value="{{ search_q }}">
+                        <input type="hidden" name="target" value="{{ search_target }}">
                         <input type="hidden" name="creator" value="{{ search_creator }}">
+                        <input type="hidden" name="cell_line_id" value="{{ search_cell_line_id }}">
                         <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
                         <input type="hidden" name="resistance" value="{{ search_resistance }}">
+                        <input type="hidden" name="status" value="{{ search_status }}">
+                        <input type="hidden" name="max_passage" value="{{ max_passage }}">
+                        <input type="hidden" name="date_from" value="{{ date_from }}">
+                        <input type="hidden" name="view_all" value="{{ 'true' if view_all else '' }}">
                         <div class="table-responsive selected-items-table-container">
                             <table class="table table-striped table-hover table-sm">
                                 <thead>
@@ -386,6 +466,14 @@
 {% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  var searchForm = document.getElementById('cryovial-search-form');
+  var searchLoading = document.getElementById('search-loading');
+  if (searchForm && searchLoading) {
+    searchForm.addEventListener('submit', function () {
+      searchLoading.classList.remove('d-none');
+      searchLoading.classList.add('d-flex');
+    });
+  }
   var vialDetailsModal = document.getElementById('vialDetailsModal');
   vialDetailsModal.addEventListener('show.bs.modal', function (event) {
     var button = event.relatedTarget;

@@ -7,12 +7,12 @@ from flask_login import current_user
 from sqlalchemy import text
 
 class BaseModelView(ModelView):
-    """Base ModelView with consistent access control"""
+    """Base ModelView with consistent access control and GAE compatibility"""
     page_size = 100  # 设置每页显示100条记录
-    
+
     def is_accessible(self):
         return current_user.is_authenticated and current_user.is_admin
-    
+
     def inaccessible_callback(self, name, **kwargs):
         if not current_user.is_authenticated:
             flash('Please login to access admin panel', 'warning')
@@ -20,6 +20,46 @@ class BaseModelView(ModelView):
         else:
             flash('Admin access required', 'error')
             return redirect(url_for('cell_storage.index'))
+
+    def render(self, template, **kwargs):
+        """Enhanced render method with error handling for GAE"""
+        try:
+            return super().render(template, **kwargs)
+        except Exception as e:
+            from flask import current_app
+            current_app.logger.error(f"Template rendering error in admin: {str(e)}")
+            # 回退到简单错误页面
+            return self._render_error_page(str(e))
+
+    def _render_error_page(self, error_msg):
+        """Render a simple error page when template rendering fails"""
+        from flask import render_template_string
+        error_template = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Admin Error</title>
+            <style>
+                body { font-family: Arial, sans-serif; margin: 40px; }
+                .error { background: #f8d7da; color: #721c24; padding: 20px; border-radius: 5px; }
+                .btn { background: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; }
+            </style>
+        </head>
+        <body>
+            <h1>Cell Storage Admin - Temporary Error</h1>
+            <div class="error">
+                <h3>Template Rendering Error</h3>
+                <p>There was an issue rendering the admin interface. This is likely due to template compatibility.</p>
+                <p><strong>Error:</strong> {{ error }}</p>
+            </div>
+            <p>
+                <a href="{{ url_for('cell_storage.index') }}" class="btn">Return to Main Application</a>
+                <a href="{{ url_for('admin.index') }}" class="btn">Try Admin Again</a>
+            </p>
+        </body>
+        </html>
+        """
+        return render_template_string(error_template, error=error_msg)
 
 class CustomAdminIndexView(AdminIndexView):
     def is_accessible(self):
@@ -43,27 +83,109 @@ class CustomAdminIndexView(AdminIndexView):
     
     @expose('/')
     def index(self):
-        from app.cell_storage.models import User, CellLine, Tower, Drawer, Box, VialBatch, CryoVial, PrintJob, PrintServer
-        
-        # Calculate stats
-        stats = {
-            'users': User.query.count(),
-            'vials': CryoVial.query.count(), 
-            'available_vials': CryoVial.query.filter_by(status='Available').count(),
-            'batches': VialBatch.query.count(),
-            'cell_lines': CellLine.query.count(),
-            'towers': Tower.query.count(),
-            'drawers': Drawer.query.count(),
-            'boxes': Box.query.count(),
-            # 打印系统统计
-            'print_jobs_total': PrintJob.query.count(),
-            'print_jobs_pending': PrintJob.query.filter_by(status='pending').count(),
-            'print_jobs_failed': PrintJob.query.filter_by(status='failed').count(),
-            'print_servers_total': PrintServer.query.count(),
-            'print_servers_online': PrintServer.query.filter_by(status='online').count()
-        }
-        
-        return self.render('admin/index.html', stats=stats)
+        try:
+            from app.cell_storage.models import User, CellLine, Tower, Drawer, Box, VialBatch, CryoVial, PrintJob, PrintServer
+
+            # Calculate stats with error handling
+            stats = {}
+            try:
+                stats.update({
+                    'users': User.query.count(),
+                    'vials': CryoVial.query.count(),
+                    'available_vials': CryoVial.query.filter_by(status='Available').count(),
+                    'batches': VialBatch.query.count(),
+                    'cell_lines': CellLine.query.count(),
+                    'towers': Tower.query.count(),
+                    'drawers': Drawer.query.count(),
+                    'boxes': Box.query.count(),
+                })
+            except Exception as e:
+                from flask import current_app
+                current_app.logger.warning(f"Error calculating basic stats: {str(e)}")
+                stats.update({
+                    'users': 'N/A', 'vials': 'N/A', 'available_vials': 'N/A',
+                    'batches': 'N/A', 'cell_lines': 'N/A', 'towers': 'N/A',
+                    'drawers': 'N/A', 'boxes': 'N/A'
+                })
+
+            # 打印系统统计 - 独立错误处理
+            try:
+                stats.update({
+                    'print_jobs_total': PrintJob.query.count(),
+                    'print_jobs_pending': PrintJob.query.filter_by(status='pending').count(),
+                    'print_jobs_failed': PrintJob.query.filter_by(status='failed').count(),
+                    'print_servers_total': PrintServer.query.count(),
+                    'print_servers_online': PrintServer.query.filter_by(status='online').count()
+                })
+            except Exception as e:
+                from flask import current_app
+                current_app.logger.warning(f"Error calculating print stats: {str(e)}")
+                stats.update({
+                    'print_jobs_total': 'N/A', 'print_jobs_pending': 'N/A',
+                    'print_jobs_failed': 'N/A', 'print_servers_total': 'N/A',
+                    'print_servers_online': 'N/A'
+                })
+
+            return self.render('admin/index.html', stats=stats)
+
+        except Exception as e:
+            from flask import current_app
+            current_app.logger.error(f"Critical error in admin index: {str(e)}")
+            # 回退到基本的管理页面
+            return self._render_fallback_index()
+
+    def _render_fallback_index(self):
+        """Fallback admin index when main template fails"""
+        from flask import render_template_string
+        fallback_template = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Cell Storage Admin</title>
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.0/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+        </head>
+        <body>
+            <div class="container-fluid">
+                <div class="jumbotron">
+                    <h1 class="display-4"><i class="fas fa-database"></i> Cell Storage Admin</h1>
+                    <p class="lead">Administrative interface for Cell Storage Management System</p>
+                    <hr class="my-4">
+                    <p>The admin interface is temporarily using a simplified view. Core functionality is available through the navigation menu.</p>
+                    <a class="btn btn-primary btn-lg" href="{{ url_for('cell_storage.index') }}" role="button">
+                        <i class="fas fa-arrow-left"></i> Return to Main Application
+                    </a>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3><i class="fas fa-cogs"></i> Admin Functions</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="alert alert-info">
+                                    <strong>Available Admin Features:</strong>
+                                    <ul class="mb-0">
+                                        <li>User Management</li>
+                                        <li>Cell Line Management</li>
+                                        <li>Storage System Management (Towers, Drawers, Boxes)</li>
+                                        <li>Vial and Batch Management</li>
+                                        <li>Print System Management</li>
+                                        <li>Inventory Management</li>
+                                        <li>System Configuration</li>
+                                    </ul>
+                                </div>
+                                <p>Use the navigation menu to access specific admin sections.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return render_template_string(fallback_template)
 
 class UserAdmin(BaseModelView):
     column_list = ['username', 'role', 'password_plain']
@@ -418,13 +540,15 @@ class AppConfigAdmin(BaseModelView):
 def init_admin(app):
     """初始化Flask-Admin"""
     from app import db
-    
-    # 创建Admin实例
+
+    # 创建Admin实例 - 移除template_mode以避免GAE兼容性问题
     admin = Admin(
-        app, 
+        app,
         name='Cell Storage Admin',
-        template_mode='bootstrap3',
-        index_view=CustomAdminIndexView(name='首页', url='/flask-admin')
+        # 不使用template_mode，让Flask-Admin使用默认模板
+        index_view=CustomAdminIndexView(name='首页', url='/flask-admin'),
+        base_template='admin/master.html',  # 使用我们创建的自定义基础模板
+        url='/flask-admin'
     )
     
     # 导入模型

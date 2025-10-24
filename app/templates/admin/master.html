@@ -1,0 +1,163 @@
+{% extends 'admin/base.html' %}
+
+{% block page_body %}
+<div class="container-fluid">
+    <style>
+        .admin-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px 0;
+            margin-bottom: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .admin-header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 300;
+        }
+
+        .admin-header p {
+            margin: 10px 0 0 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            color: #6c757d;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .card-header {
+            background: #f8f9fa;
+            border-bottom: 1px solid #dee2e6;
+            border-radius: 8px 8px 0 0 !important;
+        }
+
+        .card-header h3 {
+            margin: 0;
+            color: #495057;
+            font-weight: 500;
+        }
+
+        .alert-info {
+            background-color: #e3f2fd;
+            border-color: #2196f3;
+            color: #0d47a1;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            border: none;
+            border-radius: 6px;
+            padding: 10px 20px;
+            font-weight: 500;
+            transition: transform 0.2s;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-1px);
+            background: linear-gradient(135deg, #218838, #1cc88a);
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .admin-header h1 {
+                font-size: 2rem;
+            }
+
+            .stat-number {
+                font-size: 2rem;
+            }
+
+            .stat-card {
+                padding: 20px;
+            }
+        }
+    </style>
+
+    {% block body %}{% endblock %}
+</div>
+{% endblock %}
+
+{% block tail %}
+{{ super() }}
+<script>
+// Enhanced admin interface functionality
+document.addEventListener('DOMContentLoaded', function() {
+    // Add loading states for buttons
+    const buttons = document.querySelectorAll('.btn');
+    buttons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            if (this.type === 'submit' && !this.classList.contains('btn-danger')) {
+                this.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+                this.disabled = true;
+            }
+        });
+    });
+
+    // Auto-hide flash messages after 5 seconds
+    const alerts = document.querySelectorAll('.alert:not(.alert-info)');
+    alerts.forEach(alert => {
+        if (!alert.querySelector('.close')) {
+            setTimeout(() => {
+                alert.style.opacity = '0';
+                setTimeout(() => alert.remove(), 300);
+            }, 5000);
+        }
+    });
+
+    // Enhanced table interactions
+    const tables = document.querySelectorAll('table.table');
+    tables.forEach(table => {
+        // Add hover effects
+        const rows = table.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            row.style.transition = 'background-color 0.2s';
+        });
+    });
+
+    // Confirm delete actions
+    const deleteButtons = document.querySelectorAll('a[href*="delete"], button[name*="delete"], .btn-danger');
+    deleteButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            if (!confirm('Are you sure you want to delete this item? This action cannot be undone.')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

@@ -49,7 +49,7 @@ import subprocess
 import tempfile
 from urllib.parse import urlparse
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import func, or_, cast, String
+from sqlalchemy import case, func, or_, cast, String
 from datetime import datetime
 import json
 import boto3
@@ -106,6 +106,83 @@ def validate_csrf_token(token):
         return False
 
 
+ACTIVITY_ICON_MAP = {
+    'CREATE_CRYOVIAL': ('bi-plus-circle', 'text-success', 'Created cryovials'),
+    'DELETE': ('bi-trash', 'text-danger', 'Deleted record'),
+    'BATCH_DELETE': ('bi-trash-fill', 'text-danger', 'Deleted batch'),
+    'UPDATE': ('bi-pencil', 'text-warning', 'Updated record'),
+    'UPDATE_STATUS': ('bi-pencil', 'text-warning', 'Updated status'),
+    'LOGIN': ('bi-box-arrow-in-right', 'text-primary', 'Signed in'),
+    'PICKUP_VIALS': ('bi-box-arrow-up', 'text-info', 'Retrieved cryovials'),
+    'CREATE_CELL_LINE': ('bi-diagram-3', 'text-success', 'Created cell line'),
+    'EXPORT': ('bi-download', 'text-info', 'Exported data'),
+}
+
+
+def _resolve_activity_display(action):
+    icon, color, label = ACTIVITY_ICON_MAP.get(
+        action,
+        ('bi-circle', 'text-secondary', action.replace('_', ' ').title())
+    )
+    return icon, color, label
+
+
+def _humanize_activity_time(timestamp):
+    if not timestamp:
+        return ''
+    try:
+        delta = datetime.utcnow() - timestamp
+    except TypeError:
+        return timestamp.strftime('%Y-%m-%d %H:%M') if hasattr(timestamp, 'strftime') else ''
+
+    seconds = int(delta.total_seconds()) if delta else 0
+    if seconds < 0:
+        seconds = 0
+
+    if seconds < 60:
+        return 'Just now'
+    if seconds < 3600:
+        minutes = seconds // 60
+        return f'{minutes} min ago'
+    if seconds < 86400:
+        hours = seconds // 3600
+        return f'{hours} hr ago'
+    if seconds < 604800:
+        days = seconds // 86400
+        return f'{days} d ago'
+    return timestamp.strftime('%Y-%m-%d') if hasattr(timestamp, 'strftime') else ''
+
+
+RECENT_ACTIVITY_ALLOWED_ACTIONS = {
+    'CREATE',
+    'CREATE_CRYOVIAL',
+    'CREATE_CRYOVIALS',
+    'CREATE_TOWER',
+    'UPDATE',
+    'DELETE',
+    'DELETE_CRYOVIAL',
+    'DELETE_TOWER',
+    'DELETE_BOX',
+    'DELETE_DRAWER',
+    'DELETE_BATCH',
+    'BATCH_DELETE',
+    'BATCH_EDIT_VIALS',
+    'BATCH_EXPORT_VIALS',
+    'EDIT_CRYOVIAL',
+    'EDIT_CELL_LINE',
+    'EDIT_BATCH_INFO',
+    'UPDATE_STATUS',
+    'UPDATE_VIAL_STATUS',
+    'PICKUP_VIALS',
+    'RESOLVE_ALERT',
+    'DISMISS_ALERT',
+    'BACKUP_EXPORT',
+    'BACKUP_IMPORT',
+    'CLEAR_ALL',
+    'EXPORT',
+    'LOGIN',
+}
+
 @bp.route('/') # Defines the root URL for the main blueprint
 @bp.route('/index') # Also accessible via /index
 @login_required # Ensure only logged-in users can access the main dashboard
@@ -131,14 +208,48 @@ def index():
     
     # 获取最近活动记录
     from app.cell_storage.models import AuditLog
-    recent_activities_raw = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(5).all()
-    
-    # Format the audit details for better readability
+    recent_activity_query = (
+        AuditLog.query.options(joinedload(AuditLog.user_performing_action))
+        .filter(AuditLog.action.in_(tuple(RECENT_ACTIVITY_ALLOWED_ACTIONS)))
+        .order_by(AuditLog.timestamp.desc())
+    )
+
+    # Fetch a buffer of recent entries so we can skip malformed ones without returning empty.
+    recent_activities_raw = recent_activity_query.limit(10).all()
+
     recent_activities = []
     for activity in recent_activities_raw:
-        # Add formatted details to each activity
-        activity.formatted_details = format_audit_details(activity.action, activity.details or "", db_session=db.session)
-        recent_activities.append(activity)
+        icon_class, icon_color, action_label = _resolve_activity_display(activity.action)
+        raw_details = activity.details or ''
+        if not isinstance(raw_details, str):
+            raw_details = str(raw_details)
+        formatted_details = format_audit_details(
+            activity.action,
+            raw_details,
+            db_session=db.session
+        )
+        description = formatted_details.strip() if isinstance(formatted_details, str) else ''
+        if not description:
+            description = raw_details.strip() or action_label
+        target_label = ''
+        if activity.target_type:
+            target_label = activity.target_type.replace('_', ' ').title()
+        recent_activities.append({
+            'id': activity.id,
+            'user_name': activity.user_performing_action.username if activity.user_performing_action else 'System',
+            'action': activity.action,
+            'action_label': action_label,
+            'description': description,
+            'icon_class': icon_class,
+            'icon_color': icon_color,
+            'time_full': activity.timestamp.strftime('%Y-%m-%d %H:%M') if activity.timestamp else '',
+            'time_relative': _humanize_activity_time(activity.timestamp),
+            'target_label': target_label,
+        })
+
+        if len(recent_activities) >= 5:
+            break
+
     
     return render_template(
         'main/index.html', 
@@ -1169,6 +1280,9 @@ def cryovial_inventory():
     search_cell_line_raw = _clean(data_source.get('cell_line_id'))
     search_cell_line_id = int(search_cell_line_raw) if search_cell_line_raw.isdigit() else None
     view_all_flag = (data_source.get('view_all') or '').lower() == 'true'
+    match_mode = (data_source.get('match_mode') or 'partial').lower()
+    if match_mode not in {'exact', 'partial'}:
+        match_mode = 'partial'
 
     search_fields_used = any([
         search_q,
@@ -1215,6 +1329,7 @@ def cryovial_inventory():
                 'status': search_status,
                 'max_passage': max_passage,
                 'date_from': date_from,
+                'match_mode': match_mode,
             }
             if search_cell_line_id:
                 redirect_params['cell_line_id'] = search_cell_line_id
@@ -1249,6 +1364,7 @@ def cryovial_inventory():
                 'status': search_status,
                 'max_passage': max_passage,
                 'date_from': date_from,
+                'match_mode': match_mode,
             }
             if search_cell_line_id:
                 redirect_params['cell_line_id'] = search_cell_line_id
@@ -1362,79 +1478,97 @@ def cryovial_inventory():
         vials = base_query.order_by(VialBatch.id, CryoVial.unique_vial_id_tag).all()
         match_quality = 'filter'
     elif search_q or search_fields_used:
-        normalized_q = search_q.lower()
+        normalized_q = search_q.lower() if search_q else ''
         if search_target == 'batch':
-            exact_filters = []
             if search_q:
-                exact_filters.append(func.lower(VialBatch.name) == normalized_q)
-                if search_q.isdigit():
-                    exact_filters.append(VialBatch.id == int(search_q))
-            exact_match_results = base_query.filter(or_(*exact_filters)).all() if exact_filters else []
-            if exact_match_results:
-                vials = exact_match_results
-                match_quality = 'exact'
-                search_feedback = f"Exact batch match for \"{search_q}\"."
-            else:
-                like_pattern = f"%{search_q}%" if search_q else '%'
-                partial_filters = [VialBatch.name.ilike(like_pattern)]
-                if search_q and search_q.isdigit():
-                    partial_filters.append(cast(VialBatch.id, String).ilike(like_pattern))
-                vials = base_query.filter(or_(*partial_filters)).all()
-                match_quality = 'partial' if search_q else 'filter'
-                if search_q:
+                if match_mode == 'exact':
+                    exact_filters = [func.lower(VialBatch.name) == normalized_q]
+                    if search_q.isdigit():
+                        exact_filters.append(VialBatch.id == int(search_q))
+                    vials = base_query.filter(or_(*exact_filters)).all() if exact_filters else []
+                    match_quality = 'exact'
                     if vials:
-                        search_feedback = f"No exact batch match for \"{search_q}\". Showing partial results."
+                        search_feedback = f"Exact batch match for '{search_q}'."
+                    else:
+                        search_feedback = f"No exact batch match for '{search_q}'."
+                        search_suggestion = 'Try switching match mode to Partial to broaden the search.'
+                else:
+                    like_pattern = f"%{search_q}%"
+                    partial_filters = [VialBatch.name.ilike(like_pattern)]
+                    if search_q.isdigit():
+                        partial_filters.append(cast(VialBatch.id, String).ilike(like_pattern))
+                    vials = base_query.filter(or_(*partial_filters)).all()
+                    match_quality = 'partial'
+                    if vials:
+                        search_feedback = f"Showing partial batch matches for '{search_q}'."
                         search_suggestion = 'Found similarly named cell lines. Try switching search target to "Cell Line" if that was your intent.'
                     else:
-                        search_feedback = f"No batch found for \"{search_q}\"."
-        elif search_target == 'vial':
-            exact_match_results = []
-            if search_q:
-                exact_match_results = base_query.filter(func.lower(CryoVial.unique_vial_id_tag) == normalized_q).all()
-            if exact_match_results:
-                vials = exact_match_results
-                match_quality = 'exact'
-                search_feedback = f"Found vial ID \"{search_q}\"."
+                        search_feedback = f"No batch found for '{search_q}'."
             else:
-                like_pattern = f"%{search_q}%" if search_q else '%'
-                vials = base_query.filter(CryoVial.unique_vial_id_tag.ilike(like_pattern)).all()
-                match_quality = 'partial' if search_q else 'filter'
-                if search_q and not vials:
-                    search_feedback = f"No vial found for \"{search_q}\"."
+                vials = base_query.all()
+                match_quality = 'filter'
+        elif search_target == 'vial':
+            if search_q:
+                if match_mode == 'exact':
+                    vials = base_query.filter(func.lower(CryoVial.unique_vial_id_tag) == normalized_q).all()
+                    match_quality = 'exact'
+                    if vials:
+                        search_feedback = f"Found vial ID '{search_q}'."
+                    else:
+                        search_feedback = f"No exact vial ID match for '{search_q}'."
+                        search_suggestion = 'Try Partial mode to search within vial IDs.'
+                else:
+                    like_pattern = f"%{search_q}%"
+                    vials = base_query.filter(CryoVial.unique_vial_id_tag.ilike(like_pattern)).all()
+                    match_quality = 'partial'
+                    if vials:
+                        search_feedback = f"Showing vial IDs containing '{search_q}'."
+                    else:
+                        search_feedback = f"No vial found for '{search_q}'."
+            else:
+                vials = base_query.all()
+                match_quality = 'filter'
         elif search_target == 'cell_line':
             if search_cell_line_id:
                 vials = base_query.all()
                 match_quality = 'exact'
                 search_feedback = 'Filtered by selected cell line.'
             elif search_q:
-                exact_match_results = base_query.filter(func.lower(CellLine.name) == normalized_q).all()
-                if exact_match_results:
-                    vials = exact_match_results
+                if match_mode == 'exact':
+                    vials = base_query.filter(func.lower(CellLine.name) == normalized_q).all()
                     match_quality = 'exact'
-                    search_feedback = f"Exact cell line match for \"{search_q}\"."
+                    if vials:
+                        search_feedback = f"Exact cell line match for '{search_q}'."
+                    else:
+                        search_feedback = f"No exact cell line match for '{search_q}'."
+                        search_suggestion = 'Switch to Partial to include similar names.'
                 else:
                     like_pattern = f"%{search_q}%"
                     vials = base_query.filter(CellLine.name.ilike(like_pattern)).all()
                     match_quality = 'partial'
                     if vials:
-                        search_feedback = f"No exact cell line match for \"{search_q}\". Showing partial results."
+                        search_feedback = f"Showing cell lines containing '{search_q}'."
                     else:
-                        search_feedback = f"No cell line found for \"{search_q}\"."
+                        search_feedback = f"No cell line found for '{search_q}'."
             else:
                 vials = base_query.all()
                 match_quality = 'filter'
         elif search_target == 'tag':
             if search_q:
-                exact_match_results = base_query.filter(
-                    or_(
-                        func.lower(CryoVial.fluorescence_tag) == normalized_q,
-                        func.lower(CryoVial.resistance) == normalized_q,
-                    )
-                ).all()
-                if exact_match_results:
+                if match_mode == 'exact':
+                    exact_match_results = base_query.filter(
+                        or_(
+                            func.lower(CryoVial.fluorescence_tag) == normalized_q,
+                            func.lower(CryoVial.resistance) == normalized_q,
+                        )
+                    ).all()
                     vials = exact_match_results
                     match_quality = 'exact'
-                    search_feedback = f"Exact tag match for \"{search_q}\"."
+                    if vials:
+                        search_feedback = f"Exact tag match for '{search_q}'."
+                    else:
+                        search_feedback = f"No exact tag match for '{search_q}'."
+                        search_suggestion = 'Try Partial mode to search within tag details.'
                 else:
                     like_pattern = f"%{search_q}%"
                     vials = base_query.filter(
@@ -1447,14 +1581,12 @@ def cryovial_inventory():
                     ).all()
                     match_quality = 'partial'
                     if vials:
-                        search_feedback = f"No exact tag match for \"{search_q}\". Showing partial results."
+                        search_feedback = f"Showing tag results containing '{search_q}'."
                     else:
-                        search_feedback = f"No tags found for \"{search_q}\"."
+                        search_feedback = f"No tags found for '{search_q}'."
             else:
                 vials = base_query.all()
                 match_quality = 'filter'
-    else:
-        vials = []
 
     grouped = {}
     for vial in vials:
@@ -1500,10 +1632,14 @@ def cryovial_inventory():
         search_results = []
 
     if request.method == 'GET' and search_q:
-        recent_entry = {'q': search_q, 'target': search_target}
-        recent_searches = [item for item in recent_searches if item != recent_entry]
-        recent_searches.insert(0, recent_entry)
-        session['recent_cryovial_searches'] = recent_searches[:5]
+        recent_entry = {'q': search_q, 'target': search_target, 'match_mode': match_mode}
+        normalized_history = []
+        for item in recent_searches:
+            item_mode = item.get('match_mode', 'partial')
+            if not (item.get('q') == search_q and item.get('target') == search_target and item_mode == match_mode):
+                normalized_history.append(item)
+        normalized_history.insert(0, recent_entry)
+        session['recent_cryovial_searches'] = normalized_history[:5]
     recent_searches = session.get('recent_cryovial_searches', [])
 
     selected_batches = None
@@ -1566,6 +1702,7 @@ def cryovial_inventory():
         recent_searches=recent_searches,
         search_feedback=search_feedback,
         search_suggestion=search_suggestion,
+        match_mode=match_mode,
     )
 
 # --- Moved Inventory Summary Route ---
@@ -2278,8 +2415,55 @@ def delete_vial(vial_id):
         return jsonify({"success": False, "error": "Unable to delete vial. Please try again later."}), 500
 
 
+@bp.route('/admin/batch_edit_vials', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def batch_edit_vials():
+    """批量编辑冷冻管状态和备注"""
+    form = BatchEditVialsForm()
+    if form.validate_on_submit():
+        tags_input = form.vial_tags.data
+        tags = [t.strip() for t in tags_input.replace('\n', ',').split(',') if t.strip()]
+        if not tags:
+            flash('No valid vial tags provided.', 'danger')
+            return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
+
+        vials = CryoVial.query.filter(CryoVial.unique_vial_id_tag.in_(tags)).all()
+        found_tags = {v.unique_vial_id_tag for v in vials}
+        missing = [t for t in tags if t not in found_tags]
+
+        for v in vials:
+            if form.new_status.data:
+                v.status = form.new_status.data
+            if form.notes.data:
+                v.notes = (v.notes + '\n' if v.notes else '') + form.notes.data
+            v.last_updated = datetime.utcnow()
+
+        db.session.commit()
+
+        # 记录审计日志
+        log_audit(
+            current_user.id,
+            'BATCH_EDIT_VIALS',
+            target_type='CryoVial',
+            details={
+                'vial_tags': tags,
+                'updated_status': form.new_status.data or None,
+                'notes_appended': bool(form.notes.data),
+                'missing_tags': missing,
+            },
+        )
+
+        flash(f'Updated {len(vials)} vial(s).', 'success')
+        if missing:
+            flash(f'Missing tags: {", ".join(missing)}', 'warning')
+        return redirect(url_for('cell_storage.batch_edit_vials'))
+
+    return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
+
+
 @bp.route('/admin/batch_delete_vials', methods=['POST'])
-@login_required 
+@login_required
 @admin_required
 def batch_delete_vials():
     try:
@@ -2979,43 +3163,60 @@ def get_current_theme():
 def get_dashboard_stats():
     """Get dashboard statistics API"""
     try:
-        # 总体统计
-        total_vials = CryoVial.query.count()
-        available_vials = CryoVial.query.filter_by(status='Available').count()
-        used_vials = CryoVial.query.filter_by(status='Used').count()
-        
-        # 存储容量统计（基于实际box尺寸）
+        status_counts = dict(
+            db.session.query(
+                CryoVial.status,
+                func.count(CryoVial.id)
+            ).group_by(CryoVial.status).all()
+        )
+
+        all_vials = sum(status_counts.values())
+        available_vials = status_counts.get('Available', 0)
+        used_vials = status_counts.get('Used', 0)
+        depleted_vials = status_counts.get('Depleted', 0)
+        discarded_vials = status_counts.get('Discarded', 0)
+        active_vials = all_vials - discarded_vials
+
         total_boxes = Box.query.count()
-        occupied_positions = CryoVial.query.filter_by(status='Available').count()
-        
-        # 计算实际总容量（每个box的rows * columns）
-        boxes = Box.query.all()
-        actual_total_capacity = sum(box.rows * box.columns for box in boxes)
-        capacity_used_percent = (occupied_positions / actual_total_capacity * 100) if actual_total_capacity > 0 else 0
-        
-        # Low stock统计 - 基于batch的vials数量
-        # 只统计有vials的batch，计算其中可用vials数量少于阈值的batch数量
-        from sqlalchemy import func
-        batch_vial_counts = db.session.query(
-            VialBatch.id,
-            func.count(CryoVial.id).label('total_count'),
-            func.sum(func.case([(CryoVial.status == 'Available', 1)], else_=0)).label('available_count')
-        ).join(
-            CryoVial, CryoVial.batch_id == VialBatch.id
-        ).group_by(VialBatch.id).all()
-        
-        # 定义低库存阈值为可用vials少于2个（且batch中有vials存在）
+        box_dimensions = db.session.query(Box.rows, Box.columns).all()
+        actual_total_capacity = sum(rows * columns for rows, columns in box_dimensions)
+        capacity_used_percent = round(
+            (available_vials / actual_total_capacity * 100) if actual_total_capacity else 0,
+            1
+        )
+
+        available_count_expression = func.sum(
+            case((CryoVial.status == 'Available', 1), else_=0)
+        ).label('available_count')
+
+        batch_vial_counts = (
+            db.session.query(
+                VialBatch.id,
+                func.count(CryoVial.id).label('total_count'),
+                available_count_expression
+            )
+            .join(CryoVial, CryoVial.batch_id == VialBatch.id)
+            .group_by(VialBatch.id)
+            .all()
+        )
+
         low_stock_threshold = 2
-        low_stock_batches = sum(1 for _, total_count, available_count in batch_vial_counts 
-                              if total_count > 0 and (available_count or 0) < low_stock_threshold)
-        
+        low_stock_batches = sum(
+            1
+            for _, total_count, available_count in batch_vial_counts
+            if total_count > 0 and (available_count or 0) < low_stock_threshold
+        )
+
         return jsonify({
             'success': True,
             'stats': {
-                'total_vials': total_vials,
+                'total_vials': all_vials,
+                'active_vials': active_vials,
                 'available_vials': available_vials,
                 'used_vials': used_vials,
-                'capacity_used_percent': round(capacity_used_percent, 1),
+                'depleted_vials': depleted_vials,
+                'discarded_vials': discarded_vials,
+                'capacity_used_percent': capacity_used_percent,
                 'low_stock_batches': low_stock_batches,
                 'actual_total_capacity': actual_total_capacity,
                 'total_boxes': total_boxes

@@ -186,7 +186,7 @@
             <button class="btn btn-outline-primary me-2" onclick="refreshData()">
                 <i class="fas fa-sync-alt me-1"></i>Refresh
             </button>
-            <a href="{{ url_for('admin.permissions') }}" class="btn btn-primary">
+            <a href="{{ url_for('system_admin.permissions') }}" class="btn btn-primary">
                 <i class="fas fa-user-shield me-1"></i>Manage Permissions
             </a>
         </div>
@@ -241,7 +241,7 @@
 
     <!-- Quick Actions -->
     <div class="quick-actions">
-        <div class="action-card" onclick="location.href='{{ url_for('admin.permissions') }}'">
+        <div class="action-card" onclick="location.href='{{ url_for('system_admin.permissions') }}'">
             <div class="action-icon" style="background: #e3f2fd; color: #1976d2;">
                 <i class="fas fa-user-shield"></i>
             </div>
@@ -249,7 +249,7 @@
             <div class="action-description">Grant or revoke user permissions</div>
         </div>
 
-        <div class="action-card" onclick="location.href='{{ url_for('admin.permission_audit') }}'">
+        <div class="action-card" onclick="location.href='{{ url_for('admin.index') }}'">
             <div class="action-icon" style="background: #f3e5f5; color: #7b1fa2;">
                 <i class="fas fa-history"></i>
             </div>
@@ -340,7 +340,7 @@
                 {% endif %}
                 
                 <div class="text-center mt-3">
-                    <a href="{{ url_for('admin.permission_audit') }}" class="btn btn-sm btn-outline-primary">
+                    <a href="{{ url_for('admin.index') }}" class="btn btn-sm btn-outline-primary">
                         View Full Audit Log
                     </a>
                 </div>
@@ -357,7 +357,7 @@ function refreshData() {
 }
 
 function addUser() {
-    location.href = '{{ url_for("admin.permissions") }}';
+    location.href = '{{ url_for('system_admin.permissions') }}';
 }
 
 function exportData() {

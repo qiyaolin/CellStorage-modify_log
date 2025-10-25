@@ -81,59 +81,8 @@ class CustomAdminIndexView(AdminIndexView):
             flash('Admin access required', 'error')
             return redirect(url_for('cell_storage.index'))
     
-    @expose('/')
-    def index(self):
-        try:
-            from app.cell_storage.models import User, CellLine, Tower, Drawer, Box, VialBatch, CryoVial, PrintJob, PrintServer
-
-            # Calculate stats with error handling
-            stats = {}
-            try:
-                stats.update({
-                    'users': User.query.count(),
-                    'vials': CryoVial.query.count(),
-                    'available_vials': CryoVial.query.filter_by(status='Available').count(),
-                    'batches': VialBatch.query.count(),
-                    'cell_lines': CellLine.query.count(),
-                    'towers': Tower.query.count(),
-                    'drawers': Drawer.query.count(),
-                    'boxes': Box.query.count(),
-                })
-            except Exception as e:
-                from flask import current_app
-                current_app.logger.warning(f"Error calculating basic stats: {str(e)}")
-                stats.update({
-                    'users': 'N/A', 'vials': 'N/A', 'available_vials': 'N/A',
-                    'batches': 'N/A', 'cell_lines': 'N/A', 'towers': 'N/A',
-                    'drawers': 'N/A', 'boxes': 'N/A'
-                })
-
-            # 打印系统统计 - 独立错误处理
-            try:
-                stats.update({
-                    'print_jobs_total': PrintJob.query.count(),
-                    'print_jobs_pending': PrintJob.query.filter_by(status='pending').count(),
-                    'print_jobs_failed': PrintJob.query.filter_by(status='failed').count(),
-                    'print_servers_total': PrintServer.query.count(),
-                    'print_servers_online': PrintServer.query.filter_by(status='online').count()
-                })
-            except Exception as e:
-                from flask import current_app
-                current_app.logger.warning(f"Error calculating print stats: {str(e)}")
-                stats.update({
-                    'print_jobs_total': 'N/A', 'print_jobs_pending': 'N/A',
-                    'print_jobs_failed': 'N/A', 'print_servers_total': 'N/A',
-                    'print_servers_online': 'N/A'
-                })
-
-            # 使用正常的Flask-Admin模板系统
-            return self.render('admin/index.html', stats=stats)
-
-        except Exception as e:
-            from flask import current_app
-            current_app.logger.error(f"Critical error in admin index: {str(e)}")
-            # 回退到基本的管理页面
-            return self._render_fallback_index()
+    # 移除自定义index方法，使用Flask-Admin默认首页
+    # 这样可以确保显示完整的Flask-Admin界面包括导航菜单
 
     def _render_fallback_index(self):
         """Fallback admin index when main template fails"""
@@ -640,12 +589,12 @@ def init_admin(app):
     """初始化Flask-Admin"""
     from app import db
 
-    # 创建Admin实例
+    # 创建Admin实例 - 使用Flask-Admin默认模板以确保导航菜单正常显示
     admin = Admin(
         app,
         name='Cell Storage Admin',
         index_view=CustomAdminIndexView(name='首页', url='/flask-admin'),
-        base_template='admin/master.html',
+        # 移除自定义base_template，使用Flask-Admin默认模板
         url='/flask-admin'
     )
     

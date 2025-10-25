@@ -126,6 +126,7 @@ class CustomAdminIndexView(AdminIndexView):
                     'print_servers_online': 'N/A'
                 })
 
+            # 使用正常的Flask-Admin模板系统
             return self.render('admin/index.html', stats=stats)
 
         except Exception as e:
@@ -186,6 +187,104 @@ class CustomAdminIndexView(AdminIndexView):
         </html>
         """
         return render_template_string(fallback_template)
+
+    def _render_fallback_index_with_stats(self, stats):
+        """Fallback admin index with statistics when main template fails"""
+        from flask import render_template_string
+        fallback_template = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Cell Storage Admin</title>
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/4.6.0/css/bootstrap.min.css" rel="stylesheet">
+            <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
+            <style>
+                .stat-card {
+                    background: white;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    padding: 20px;
+                    margin-bottom: 20px;
+                    border-left: 4px solid #667eea;
+                }
+                .stat-number { font-size: 2rem; font-weight: bold; color: #667eea; }
+                .stat-label { color: #6c757d; font-size: 0.9rem; }
+                .admin-header {
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 30px;
+                    margin-bottom: 30px;
+                    border-radius: 8px;
+                }
+            </style>
+        </head>
+        <body class="bg-light">
+            <div class="container-fluid">
+                <div class="admin-header">
+                    <h1 class="display-4"><i class="fas fa-database"></i> Cell Storage Admin</h1>
+                    <p class="lead">Administrative interface for Cell Storage Management System</p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="stat-card text-center">
+                            <div class="stat-number">{{ stats.users }}</div>
+                            <div class="stat-label">Total Users</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card text-center">
+                            <div class="stat-number">{{ stats.vials }}</div>
+                            <div class="stat-label">Total Vials</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card text-center">
+                            <div class="stat-number">{{ stats.available_vials }}</div>
+                            <div class="stat-label">Available Vials</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="stat-card text-center">
+                            <div class="stat-number">{{ stats.batches }}</div>
+                            <div class="stat-label">Total Batches</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="stat-card text-center">
+                            <div class="stat-number">{{ stats.cell_lines }}</div>
+                            <div class="stat-label">Cell Lines</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card text-center">
+                            <div class="stat-number">{{ stats.towers }}</div>
+                            <div class="stat-label">Storage Towers</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-card text-center">
+                            <div class="stat-number">{{ stats.boxes }}</div>
+                            <div class="stat-label">Storage Boxes</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-4">
+                    <h5><i class="fas fa-info-circle"></i> Note</h5>
+                    <p>This is a simplified admin interface. Use the navigation menu to access specific admin sections for managing users, cell lines, storage locations, vials, and system configuration.</p>
+                    <a href="{{ url_for('cell_storage.index') }}" class="btn btn-primary">
+                        <i class="fas fa-arrow-left"></i> Return to Main Application
+                    </a>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
+        return render_template_string(fallback_template, stats=stats)
 
 class UserAdmin(BaseModelView):
     column_list = ['username', 'role', 'password_plain']
@@ -277,9 +376,9 @@ class CryoVialAdmin(BaseModelView):
     # 默认按ID排序
     column_default_sort = 'id'
     
-    # 禁用创建和编辑，只允许查看和删除
-    can_create = False
-    can_edit = False
+    # 启用完整的数据库管理功能
+    can_create = True
+    can_edit = True
     can_delete = True
     can_view_details = True
     
@@ -541,13 +640,12 @@ def init_admin(app):
     """初始化Flask-Admin"""
     from app import db
 
-    # 创建Admin实例 - 移除template_mode以避免GAE兼容性问题
+    # 创建Admin实例
     admin = Admin(
         app,
         name='Cell Storage Admin',
-        # 不使用template_mode，让Flask-Admin使用默认模板
         index_view=CustomAdminIndexView(name='首页', url='/flask-admin'),
-        base_template='admin/master.html',  # 使用我们创建的自定义基础模板
+        base_template='admin/master.html',
         url='/flask-admin'
     )
     

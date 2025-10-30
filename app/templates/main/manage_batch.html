@@ -2,7 +2,7 @@
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h1>Manage Batch: {{ batch.name }} <span class="text-muted fs-5">(ID: {{ batch.id }})</span></h1>
-    <a href="{{ url_for('cell_storage.manage_batch_lookup') }}" class="btn btn-secondary">Back to Lookup</a>
+    <a href="{{ url_for('cell_storage.batch_edit_vials') }}" class="btn btn-secondary">Back to Lookup</a>
 </div>
 
 <!-- Navigation Tabs -->

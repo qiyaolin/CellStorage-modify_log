@@ -38,6 +38,22 @@
     .match-exact { background-color: #d1e7dd; color: #0f5132; }
     .match-partial { background-color: #fff3cd; color: #664d03; }
     .match-filter { background-color: #e2e3e5; color: #41464b; }
+    .match-mode-group .btn { min-width: 80px; }
+
+    /* Fix blue-on-blue text contrast issue for checked buttons */
+    .search-target-group .btn-check:checked + .btn-outline-primary,
+    .match-mode-group .btn-check:checked + .btn-outline-primary {
+        background-color: #1976D2 !important;
+        border-color: #1976D2 !important;
+        color: #ffffff !important; /* Force white text on blue background */
+    }
+
+    .search-target-group .btn-check:checked + .btn-outline-primary:hover,
+    .match-mode-group .btn-check:checked + .btn-outline-primary:hover {
+        background-color: #1565C0 !important;
+        border-color: #1565C0 !important;
+        color: #ffffff !important; /* Ensure white text remains on hover */
+    }
 </style>
 
 <!-- Nav tabs -->
@@ -70,12 +86,22 @@
                           <label class="btn btn-outline-primary" for="target-tag">Tag</label>
                         </div>
                       </div>
+                      <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+                        <span class="text-muted small">Match mode</span>
+                        <div class="btn-group btn-group-sm match-mode-group" role="group" aria-label="Match mode options">
+                          <input type="radio" class="btn-check" name="match_mode" id="match-mode-partial" value="partial" {% if match_mode != 'exact' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="match-mode-partial">Partial</label>
+                          <input type="radio" class="btn-check" name="match_mode" id="match-mode-exact" value="exact" {% if match_mode == 'exact' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="match-mode-exact">Exact</label>
+                        </div>
+                        <span class="text-muted small d-none d-lg-inline">Partial finds similar matches; Exact requires full field match.</span>
+                      </div>
                       {% if recent_searches %}
                       <div class="col-12">
                         <div class="d-flex flex-wrap align-items-center gap-2 recent-searches">
                           <span class="text-muted small">Recent:</span>
                           {% for item in recent_searches %}
-                            <a class="badge bg-light text-primary border" href="{{ url_for('cell_storage.cryovial_inventory', q=item.q, target=item.target) }}">{{ item.target|capitalize }}: {{ item.q }}</a>
+                            <a class="badge bg-light text-primary border" href="{{ url_for('cell_storage.cryovial_inventory', q=item.q, target=item.target, match_mode=item.match_mode or 'partial') }}">{{ item.target|capitalize }}: {{ item.q }} <span class='ms-1 text-muted'>{{ (item.match_mode or 'partial')|capitalize }}</span></a>
                           {% endfor %}
                         </div>
                       </div>
@@ -172,11 +198,17 @@
                         {% endif %}
                     </div>
                 </div>
+                {% if match_mode == 'exact' %}
+                <div class="small text-muted mt-2">Exact match mode: only exact field matches are returned.</div>
+                {% else %}
+                <div class="small text-muted mt-2">Partial match mode: includes close matches across fields.</div>
+                {% endif %}
                 <div class="card-body">
                     <form method="post" class="mb-3">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <input type="hidden" name="q" value="{{ search_q }}">
                         <input type="hidden" name="target" value="{{ search_target }}">
+                        <input type="hidden" name="match_mode" value="{{ match_mode }}">
                         <input type="hidden" name="creator" value="{{ search_creator }}">
                         <input type="hidden" name="cell_line_id" value="{{ search_cell_line_id }}">
                         <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
@@ -255,6 +287,7 @@
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <input type="hidden" name="q" value="{{ search_q }}">
                         <input type="hidden" name="target" value="{{ search_target }}">
+                        <input type="hidden" name="match_mode" value="{{ match_mode }}">
                         <input type="hidden" name="creator" value="{{ search_creator }}">
                         <input type="hidden" name="cell_line_id" value="{{ search_cell_line_id }}">
                         <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">

@@ -243,3 +243,223 @@ class BatchLineageService:
             'warnings': warnings,
             'summary': f"Validation completed with {len(issues)} issues and {len(warnings)} warnings"
         }
+    
+    @staticmethod
+    def get_optimized_lineage_for_frontend(batch_id, viewport_depth=3, include_details=True):
+        """
+        Get frontend-optimized lineage data with lazy loading support
+        
+        Args:
+            batch_id (int): Batch ID
+            viewport_depth (int): Maximum depth to load initially (default: 3)
+            include_details (bool): Include detailed node information
+            
+        Returns:
+            dict: Optimized lineage data structure for frontend rendering
+        """
+        batch = VialBatch.query.get_or_404(batch_id)
+        
+        def build_optimized_node(batch_obj, depth=0, node_type='current'):
+            """Build optimized node data for frontend"""
+            node_data = {
+                'id': batch_obj.id,
+                'name': batch_obj.name,
+                'type': node_type,
+                'depth': depth,
+                'hasChildren': False,
+                'hasParents': False,
+                'canExpand': depth < viewport_depth
+            }
+            
+            if include_details:
+                node_data.update({
+                    'cell_line': batch_obj.cell_line,
+                    'passage_number': batch_obj.passage_number,
+                    'date_frozen': batch_obj.date_frozen.isoformat() if batch_obj.date_frozen else None,
+                    'parental_cell_line': batch_obj.parental_cell_line,
+                    'vial_count': batch_obj.vials.count(),
+                    'timestamp': batch_obj.timestamp.isoformat() if batch_obj.timestamp else None
+                })
+            
+            return node_data
+        
+        def get_limited_ancestors(current_batch, max_depth, current_depth=0):
+            """Get ancestors up to specified depth"""
+            if current_depth >= max_depth:
+                return []
+            
+            ancestors = []
+            parents = current_batch.get_parent_batches()
+            
+            for parent in parents:
+                ancestor_node = build_optimized_node(parent, current_depth + 1, 'ancestor')
+                ancestor_node['hasParents'] = len(parent.get_parent_batches()) > 0
+                ancestor_node['children'] = get_limited_ancestors(parent, max_depth, current_depth + 1)
+                ancestors.append(ancestor_node)
+            
+            return ancestors
+        
+        def get_limited_descendants(current_batch, max_depth, current_depth=0):
+            """Get descendants up to specified depth"""
+            if current_depth >= max_depth:
+                return []
+            
+            descendants = []
+            children = current_batch.get_child_batches()
+            
+            for child in children:
+                descendant_node = build_optimized_node(child, current_depth + 1, 'descendant')
+                descendant_node['hasChildren'] = len(child.get_child_batches()) > 0
+                descendant_node['children'] = get_limited_descendants(child, max_depth, current_depth + 1)
+                descendants.append(descendant_node)
+            
+            return descendants
+        
+        # Build the optimized tree structure
+        current_node = build_optimized_node(batch, 0, 'current')
+        ancestors = get_limited_ancestors(batch, viewport_depth)
+        descendants = get_limited_descendants(batch, viewport_depth)
+        
+        # Check if there are more nodes beyond the viewport
+        total_ancestors = len(batch.get_parent_batches())
+        total_descendants = len(batch.get_child_batches())
+        
+        return {
+            'current': current_node,
+            'ancestors': ancestors,
+            'descendants': descendants,
+            'metadata': {
+                'viewport_depth': viewport_depth,
+                'has_more_ancestors': total_ancestors > 0 and viewport_depth < 5,
+                'has_more_descendants': total_descendants > 0 and viewport_depth < 5,
+                'total_ancestor_count': total_ancestors,
+                'total_descendant_count': total_descendants,
+                'optimized_for_frontend': True
+            }
+        }
+    
+    @staticmethod
+    def get_lineage_summary_stats(batch_id):
+        """
+        Get lightweight summary statistics for quick loading
+        
+        Args:
+            batch_id (int): Batch ID
+            
+        Returns:
+            dict: Summary statistics optimized for quick display
+        """
+        batch = VialBatch.query.get_or_404(batch_id)
+        
+        # Quick counts without deep traversal
+        direct_parents = batch.get_parent_batches()
+        direct_children = batch.get_child_batches()
+        
+        # Estimate total related batches (lightweight calculation)
+        estimated_ancestors = len(direct_parents)
+        estimated_descendants = len(direct_children)
+        
+        # Add one level deeper for better estimation
+        for parent in direct_parents:
+            estimated_ancestors += len(parent.get_parent_batches())
+        
+        for child in direct_children:
+            estimated_descendants += len(child.get_child_batches())
+        
+        return {
+            'batch_id': batch_id,
+            'batch_name': batch.name,
+            'has_lineage': len(direct_parents) > 0 or len(direct_children) > 0,
+            'direct_parents': len(direct_parents),
+            'direct_children': len(direct_children),
+            'estimated_ancestors': estimated_ancestors,
+            'estimated_descendants': estimated_descendants,
+            'estimated_total_related': estimated_ancestors + estimated_descendants,
+            'last_updated': datetime.now().isoformat(),
+            'is_summary': True
+        }
+    
+    @staticmethod
+    def get_batch_nodes_by_depth(batch_id, depth_level, node_type='descendants', limit=50, offset=0):
+        """
+        Get batch nodes at specific depth level for lazy loading
+        
+        Args:
+            batch_id (int): Root batch ID
+            depth_level (int): Depth level to retrieve (1, 2, 3...)
+            node_type (str): 'ancestors' or 'descendants'
+            limit (int): Maximum number of nodes to return
+            offset (int): Pagination offset
+            
+        Returns:
+            dict: Paginated nodes at specified depth
+        """
+        batch = VialBatch.query.get_or_404(batch_id)
+        nodes = []
+        
+        def traverse_to_depth(current_batch, target_depth, current_depth=0, visited=None):
+            """Traverse to specific depth and collect nodes"""
+            if visited is None:
+                visited = set()
+            
+            if current_batch.id in visited:
+                return []
+            
+            visited.add(current_batch.id)
+            
+            if current_depth == target_depth:
+                return [current_batch]
+            
+            if current_depth >= target_depth:
+                return []
+            
+            result_nodes = []
+            
+            if node_type == 'descendants':
+                children = current_batch.get_child_batches()
+                for child in children:
+                    result_nodes.extend(traverse_to_depth(child, target_depth, current_depth + 1, visited))
+            elif node_type == 'ancestors':
+                parents = current_batch.get_parent_batches()
+                for parent in parents:
+                    result_nodes.extend(traverse_to_depth(parent, target_depth, current_depth + 1, visited))
+            
+            return result_nodes
+        
+        # Get nodes at the specified depth
+        depth_nodes = traverse_to_depth(batch, depth_level)
+        
+        # Apply pagination
+        total_count = len(depth_nodes)
+        paginated_nodes = depth_nodes[offset:offset + limit]
+        
+        # Convert to JSON-friendly format
+        for node_batch in paginated_nodes:
+            nodes.append({
+                'id': node_batch.id,
+                'name': node_batch.name,
+                'cell_line': node_batch.cell_line,
+                'passage_number': node_batch.passage_number,
+                'date_frozen': node_batch.date_frozen.isoformat() if node_batch.date_frozen else None,
+                'parental_cell_line': node_batch.parental_cell_line,
+                'vial_count': node_batch.vials.count(),
+                'depth': depth_level,
+                'has_children': len(node_batch.get_child_batches()) > 0,
+                'has_parents': len(node_batch.get_parent_batches()) > 0
+            })
+        
+        return {
+            'nodes': nodes,
+            'pagination': {
+                'depth_level': depth_level,
+                'limit': limit,
+                'offset': offset,
+                'total_count': total_count,
+                'has_more': offset + limit < total_count,
+                'next_offset': offset + limit if offset + limit < total_count else None
+            },
+            'metadata': {
+                'node_type': node_type,
+                'root_batch_id': batch_id
+            }
+        }

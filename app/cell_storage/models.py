@@ -112,6 +112,33 @@ class Box(db.Model):
         return f'<Box {self.name} in Drawer ID {self.drawer_id}>'
 
 
+class BatchLineage(db.Model):
+    """
+    Association table for tracking parent-child relationships between batches.
+    Supports multiple parents (e.g., cell fusion) and multiple children (splitting).
+    """
+    __tablename__ = 'batch_lineage'
+    id = db.Column(db.Integer, primary_key=True)
+    parent_batch_id = db.Column(db.Integer, db.ForeignKey('vial_batches.id', ondelete='CASCADE'), nullable=False, index=True)
+    child_batch_id = db.Column(db.Integer, db.ForeignKey('vial_batches.id', ondelete='CASCADE'), nullable=False, index=True)
+    relationship_type = db.Column(db.String(50), default='passage', nullable=False)  # passage, split, fusion, derived
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    # Relationships
+    created_by = db.relationship('User', backref='lineage_records_created', lazy='select')
+
+    # Prevent circular references (batch cannot be its own parent)
+    __table_args__ = (
+        db.CheckConstraint('parent_batch_id != child_batch_id', name='no_self_reference'),
+        db.UniqueConstraint('parent_batch_id', 'child_batch_id', name='unique_parent_child'),
+    )
+
+    def __repr__(self):
+        return f'<BatchLineage {self.parent_batch_id} -> {self.child_batch_id} ({self.relationship_type})>'
+
+
 class VialBatch(db.Model):
     __tablename__ = 'vial_batches'
     id = db.Column(db.Integer, primary_key=True)
@@ -119,8 +146,25 @@ class VialBatch(db.Model):
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-    vials = db.relationship('CryoVial', backref='batch', lazy='dynamic')
+    vials = db.relationship('CryoVial', backref='batch', lazy='dynamic', cascade='all, delete-orphan')
     created_by = db.relationship('User', backref='batches_created', lazy='select')
+
+    # Lineage relationships - use foreign_keys to avoid ambiguity
+    parent_lineages = db.relationship(
+        'BatchLineage',
+        foreign_keys='BatchLineage.child_batch_id',
+        backref=db.backref('child_batch', lazy='select'),
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
+
+    child_lineages = db.relationship(
+        'BatchLineage',
+        foreign_keys='BatchLineage.parent_batch_id',
+        backref=db.backref('parent_batch', lazy='select'),
+        lazy='dynamic',
+        cascade='all, delete-orphan'
+    )
 
     def __repr__(self):
         return f'<VialBatch {self.id}: {self.name}>'
@@ -181,42 +225,195 @@ class VialBatch(db.Model):
         return self.name
     
     def get_parent_batches(self):
-        """获取父代批次列表，基于parental_cell_line字段匹配"""
-        if not self.parental_cell_line:
-            return []
-        
-        # 找到所有名称匹配parental_cell_line的batch
-        parent_batches = VialBatch.query.filter_by(name=self.parental_cell_line).all()
-        
-        # 同时也考虑那些cell_line名称匹配的batch（通过第一个vial的cell_line）
-        cell_line_matches = VialBatch.query.join(CryoVial).join(CellLine).filter(
-            CellLine.name == self.parental_cell_line
-        ).all()
-        
-        # 合并并去重
-        all_parents = list(set(parent_batches + cell_line_matches))
-        # 排除自己
-        return [batch for batch in all_parents if batch.id != self.id]
-    
+        """
+        Get parent batches using proper BatchLineage relationships.
+        Returns list of VialBatch objects that are parents of this batch.
+        """
+        parent_lineages = self.parent_lineages.all()
+        return [lineage.parent_batch for lineage in parent_lineages if lineage.parent_batch]
+
     def get_child_batches(self):
-        """获取子代批次列表，基于其他batch的parental_cell_line指向当前batch"""
-        # 找到所有parental_cell_line等于当前batch名称的batch
-        name_children = VialBatch.query.join(CryoVial).filter(
-            CryoVial.parental_cell_line == self.name
-        ).distinct().all()
-        
-        # 同时考虑parental_cell_line等于当前batch关联cell_line名称的batch
-        cell_line_children = []
-        if self.cell_line != 'Unknown':
-            cell_line_children = VialBatch.query.join(CryoVial).filter(
-                CryoVial.parental_cell_line == self.cell_line
-            ).distinct().all()
-        
-        # 合并并去重
-        all_children = list(set(name_children + cell_line_children))
-        # 排除自己
-        return [batch for batch in all_children if batch.id != self.id]
-    
+        """
+        Get child batches using proper BatchLineage relationships.
+        Returns list of VialBatch objects that are children of this batch.
+        """
+        child_lineages = self.child_lineages.all()
+        return [lineage.child_batch for lineage in child_lineages if lineage.child_batch]
+
+    def add_parent(self, parent_batch, relationship_type='passage', notes=None, created_by_user_id=None):
+        """
+        Add a parent batch relationship.
+
+        Args:
+            parent_batch: VialBatch object or batch_id (int)
+            relationship_type: Type of relationship (passage, split, fusion, derived)
+            notes: Optional notes about the relationship
+            created_by_user_id: User who created this relationship
+
+        Returns:
+            BatchLineage object if created, None if relationship already exists
+        """
+        parent_id = parent_batch.id if isinstance(parent_batch, VialBatch) else parent_batch
+
+        # Check if relationship already exists
+        existing = BatchLineage.query.filter_by(
+            parent_batch_id=parent_id,
+            child_batch_id=self.id
+        ).first()
+
+        if existing:
+            return None
+
+        # Create new relationship
+        lineage = BatchLineage(
+            parent_batch_id=parent_id,
+            child_batch_id=self.id,
+            relationship_type=relationship_type,
+            notes=notes,
+            created_by_user_id=created_by_user_id
+        )
+        db.session.add(lineage)
+        return lineage
+
+    def add_child(self, child_batch, relationship_type='passage', notes=None, created_by_user_id=None):
+        """
+        Add a child batch relationship.
+
+        Args:
+            child_batch: VialBatch object or batch_id (int)
+            relationship_type: Type of relationship (passage, split, fusion, derived)
+            notes: Optional notes about the relationship
+            created_by_user_id: User who created this relationship
+
+        Returns:
+            BatchLineage object if created, None if relationship already exists
+        """
+        child_id = child_batch.id if isinstance(child_batch, VialBatch) else child_batch
+
+        # Check if relationship already exists
+        existing = BatchLineage.query.filter_by(
+            parent_batch_id=self.id,
+            child_batch_id=child_id
+        ).first()
+
+        if existing:
+            return None
+
+        # Create new relationship
+        lineage = BatchLineage(
+            parent_batch_id=self.id,
+            child_batch_id=child_id,
+            relationship_type=relationship_type,
+            notes=notes,
+            created_by_user_id=created_by_user_id
+        )
+        db.session.add(lineage)
+        return lineage
+
+    def remove_parent(self, parent_batch):
+        """Remove a parent batch relationship."""
+        parent_id = parent_batch.id if isinstance(parent_batch, VialBatch) else parent_batch
+        lineage = BatchLineage.query.filter_by(
+            parent_batch_id=parent_id,
+            child_batch_id=self.id
+        ).first()
+        if lineage:
+            db.session.delete(lineage)
+            return True
+        return False
+
+    def remove_child(self, child_batch):
+        """Remove a child batch relationship."""
+        child_id = child_batch.id if isinstance(child_batch, VialBatch) else child_batch
+        lineage = BatchLineage.query.filter_by(
+            parent_batch_id=self.id,
+            child_batch_id=child_id
+        ).first()
+        if lineage:
+            db.session.delete(lineage)
+            return True
+        return False
+
+    @staticmethod
+    def auto_create_lineage_from_parental_name(child_batch_id, parental_name, created_by_user_id=None):
+        """
+        从 parental_cell_line 字符串自动创建 BatchLineage 关系
+
+        这个方法用于在创建/更新 CryoVial 时自动建立批次间的父子关系。
+        它会尝试根据 parental_cell_line 的名称查找对应的父批次，
+        如果找到则创建 BatchLineage 记录。
+
+        Args:
+            child_batch_id: 子批次 ID
+            parental_name: 父代批次名称（来自 CryoVial.parental_cell_line 字段）
+            created_by_user_id: 创建关系的用户 ID（可选）
+
+        Returns:
+            BatchLineage: 创建的 BatchLineage 对象
+            None: 如果找不到父批次、已存在关系、或发生自引用
+
+        Example:
+            >>> VialBatch.auto_create_lineage_from_parental_name(
+            ...     child_batch_id=123,
+            ...     parental_name="Batch_001",
+            ...     created_by_user_id=current_user.id
+            ... )
+        """
+        # 参数验证
+        if not parental_name or not parental_name.strip():
+            return None
+
+        parental_name = parental_name.strip()
+
+        # 查找父批次（精确匹配批次名称）
+        parent_batch = VialBatch.query.filter_by(name=parental_name).first()
+
+        if not parent_batch:
+            # 找不到父批次，记录日志但不报错（不影响主流程）
+            try:
+                from flask import current_app
+                current_app.logger.info(
+                    f"Auto-lineage: Parent batch '{parental_name}' not found for batch {child_batch_id}"
+                )
+            except:
+                pass  # 如果日志记录失败，也不影响主流程
+            return None
+
+        # 防止自引用（批次不能是自己的父代）
+        if parent_batch.id == child_batch_id:
+            return None
+
+        # 检查关系是否已存在（避免重复创建）
+        existing = BatchLineage.query.filter_by(
+            parent_batch_id=parent_batch.id,
+            child_batch_id=child_batch_id
+        ).first()
+
+        if existing:
+            return existing  # 关系已存在，返回现有记录
+
+        # 创建新的 lineage 关系
+        lineage = BatchLineage(
+            parent_batch_id=parent_batch.id,
+            child_batch_id=child_batch_id,
+            relationship_type='passage',  # 默认为 passage 类型
+            notes=f'Auto-created from parental_cell_line: {parental_name}',
+            created_by_user_id=created_by_user_id
+        )
+
+        db.session.add(lineage)
+
+        # 记录成功日志
+        try:
+            from flask import current_app
+            current_app.logger.info(
+                f"Auto-lineage: Created relationship {parent_batch.id} ({parent_batch.name}) -> {child_batch_id}"
+            )
+        except:
+            pass
+
+        return lineage
+
     def get_lineage_tree(self, max_depth=5):
         """
         获取完整的家谱树（包括祖先和后代）

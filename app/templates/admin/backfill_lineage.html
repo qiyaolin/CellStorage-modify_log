@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Batch Lineage Backfill - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-diagram-3"></i>
+                        Batch Lineage Backfill Tool
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info" role="alert">
+                        <h5 class="alert-heading"><i class="bi bi-info-circle"></i> About This Tool</h5>
+                        <p>
+                            This tool converts existing <code>parental_cell_line</code> string data from CryoVials
+                            into proper <code>BatchLineage</code> database relationships. This enables the
+                            <strong>History Tree</strong> feature to visualize batch genealogy.
+                        </p>
+                        <hr>
+                        <p class="mb-0">
+                            <strong>Note:</strong> New vials will automatically create lineage relationships going forward.
+                            This tool is only needed for existing historical data.
+                        </p>
+                    </div>
+
+                    <!-- Statistics Section -->
+                    <div class="row mb-4">
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h2 class="text-primary mb-1">{{ total_batches }}</h2>
+                                    <p class="text-muted mb-0">Total Batches</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h2 class="text-warning mb-1">{{ batches_with_parental }}</h2>
+                                    <p class="text-muted mb-0">Batches with Parental Data</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h2 class="text-success mb-1">{{ existing_lineage_count }}</h2>
+                                    <p class="text-muted mb-0">Existing Lineage Records</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sample Data Section -->
+                    {% if sample_batches %}
+                    <div class="mb-4">
+                        <h5>Sample Batches to Process (first 10)</h5>
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Batch ID</th>
+                                        <th>Batch Name</th>
+                                        <th>Parental Cell Line</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for batch in sample_batches %}
+                                    <tr>
+                                        <td>{{ batch[0] }}</td>
+                                        <td><strong>{{ batch[1] }}</strong></td>
+                                        <td><span class="badge bg-secondary">{{ batch[2] }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex gap-2 mb-4">
+                        <button type="button" class="btn btn-outline-primary" id="btn-preview">
+                            <i class="bi bi-eye"></i> Preview Changes (Dry Run)
+                        </button>
+                        <button type="button" class="btn btn-success" id="btn-execute">
+                            <i class="bi bi-play-fill"></i> Execute Backfill
+                        </button>
+                        <button type="button" class="btn btn-warning" id="btn-force" data-bs-toggle="tooltip"
+                                title="Overwrite existing relationships">
+                            <i class="bi bi-exclamation-triangle"></i> Force Overwrite
+                        </button>
+                    </div>
+
+                    <!-- Progress Section -->
+                    <div id="progress-section" class="d-none mb-4">
+                        <div class="progress" style="height: 30px;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated"
+                                 role="progressbar"
+                                 id="progress-bar"
+                                 aria-valuenow="0"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100"
+                                 style="width: 0%">
+                                <span id="progress-text">Processing...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Results Section -->
+                    <div id="results-section" class="d-none">
+                        <div class="alert alert-dismissible fade show" role="alert" id="results-alert">
+                            <h5 class="alert-heading" id="results-heading"></h5>
+                            <div id="results-summary"></div>
+                            <hr>
+                            <div id="results-details" style="max-height: 400px; overflow-y: auto;"></div>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const btnPreview = document.getElementById('btn-preview');
+    const btnExecute = document.getElementById('btn-execute');
+    const btnForce = document.getElementById('btn-force');
+    const progressSection = document.getElementById('progress-section');
+    const progressBar = document.getElementById('progress-bar');
+    const progressText = document.getElementById('progress-text');
+    const resultsSection = document.getElementById('results-section');
+    const resultsAlert = document.getElementById('results-alert');
+    const resultsHeading = document.getElementById('results-heading');
+    const resultsSummary = document.getElementById('results-summary');
+    const resultsDetails = document.getElementById('results-details');
+
+    // Initialize tooltips
+    const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltips.forEach(el => new bootstrap.Tooltip(el));
+
+    function showProgress() {
+        progressSection.classList.remove('d-none');
+        resultsSection.classList.add('d-none');
+        progressBar.style.width = '100%';
+        progressText.textContent = 'Processing...';
+    }
+
+    function hideProgress() {
+        progressSection.classList.add('d-none');
+    }
+
+    function showResults(data) {
+        hideProgress();
+        resultsSection.classList.remove('d-none');
+
+        // Set alert style based on success
+        resultsAlert.className = 'alert alert-dismissible fade show';
+        if (!data.success) {
+            resultsAlert.classList.add('alert-danger');
+            resultsHeading.innerHTML = '<i class="bi bi-x-circle"></i> Operation Failed';
+        } else if (data.dry_run) {
+            resultsAlert.classList.add('alert-info');
+            resultsHeading.innerHTML = '<i class="bi bi-eye"></i> Preview Results (Dry Run)';
+        } else {
+            resultsAlert.classList.add('alert-success');
+            resultsHeading.innerHTML = '<i class="bi bi-check-circle"></i> Backfill Completed Successfully';
+        }
+
+        // Summary
+        if (data.success) {
+            const verb = data.dry_run ? 'would be created' : 'created';
+            resultsSummary.innerHTML = `
+                <p class="mb-2"><strong>${data.message}</strong></p>
+                <ul class="mb-0">
+                    <li><strong>${data.created_count}</strong> relationships ${verb}</li>
+                    <li><strong>${data.skipped_count}</strong> skipped</li>
+                    <li><strong>${data.error_count}</strong> errors</li>
+                    <li><strong>${data.total_processed}</strong> total processed</li>
+                </ul>
+            `;
+        } else {
+            resultsSummary.innerHTML = `<p class="mb-0"><strong>Error:</strong> ${data.message || data.error}</p>`;
+        }
+
+        // Details
+        if (data.details && data.details.length > 0) {
+            let detailsHTML = '<div class="list-group list-group-flush">';
+            data.details.forEach(detail => {
+                let iconClass = '';
+                let badgeClass = '';
+
+                switch(detail.type) {
+                    case 'create':
+                    case 'preview':
+                        iconClass = 'bi-plus-circle text-success';
+                        badgeClass = 'bg-success';
+                        break;
+                    case 'update':
+                        iconClass = 'bi-arrow-repeat text-primary';
+                        badgeClass = 'bg-primary';
+                        break;
+                    case 'skip':
+                        iconClass = 'bi-dash-circle text-warning';
+                        badgeClass = 'bg-warning';
+                        break;
+                    case 'error':
+                        iconClass = 'bi-x-circle text-danger';
+                        badgeClass = 'bg-danger';
+                        break;
+                }
+
+                detailsHTML += `
+                    <div class="list-group-item">
+                        <div class="d-flex w-100 justify-content-between align-items-center">
+                            <div>
+                                <i class="bi ${iconClass} me-2"></i>
+                                <strong>${detail.batch_name || 'N/A'}</strong>
+                                ${detail.parental_name ? `<span class="text-muted">← ${detail.parental_name}</span>` : ''}
+                            </div>
+                            <span class="badge ${badgeClass}">${detail.type}</span>
+                        </div>
+                        ${detail.message ? `<p class="mb-0 mt-1 small text-muted">${detail.message}</p>` : ''}
+                        ${detail.reason ? `<p class="mb-0 mt-1 small text-warning">Reason: ${detail.reason}</p>` : ''}
+                        ${detail.error ? `<p class="mb-0 mt-1 small text-danger">Error: ${detail.error}</p>` : ''}
+                    </div>
+                `;
+            });
+            detailsHTML += '</div>';
+            resultsDetails.innerHTML = detailsHTML;
+        } else {
+            resultsDetails.innerHTML = '<p class="text-muted">No details available.</p>';
+        }
+    }
+
+    function executeBackfill(dryRun, force = false) {
+        // Disable buttons
+        btnPreview.disabled = true;
+        btnExecute.disabled = true;
+        btnForce.disabled = true;
+
+        showProgress();
+
+        fetch('{{ url_for("admin.api_backfill_lineage") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token() }}'
+            },
+            body: JSON.stringify({
+                dry_run: dryRun,
+                force: force
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            showResults(data);
+        })
+        .catch(error => {
+            hideProgress();
+            showResults({
+                success: false,
+                message: 'Network error: ' + error.message
+            });
+        })
+        .finally(() => {
+            // Re-enable buttons
+            btnPreview.disabled = false;
+            btnExecute.disabled = false;
+            btnForce.disabled = false;
+        });
+    }
+
+    btnPreview.addEventListener('click', () => {
+        if (confirm('Preview changes without making any modifications?')) {
+            executeBackfill(true, false);
+        }
+    });
+
+    btnExecute.addEventListener('click', () => {
+        if (confirm('Execute backfill operation? This will create BatchLineage relationships.')) {
+            executeBackfill(false, false);
+        }
+    });
+
+    btnForce.addEventListener('click', () => {
+        if (confirm('WARNING: Force overwrite will update existing relationships. Are you sure?')) {
+            executeBackfill(false, true);
+        }
+    });
+});
+</script>
+{% endblock %}

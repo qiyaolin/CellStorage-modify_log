@@ -315,33 +315,15 @@
                         {% for activity in recent_activities %}
                         <div class="compact-activity-item">
                             <div class="activity-icon">
-                                {% if activity.action == 'CREATE_CRYOVIAL' %}
-                                <i class="bi bi-plus-circle text-success"></i>
-                                {% elif activity.action == 'DELETE' %}
-                                <i class="bi bi-trash text-danger"></i>
-                                {% elif activity.action == 'BATCH_DELETE' %}
-                                <i class="bi bi-trash-fill text-danger"></i>
-                                {% elif activity.action == 'UPDATE' or activity.action == 'UPDATE_STATUS' %}
-                                <i class="bi bi-pencil text-warning"></i>
-                                {% elif activity.action == 'LOGIN' %}
-                                <i class="bi bi-box-arrow-in-right text-primary"></i>
-                                {% elif activity.action == 'PICKUP_VIALS' %}
-                                <i class="bi bi-box-arrow-up text-info"></i>
-                                {% elif activity.action == 'CREATE_CELL_LINE' %}
-                                <i class="bi bi-diagram-3 text-success"></i>
-                                {% elif activity.action == 'EXPORT' %}
-                                <i class="bi bi-download text-info"></i>
-                                {% else %}
-                                <i class="bi bi-circle text-secondary"></i>
-                                {% endif %}
+                                <i class="{{ activity.icon_class }} {{ activity.icon_color }}"></i>
                             </div>
                             <div class="activity-details">
                                 <div class="activity-description">
-                                    <strong class="user-name">{{ activity.user_performing_action.username if activity.user_performing_action else 'System' }}</strong>
-                                    <span class="action-description">{{ activity.formatted_details if activity.formatted_details else activity.details }}</span>
+                                    <strong class="user-name">{{ activity.user_name }}</strong>
+                                    <span class="action-description">{{ activity.description }}</span>
                                 </div>
-                                <div class="activity-time">
-                                    {{ activity.timestamp.strftime('%m/%d %H:%M') }}
+                                <div class="activity-time" title="{{ activity.time_full }}">
+                                    {{ activity.time_relative }}
                                 </div>
                             </div>
                         </div>
@@ -401,7 +383,7 @@
                                 </a>
                             </div>
                             <div class="col-lg-2 col-md-4 col-sm-6">
-                                <a href="{{ url_for('cell_storage.manage_batch_lookup') }}" class="btn btn-outline-dark btn-sm w-100">
+                                <a href="{{ url_for('cell_storage.batch_edit_vials') }}" class="btn btn-outline-dark btn-sm w-100">
                                     <i class="bi bi-box-seam me-1"></i>Batch Tools
                                 </a>
                             </div>

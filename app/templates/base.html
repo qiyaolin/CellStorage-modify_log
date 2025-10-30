@@ -158,7 +158,7 @@
                                     <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.batch_edit_vials') }}" style="color: #212529;">
                                         <i class="bi bi-pencil-square me-2 text-warning"></i>Batch Edit
                                     </a></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.manage_batch_lookup') }}" style="color: #212529;">
+                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.batch_edit_vials') }}" style="color: #212529;">
                                         <i class="bi bi-search me-2 text-secondary"></i>Manage Batch
                                     </a></li>
                                 </ul>
@@ -192,9 +192,7 @@
                                     <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.backup_database') }}" style="color: #212529;">
                                         <i class="bi bi-download me-2 text-success"></i>Backup
                                     </a></li>
-                                    <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.restore_database') }}" style="color: #212529;">
-                                        <i class="bi bi-upload me-2 text-warning"></i>Restore
-                                    </a></li>
+                                    <!-- Database restore link disabled -->
                                     <li><a class="dropdown-item d-flex align-items-center" href="{{ url_for('cell_storage.import_csv') }}" style="color: #212529;">
                                         <i class="bi bi-file-earmark-spreadsheet me-2 text-info"></i>Import CSV
                                     </a></li>

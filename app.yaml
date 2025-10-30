@@ -1,6 +1,11 @@
 runtime: python313 # 您可以选择 python38, python39, python310 等
 instance_class: F1 # 这是免费额度中最小也是最经济的实例类型
 
+# 添加自动扩缩配置以避免警告
+automatic_scaling:
+  max_instances: 10  # 限制最大实例数量以控制成本
+  min_instances: 1   # 保持最少1个实例运行
+
 # Gunicorn是生产级的WSGI服务器，用于运行您的Flask应用
 # :$PORT 是App Engine自动设置的环境变量
 entrypoint: gunicorn -b :$PORT 'app:create_app()'

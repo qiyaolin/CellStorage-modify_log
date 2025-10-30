@@ -779,6 +779,9 @@ def edit_cryovial(vial_id):
         vial.passage_number = form.passage_number.data
         vial.date_frozen = form.date_frozen.data
         # frozen_by_user_id should generally not change, or only by admin
+        # 保存旧的 parental_cell_line 值用于检测变化（在更新之前）
+        old_parental_cell_line = vial.parental_cell_line
+
         vial.number_of_vials_at_creation = form.number_of_vials_at_creation.data
         vial.volume_ml = form.volume_ml.data
         vial.concentration = form.concentration.data
@@ -788,6 +791,20 @@ def edit_cryovial(vial_id):
         vial.status = form.status.data
         vial.notes = form.notes.data
         vial.last_updated = datetime.utcnow()
+
+        # 如果 parental_cell_line 被修改，更新 BatchLineage 关系
+        new_parental_cell_line = form.parental_cell_line.data
+        if new_parental_cell_line and new_parental_cell_line.strip():
+            # 只有当值发生变化时才尝试创建新关系
+            if new_parental_cell_line.strip() != (old_parental_cell_line or '').strip():
+                try:
+                    VialBatch.auto_create_lineage_from_parental_name(
+                        child_batch_id=vial.batch_id,
+                        parental_name=new_parental_cell_line,
+                        created_by_user_id=current_user.id
+                    )
+                except Exception as e:
+                    current_app.logger.warning(f'Auto-lineage update failed for batch {vial.batch_id}: {e}')
 
         current_details_for_edit = {
             'general_info': 'vial edited',
@@ -873,6 +890,20 @@ def add_vial_at_position(box_id, row, col):
             date_created=datetime.utcnow(),
         )
         db.session.add(vial)
+        db.session.flush()  # 确保 batch.id 可用
+
+        # 自动创建 BatchLineage 关系（从 parental_cell_line 字符串）
+        parental_name = form.parental_cell_line.data
+        if parental_name and parental_name.strip():
+            try:
+                VialBatch.auto_create_lineage_from_parental_name(
+                    child_batch_id=batch.id,
+                    parental_name=parental_name,
+                    created_by_user_id=current_user.id
+                )
+            except Exception as e:
+                current_app.logger.warning(f'Auto-lineage creation failed for batch {batch.id}: {e}')
+
         db.session.commit()
         log_audit(current_user.id, 'CREATE_CRYOVIAL', target_type='CryoVial', target_id=vial.id, details=f'box {box.id} R{row}C{col}')
         flash('Vial added.', 'success')
@@ -1117,6 +1148,21 @@ def add_cryovial():
                 target_id=batch.id,
                 details=readable_details
             )
+
+            # 自动创建 BatchLineage 关系（从 parental_cell_line 字符串）
+            parental_name = vial_common_data.get('parental_cell_line')
+            if parental_name and parental_name.strip():
+                try:
+                    VialBatch.auto_create_lineage_from_parental_name(
+                        child_batch_id=batch.id,
+                        parental_name=parental_name,
+                        created_by_user_id=current_user.id
+                    )
+                    # 不需要单独 commit，会在下面的主 commit 中一起提交
+                except Exception as e:
+                    # 记录错误但不影响 vial 创建流程
+                    current_app.logger.warning(f'Auto-lineage creation failed for batch {batch.id}: {e}')
+
             db.session.commit()
             flash(
                 f"Batch #{batch.id} '{batch.name}' added with base ID {base_tag} and {len(placements)} vial(s): "
@@ -4631,5 +4677,166 @@ def handle_workflow_webhook():
             'success': False,
             'message': f'Failed to process webhook: {str(e)}'
         }), 500
+
+
+# Database Backup Endpoint
+@bp.route('/admin/backup')
+@login_required
+@admin_required
+def backup_database():
+    db.session.commit()
+    uri = current_app.config['SQLALCHEMY_DATABASE_URI']
+    scheme = urlparse(uri).scheme
+    rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
+
+    if rds_identifier:
+        try:
+            client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
+            snapshot_id = f"{rds_identifier}-snapshot-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            client.create_db_snapshot(
+                DBInstanceIdentifier=rds_identifier,
+                DBSnapshotIdentifier=snapshot_id,
+            )
+            log_audit(
+                current_user.id,
+                'BACKUP_EXPORT',
+                target_type='System',
+                details=f'RDS snapshot {snapshot_id}',
+            )
+            flash('RDS snapshot initiated.', 'success')
+        except (BotoCoreError, ClientError) as exc:
+            current_app.logger.error('RDS snapshot failed: %s', exc)
+            flash('RDS backup failed.', 'danger')
+        return redirect(url_for('cell_storage.index'))
+
+    if scheme == 'sqlite':
+        path = uri.replace('sqlite:///', '')
+        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
+        return send_file(path, as_attachment=True, download_name='backup.db')
+
+    if scheme.startswith('postgres'):
+        try:
+            result = subprocess.run(
+                ['pg_dump', '--format', 'custom', '--dbname', uri],
+                check=True,
+                capture_output=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            current_app.logger.error('pg_dump failed: %s', exc)
+            flash('PostgreSQL backup failed.', 'danger')
+            return redirect(url_for('cell_storage.index'))
+
+        buf = BytesIO(result.stdout)
+        buf.seek(0)
+        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
+        return send_file(buf, as_attachment=True, download_name='backup.dump', mimetype='application/octet-stream')
+
+    flash('Unsupported database type.', 'danger')
+    return redirect(url_for('cell_storage.index'))
+
+
+# Database Restore Endpoint
+@bp.route('/admin/restore', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def restore_database():
+    form = RestoreForm()
+    rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
+    rds_configured = bool(rds_identifier)
+
+    if form.validate_on_submit():
+        snapshot_id = (form.snapshot_id.data or '').strip()
+        file = form.backup_file.data
+
+        if rds_configured:
+            if not snapshot_id:
+                flash('RDS Snapshot Identifier is required.', 'danger')
+                return redirect(url_for('cell_storage.restore_database'))
+
+            try:
+                client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
+                client.restore_db_instance_from_db_snapshot(
+                    DBInstanceIdentifier=rds_identifier,
+                    DBSnapshotIdentifier=snapshot_id,
+                )
+                log_audit(
+                    current_user.id,
+                    'BACKUP_IMPORT',
+                    target_type='System',
+                    details=f'RDS restore from {snapshot_id}',
+                )
+                flash(
+                    (
+                        'RDS restore initiated. This may take several minutes. '
+                        'The instance will be unavailable during this time.'
+                    ),
+                    'success',
+                )
+            except (BotoCoreError, ClientError) as exc:
+                current_app.logger.error('RDS restore failed: %s', exc)
+                flash(f'RDS restore failed: {exc}', 'danger')
+            return redirect(url_for('cell_storage.index'))
+
+        elif file:
+            uri = current_app.config['SQLALCHEMY_DATABASE_URI']
+            scheme = urlparse(uri).scheme
+
+            if scheme == 'sqlite':
+                path = uri.replace('sqlite:///', '')
+                db.session.remove()
+                file.save(path)
+                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
+                flash('Database restored from backup.', 'success')
+
+            elif scheme.startswith('postgres'):
+                tmp = tempfile.NamedTemporaryFile(delete=False)
+                try:
+                    file.save(tmp.name)
+                    subprocess.run(
+                        ['pg_restore', '--clean', '--if-exists', '--dbname', uri, tmp.name],
+                        check=True,
+                    )
+                except (OSError, subprocess.CalledProcessError) as exc:
+                    current_app.logger.error('pg_restore failed: %s', exc)
+                    flash('PostgreSQL restore failed.', 'danger')
+                    return redirect(url_for('cell_storage.index'))
+                finally:
+                    tmp.close()
+                    os.unlink(tmp.name)
+
+                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
+                flash('Database restored from backup.', 'success')
+
+            else:
+                flash('Unsupported database type.', 'danger')
+            return redirect(url_for('cell_storage.index'))
+
+        else:
+            flash('No snapshot ID or file provided.', 'danger')
+
+    return render_template(
+        'main/restore_backup.html',
+        form=form,
+        title='Restore Backup',
+        rds_configured=rds_configured,
+    )
+
+
+# Clear All Data Endpoint
+@bp.route('/admin/clear_all', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def clear_all():
+    form = ConfirmForm()
+    if form.validate_on_submit():
+        if form.confirm.data.strip() == 'confirm_hayer':
+            # Save user ID before clearing database (session cleanup will detach user object)
+            user_id = current_user.id
+            clear_database_except_admin()
+            log_audit(user_id, 'CLEAR_ALL', target_type='System')
+            flash('All business data has been cleared. All user accounts have been preserved.', 'success')
+            return redirect(url_for('cell_storage.index'))
+        flash('Incorrect confirmation phrase.', 'danger')
+    return render_template('main/clear_all.html', form=form, title='Clear Database')
 
 

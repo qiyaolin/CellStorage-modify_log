@@ -46,19 +46,49 @@ def create_app(config_class=Config):
             
             # Add foreign key constraint if it doesn't exist
             db.session.execute(text("""
-                DO $$ 
-                BEGIN 
+                DO $$
+                BEGIN
                     IF NOT EXISTS (
-                        SELECT 1 FROM information_schema.table_constraints 
+                        SELECT 1 FROM information_schema.table_constraints
                         WHERE constraint_name = 'fk_print_jobs_batch_id'
                     ) THEN
-                        ALTER TABLE print_jobs 
-                        ADD CONSTRAINT fk_print_jobs_batch_id 
+                        ALTER TABLE print_jobs
+                        ADD CONSTRAINT fk_print_jobs_batch_id
                         FOREIGN KEY (batch_id) REFERENCES vial_batches(id);
                     END IF;
                 END $$;
             """))
-            
+
+            # Create batch_lineage table for proper batch relationship tracking
+            # This table replaces the unreliable string-based relationship matching
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS batch_lineage (
+                    id SERIAL PRIMARY KEY,
+                    parent_batch_id INTEGER NOT NULL REFERENCES vial_batches(id) ON DELETE CASCADE,
+                    child_batch_id INTEGER NOT NULL REFERENCES vial_batches(id) ON DELETE CASCADE,
+                    relationship_type VARCHAR(50) NOT NULL DEFAULT 'passage',
+                    notes TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_by_user_id INTEGER REFERENCES users(id),
+                    CHECK (parent_batch_id != child_batch_id),
+                    UNIQUE (parent_batch_id, child_batch_id)
+                );
+            """))
+
+            # Create indexes for batch_lineage table
+            db.session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_batch_lineage_parent
+                ON batch_lineage(parent_batch_id);
+            """))
+            db.session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_batch_lineage_child
+                ON batch_lineage(child_batch_id);
+            """))
+            db.session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_batch_lineage_type
+                ON batch_lineage(relationship_type);
+            """))
+
             db.session.commit()
         except Exception as e:
             db.session.rollback()

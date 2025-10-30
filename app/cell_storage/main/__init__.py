@@ -5,3 +5,4 @@ bp = Blueprint('cell_storage', __name__)
 
 # Import routes at the end to avoid circular dependencies
 from . import routes
+from . import lineage_routes  # Batch lineage management API endpoints

@@ -619,7 +619,7 @@ $(document).ready(function() {
             processing: true,
             serverSide: true,
             ajax: {
-                url: '{{ url_for("inventory.api_search") }}',
+                url: '{{ url_for('inventory.index') }}',
                 type: 'GET',
                 data: function(d) {
                     // Add custom filter parameters
@@ -776,7 +776,7 @@ $(document).ready(function() {
             length: 12 // Number of cards per page
         };
 
-        $.get('{{ url_for("inventory.api_search") }}', params)
+        $.get('{{ url_for('inventory.index') }}', params)
             .done(function(response) {
                 const container = $('#inventoryCards');
                 container.empty();
@@ -874,7 +874,7 @@ $(document).ready(function() {
     $('#confirmBulkDelete').on('click', function() {
         const selectedIds = getSelectedIds();
         $.ajax({
-            url: '{{ url_for("inventory.api_bulk_delete_items") }}',
+            url: '{{ url_for('inventory.index') }}',
             method: 'POST',
             data: JSON.stringify({ ids: selectedIds }),
             contentType: 'application/json',
@@ -898,7 +898,7 @@ $(document).ready(function() {
     
     // Export functionality
     $('#exportBtn').on('click', function() {
-        window.location.href = '{{ url_for("inventory.export_items") }}';
+        window.location.href = '{{ url_for('inventory.index') }}';
     });
 
     // Import functionality
@@ -909,7 +909,7 @@ $(document).ready(function() {
     $('#uploadImport').on('click', function() {
         const formData = new FormData($('#importForm')[0]);
         $.ajax({
-            url: '{{ url_for("inventory.api_import_items") }}',
+            url: '{{ url_for('inventory.index') }}',
             method: 'POST',
             data: formData,
             processData: false,
@@ -929,7 +929,7 @@ $(document).ready(function() {
 
     $('#downloadTemplate').on('click', function(e) {
         e.preventDefault();
-        window.location.href = '{{ url_for("inventory.api_download_template") }}';
+        window.location.href = '{{ url_for('inventory.index') }}';
     });
     
     // Quick edit functionality

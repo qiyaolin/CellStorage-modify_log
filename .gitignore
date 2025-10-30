@@ -170,13 +170,17 @@ app.db.backup*
 test_*.csv
 sample_*.csv
 
-# Screenshots and images (if they contain sensitive data)
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.ico
+# Screenshots and images (only exclude root level and test files, not static assets)
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.bmp
+/*.ico
+test_*.png
+test_*.jpg
+screenshot*.png
+screenshot*.jpg
 
 # Print agent logs
 print_agent.log
@@ -217,6 +221,18 @@ dymo-print-server-nodejs/src/heartbeat_*.json
 
 # Temporary markdown files (development notes)
 temp_*.md
+tmp_*.md
 debug_*.md
 *_debug.md
 *_notes.md
+
+# Windows temporary files
+nul
+NUL
+
+# Servers subproject (print server) dependencies
+servers/node_modules/
+servers/dist/
+servers/build/
+servers/*.log
+servers/.env*

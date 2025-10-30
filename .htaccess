@@ -1,0 +1,177 @@
+# ==================== Cell Storage Management System ====================
+# Apache .htaccess configuration for Bluehost deployment
+# Place this file in your public_html directory or domain root
+
+# ==================== Passenger WSGI Configuration ====================
+PassengerEnabled On
+PassengerAppRoot /home/username/cellstorage  # 修改为你的实际路径
+PassengerStartupFile passenger_wsgi.py
+PassengerPython /home/username/virtualenv/cellstorage/3.9/bin/python3  # 修改为实际Python路径
+PassengerAppType wsgi
+
+# ==================== URL Rewriting ====================
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # 强制HTTPS（生产环境推荐）
+    # 如果不需要强制HTTPS，注释掉以下3行
+    RewriteCond %{HTTPS} off
+    RewriteCond %{HTTP:X-Forwarded-Proto} !https
+    RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+    # 重定向www到非www（或反之）
+    # 非www到www（如需要，取消注释）
+    # RewriteCond %{HTTP_HOST} !^www\. [NC]
+    # RewriteRule ^(.*)$ https://www.%{HTTP_HOST}/$1 [R=301,L]
+
+    # www到非www（默认）
+    RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
+    RewriteRule ^(.*)$ https://%1/$1 [R=301,L]
+
+    # 将所有请求路由到passenger_wsgi.py
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ passenger_wsgi.py/$1 [QSA,L]
+</IfModule>
+
+# ==================== 静态文件缓存 ====================
+<IfModule mod_expires.c>
+    ExpiresActive On
+
+    # 图片缓存1年
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/x-icon "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+
+    # CSS和JavaScript缓存1个月
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+
+    # 字体缓存1年
+    ExpiresByType font/woff "access plus 1 year"
+    ExpiresByType font/woff2 "access plus 1 year"
+    ExpiresByType application/font-woff "access plus 1 year"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+    ExpiresByType application/vnd.ms-fontobject "access plus 1 year"
+    ExpiresByType application/x-font-ttf "access plus 1 year"
+
+    # HTML不缓存
+    ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# ==================== 压缩配置 ====================
+<IfModule mod_deflate.c>
+    # 压缩HTML, CSS, JavaScript, Text, XML
+    AddOutputFilterByType DEFLATE text/html
+    AddOutputFilterByType DEFLATE text/css
+    AddOutputFilterByType DEFLATE text/javascript
+    AddOutputFilterByType DEFLATE application/javascript
+    AddOutputFilterByType DEFLATE application/x-javascript
+    AddOutputFilterByType DEFLATE text/xml
+    AddOutputFilterByType DEFLATE application/xml
+    AddOutputFilterByType DEFLATE application/json
+    AddOutputFilterByType DEFLATE text/plain
+    AddOutputFilterByType DEFLATE image/svg+xml
+
+    # 不压缩图片和PDF
+    SetEnvIfNoCase Request_URI \.(?:gif|jpe?g|png|pdf)$ no-gzip dont-vary
+</IfModule>
+
+# ==================== 安全配置 ====================
+# 防止目录浏览
+Options -Indexes
+
+# 防止访问敏感文件
+<FilesMatch "(^#.*#|\.(bak|config|dist|fla|inc|ini|log|psd|sh|sql|sw[op])|~)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 保护.env文件
+<Files .env>
+    Order allow,deny
+    Deny from all
+</Files>
+
+# 保护Python源代码（仅允许通过WSGI访问）
+<FilesMatch "\.py$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 允许passenger_wsgi.py（必须）
+<Files passenger_wsgi.py>
+    Order allow,deny
+    Allow from all
+</Files>
+
+# ==================== MIME类型 ====================
+<IfModule mod_mime.c>
+    # JavaScript
+    AddType application/javascript js
+    AddType text/javascript js
+
+    # JSON
+    AddType application/json json
+
+    # 字体
+    AddType font/woff woff
+    AddType font/woff2 woff2
+    AddType application/vnd.ms-fontobject eot
+    AddType font/ttf ttf
+    AddType font/otf otf
+
+    # SVG
+    AddType image/svg+xml svg svgz
+    AddEncoding gzip svgz
+
+    # 音视频
+    AddType video/mp4 mp4
+    AddType video/webm webm
+    AddType audio/mp3 mp3
+    AddType audio/ogg ogg
+</IfModule>
+
+# ==================== 字符编码 ====================
+AddDefaultCharset UTF-8
+<IfModule mod_mime.c>
+    AddCharset UTF-8 .html .css .js .xml .json .rss .atom
+</IfModule>
+
+# ==================== 错误页面 ====================
+# 自定义错误页面（可选）
+# ErrorDocument 404 /404.html
+# ErrorDocument 500 /500.html
+
+# ==================== 性能优化 ====================
+# 启用Keep-Alive
+<IfModule mod_headers.c>
+    Header set Connection keep-alive
+</IfModule>
+
+# 限制上传文件大小（与Flask配置一致）
+php_value upload_max_filesize 16M
+php_value post_max_size 16M
+
+# ==================== CORS配置（如需要跨域访问） ====================
+# <IfModule mod_headers.c>
+#     # 允许特定域名跨域访问
+#     Header set Access-Control-Allow-Origin "https://yourdomain.com"
+#     # 或允许所有域名（不推荐用于生产环境）
+#     # Header set Access-Control-Allow-Origin "*"
+#     Header set Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+#     Header set Access-Control-Allow-Headers "Content-Type, Authorization"
+# </IfModule>
+
+# ==================== CSP安全策略（可选） ====================
+# <IfModule mod_headers.c>
+#     Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
+#     Header set X-Content-Type-Options "nosniff"
+#     Header set X-Frame-Options "SAMEORIGIN"
+#     Header set X-XSS-Protection "1; mode=block"
+#     Header set Referrer-Policy "strict-origin-when-cross-origin"
+# </IfModule>

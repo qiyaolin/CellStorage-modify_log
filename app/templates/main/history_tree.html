@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}History Tree{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/history_tree.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-xxl py-4 history-tree-page">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 mb-1 d-flex align-items-center gap-2">
+                <i class="bi bi-diagram-3 text-primary"></i>
+                <span>Batch History Tree</span>
+            </h1>
+            <p class="text-muted mb-0">Explore lineage relationships for cryovial batches with an interactive tree.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" class="btn btn-outline-primary" id="refresh-history-tree">
+                <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+            </button>
+            <button type="button" class="btn btn-outline-secondary" id="open-history-tree-help" data-bs-toggle="modal" data-bs-target="#historyTreeHelpModal">
+                <i class="bi bi-question-circle me-1"></i>Help
+            </button>
+        </div>
+    </div>
+
+    <div class="row gy-4">
+        <div class="col-lg-4 col-xl-3 d-flex flex-column gap-4">
+            <div class="card shadow-sm">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-search text-primary"></i>
+                    <h5 class="mb-0">Find a Batch</h5>
+                </div>
+                <div class="card-body">
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="text" class="form-control" id="history-tree-search" placeholder="Search by batch name, cell line, or parental line" autocomplete="off">
+                    </div>
+                    <div class="form-text mt-2" id="history-tree-search-hint">Start typing to search across batches.</div>
+                    <div class="list-group mt-3 d-none" id="history-tree-search-results" role="listbox"></div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-lightning-charge text-warning"></i>
+                    <h5 class="mb-0">Quick Picks</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-pills small mb-3" id="history-tree-quick-tabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="history-tree-tab-recent" data-bs-toggle="pill" data-bs-target="#history-tree-pane-recent" type="button" role="tab" aria-controls="history-tree-pane-recent" aria-selected="true">Recent</button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="history-tree-tab-lineage" data-bs-toggle="pill" data-bs-target="#history-tree-pane-lineage" type="button" role="tab" aria-controls="history-tree-pane-lineage" aria-selected="false">With lineage</button>
+                        </li>
+                    </ul>
+                    <div class="tab-content">
+                        <div class="tab-pane fade show active" id="history-tree-pane-recent" role="tabpanel" aria-labelledby="history-tree-tab-recent">
+                            <div class="history-tree-quick-list" id="history-tree-recent-list">
+                                <p class="text-muted small mb-0">Loading recent batches...</p>
+                            </div>
+                        </div>
+                        <div class="tab-pane fade" id="history-tree-pane-lineage" role="tabpanel" aria-labelledby="history-tree-tab-lineage">
+                            <div class="history-tree-quick-list" id="history-tree-lineage-list">
+                                <p class="text-muted small mb-0">Loading lineage batches...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm d-none" id="history-tree-selection-card">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-info-circle text-info"></i>
+                    <h5 class="mb-0">Selected Batch</h5>
+                </div>
+                <div class="card-body">
+                    <h4 class="h5 mb-1" id="history-tree-selected-name"></h4>
+                    <p class="text-muted mb-3" id="history-tree-selected-meta"></p>
+                    <dl class="row small mb-3" id="history-tree-selected-details"></dl>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a class="btn btn-sm btn-primary" id="history-tree-manage-link" target="_blank" rel="noopener">
+                            <i class="bi bi-box-arrow-up-right me-1"></i>Open in batch manager
+                        </a>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="history-tree-copy-link">
+                            <i class="bi bi-link-45deg me-1"></i>Copy direct link
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm" id="history-tree-stats-card">
+                <div class="card-header d-flex align-items-center gap-2">
+                    <i class="bi bi-bar-chart text-success"></i>
+                    <h5 class="mb-0">Lineage statistics</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-muted small" id="history-tree-stats-empty">Select a batch to view related counts.</div>
+                    <div class="row g-2 d-none" id="history-tree-stats">
+                        <div class="col-6">
+                            <div class="history-tree-stat">
+                                <span class="history-tree-stat-label">Direct parents</span>
+                                <span class="history-tree-stat-value" id="history-tree-stat-direct-parents">0</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="history-tree-stat">
+                                <span class="history-tree-stat-label">Direct children</span>
+                                <span class="history-tree-stat-value" id="history-tree-stat-direct-children">0</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="history-tree-stat">
+                                <span class="history-tree-stat-label">Estimated ancestors</span>
+                                <span class="history-tree-stat-value" id="history-tree-stat-ancestors">0</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="history-tree-stat">
+                                <span class="history-tree-stat-label">Estimated descendants</span>
+                                <span class="history-tree-stat-value" id="history-tree-stat-descendants">0</span>
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <div class="history-tree-stat">
+                                <span class="history-tree-stat-label">Total related (est.)</span>
+                                <span class="history-tree-stat-value" id="history-tree-stat-total">0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8 col-xl-9">
+            <div class="card shadow-sm h-100" id="history-tree-visual-card">
+                <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <h5 class="mb-0 d-flex align-items-center gap-2">
+                            <i class="bi bi-diagram-3 text-primary"></i>
+                            <span>Lineage visualization</span>
+                        </h5>
+                        <div class="small text-muted" id="history-tree-visual-status">Select a batch to load the tree.</div>
+                    </div>
+                    <div class="btn-group" role="group" aria-label="History tree mode" id="history-tree-mode-group">
+                        <input type="radio" class="btn-check" name="history-tree-mode" id="history-mode-full" value="full" autocomplete="off" checked>
+                        <label class="btn btn-outline-secondary" for="history-mode-full">Full</label>
+                        <input type="radio" class="btn-check" name="history-tree-mode" id="history-mode-ancestors" value="ancestors" autocomplete="off">
+                        <label class="btn btn-outline-secondary" for="history-mode-ancestors">Ancestors</label>
+                        <input type="radio" class="btn-check" name="history-tree-mode" id="history-mode-descendants" value="descendants" autocomplete="off">
+                        <label class="btn btn-outline-secondary" for="history-mode-descendants">Descendants</label>
+                    </div>
+                </div>
+                <div class="card-body position-relative">
+                    <div class="alert alert-info d-none" id="history-tree-feedback" role="alert"></div>
+                    <div class="history-tree-canvas" id="history-tree-canvas">
+                        <svg id="history-tree-svg" role="img" aria-label="History tree visualization"></svg>
+                        <div class="history-tree-placeholder" id="history-tree-placeholder">
+                            <i class="bi bi-diagram-3 display-6 text-primary mb-3"></i>
+                            <p class="text-muted mb-0">A batch lineage tree will appear here once loaded.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <div class="small text-muted" id="history-tree-meta"></div>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-secondary" id="history-tree-fit">
+                            <i class="bi bi-arrows-fullscreen me-1"></i>Fit to view
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" id="history-tree-export">
+                            <i class="bi bi-download me-1"></i>Export SVG
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="historyTreeHelpModal" tabindex="-1" aria-labelledby="historyTreeHelpTitle" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="historyTreeHelpTitle">History Tree workflow</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <ol class="mb-4">
+                    <li>Search for a batch or select one from the quick pick lists.</li>
+                    <li>Review batch details and lineage statistics in the left column.</li>
+                    <li>Use the visualization controls to explore ancestors, descendants, or the full tree.</li>
+                    <li>Fit the view or export the SVG if you need to share the lineage.</li>
+                </ol>
+                <p class="mb-1"><strong>Tips</strong></p>
+                <ul class="mb-0">
+                    <li>Hover a node to see name and cell line. Click a node to jump to its history.</li>
+                    <li>The app first tries the optimized v2 API and falls back to the classic lineage endpoint automatically.</li>
+                    <li>If the tree looks incomplete, refresh to load a deeper viewport.</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js" integrity="sha256-sLgsnXGycNQY83H8XTur2qxGn8pY/+bexdFv+I5jBsw=" crossorigin="anonymous"></script>
+<script type="module" src="{{ url_for('static', filename='js/history_tree.js') }}"></script>
+{% endblock %}

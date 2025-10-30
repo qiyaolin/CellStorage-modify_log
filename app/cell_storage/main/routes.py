@@ -13,6 +13,8 @@ from flask import (
 )
 from flask_login import login_required, current_user
 from datetime import datetime
+import time
+from collections import defaultdict
 try:
     from markupsafe import Markup
 except ImportError:
@@ -47,6 +49,7 @@ import subprocess
 import tempfile
 from urllib.parse import urlparse
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import case, func, or_, cast, String
 from datetime import datetime
 import json
 import boto3
@@ -84,7 +87,7 @@ from ..models import (
 )
 
 from ...shared.utils import log_audit, clear_database_except_admin
-from ...shared.utils import get_next_batch_id, get_batch_counter, set_batch_counter
+from ...shared.utils import get_next_batch_id, get_batch_counter, set_batch_counter, get_next_vial_id, get_vial_counter, set_vial_counter
 from ...shared.audit_utils import create_audit_log, format_audit_details
 import io
 import csv
@@ -102,6 +105,83 @@ def validate_csrf_token(token):
     except Exception:
         return False
 
+
+ACTIVITY_ICON_MAP = {
+    'CREATE_CRYOVIAL': ('bi-plus-circle', 'text-success', 'Created cryovials'),
+    'DELETE': ('bi-trash', 'text-danger', 'Deleted record'),
+    'BATCH_DELETE': ('bi-trash-fill', 'text-danger', 'Deleted batch'),
+    'UPDATE': ('bi-pencil', 'text-warning', 'Updated record'),
+    'UPDATE_STATUS': ('bi-pencil', 'text-warning', 'Updated status'),
+    'LOGIN': ('bi-box-arrow-in-right', 'text-primary', 'Signed in'),
+    'PICKUP_VIALS': ('bi-box-arrow-up', 'text-info', 'Retrieved cryovials'),
+    'CREATE_CELL_LINE': ('bi-diagram-3', 'text-success', 'Created cell line'),
+    'EXPORT': ('bi-download', 'text-info', 'Exported data'),
+}
+
+
+def _resolve_activity_display(action):
+    icon, color, label = ACTIVITY_ICON_MAP.get(
+        action,
+        ('bi-circle', 'text-secondary', action.replace('_', ' ').title())
+    )
+    return icon, color, label
+
+
+def _humanize_activity_time(timestamp):
+    if not timestamp:
+        return ''
+    try:
+        delta = datetime.utcnow() - timestamp
+    except TypeError:
+        return timestamp.strftime('%Y-%m-%d %H:%M') if hasattr(timestamp, 'strftime') else ''
+
+    seconds = int(delta.total_seconds()) if delta else 0
+    if seconds < 0:
+        seconds = 0
+
+    if seconds < 60:
+        return 'Just now'
+    if seconds < 3600:
+        minutes = seconds // 60
+        return f'{minutes} min ago'
+    if seconds < 86400:
+        hours = seconds // 3600
+        return f'{hours} hr ago'
+    if seconds < 604800:
+        days = seconds // 86400
+        return f'{days} d ago'
+    return timestamp.strftime('%Y-%m-%d') if hasattr(timestamp, 'strftime') else ''
+
+
+RECENT_ACTIVITY_ALLOWED_ACTIONS = {
+    'CREATE',
+    'CREATE_CRYOVIAL',
+    'CREATE_CRYOVIALS',
+    'CREATE_TOWER',
+    'UPDATE',
+    'DELETE',
+    'DELETE_CRYOVIAL',
+    'DELETE_TOWER',
+    'DELETE_BOX',
+    'DELETE_DRAWER',
+    'DELETE_BATCH',
+    'BATCH_DELETE',
+    'BATCH_EDIT_VIALS',
+    'BATCH_EXPORT_VIALS',
+    'EDIT_CRYOVIAL',
+    'EDIT_CELL_LINE',
+    'EDIT_BATCH_INFO',
+    'UPDATE_STATUS',
+    'UPDATE_VIAL_STATUS',
+    'PICKUP_VIALS',
+    'RESOLVE_ALERT',
+    'DISMISS_ALERT',
+    'BACKUP_EXPORT',
+    'BACKUP_IMPORT',
+    'CLEAR_ALL',
+    'EXPORT',
+    'LOGIN',
+}
 
 @bp.route('/') # Defines the root URL for the main blueprint
 @bp.route('/index') # Also accessible via /index
@@ -128,14 +208,48 @@ def index():
     
     # 获取最近活动记录
     from app.cell_storage.models import AuditLog
-    recent_activities_raw = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(5).all()
-    
-    # Format the audit details for better readability
+    recent_activity_query = (
+        AuditLog.query.options(joinedload(AuditLog.user_performing_action))
+        .filter(AuditLog.action.in_(tuple(RECENT_ACTIVITY_ALLOWED_ACTIONS)))
+        .order_by(AuditLog.timestamp.desc())
+    )
+
+    # Fetch a buffer of recent entries so we can skip malformed ones without returning empty.
+    recent_activities_raw = recent_activity_query.limit(10).all()
+
     recent_activities = []
     for activity in recent_activities_raw:
-        # Add formatted details to each activity
-        activity.formatted_details = format_audit_details(activity.action, activity.details or "", db_session=db.session)
-        recent_activities.append(activity)
+        icon_class, icon_color, action_label = _resolve_activity_display(activity.action)
+        raw_details = activity.details or ''
+        if not isinstance(raw_details, str):
+            raw_details = str(raw_details)
+        formatted_details = format_audit_details(
+            activity.action,
+            raw_details,
+            db_session=db.session
+        )
+        description = formatted_details.strip() if isinstance(formatted_details, str) else ''
+        if not description:
+            description = raw_details.strip() or action_label
+        target_label = ''
+        if activity.target_type:
+            target_label = activity.target_type.replace('_', ' ').title()
+        recent_activities.append({
+            'id': activity.id,
+            'user_name': activity.user_performing_action.username if activity.user_performing_action else 'System',
+            'action': activity.action,
+            'action_label': action_label,
+            'description': description,
+            'icon_class': icon_class,
+            'icon_color': icon_color,
+            'time_full': activity.timestamp.strftime('%Y-%m-%d %H:%M') if activity.timestamp else '',
+            'time_relative': _humanize_activity_time(activity.timestamp),
+            'target_label': target_label,
+        })
+
+        if len(recent_activities) >= 5:
+            break
+
     
     return render_template(
         'main/index.html', 
@@ -344,7 +458,7 @@ def edit_cell_line(cell_line_id):
 def locations_overview():
     towers = Tower.query.order_by(Tower.name).all()
     # You might want to pass drawers and boxes too, or fetch them in the template via tower.drawers, drawer.boxes
-    return render_template('main/locations_overview.html', title='Freezer Locations', towers=towers)
+    return render_template('main/locations_overview_simplified.html', title='Storage Location Management', towers=towers)
 
 # --- Tower Routes ---
 @bp.route('/tower/add', methods=['GET', 'POST'])
@@ -353,11 +467,32 @@ def locations_overview():
 def add_tower():
     form = TowerForm()
     if form.validate_on_submit():
+        # Create the tower
         tower = Tower(name=form.name.data, freezer_name=form.freezer_name.data, description=form.description.data)
         db.session.add(tower)
+        db.session.flush()  # Flush to get the tower ID
+        
+        # Automatically create 5 drawers for the new tower
+        for drawer_num in range(1, 6):
+            drawer = Drawer(name=f'Drawer {drawer_num}', tower_id=tower.id)
+            db.session.add(drawer)
+            db.session.flush()  # Get drawer.id
+
+            # Automatically create 5 boxes (9x9) for each drawer
+            # Each drawer has boxes numbered 1-5
+            for box_num in range(1, 6):
+                box = Box(
+                    name=f'Box {box_num}',
+                    drawer_id=drawer.id,
+                    rows=9,
+                    columns=9,
+                    description=f'Auto-created 9x9 box for Drawer {drawer_num}'
+                )
+                db.session.add(box)
+        
         db.session.commit()
-        log_audit(current_user.id, 'CREATE_TOWER', target_type='Tower', target_id=tower.id, details=f'Tower "{tower.name}" in freezer "{tower.freezer_name}"')
-        flash(f'Tower "{tower.name}" added successfully!', 'success')
+        log_audit(current_user.id, 'CREATE_TOWER', target_type='Tower', target_id=tower.id, details=f'Tower "{tower.name}" in freezer "{tower.freezer_name}" with 5 drawers and 25 boxes')
+        flash(f'Tower "{tower.name}" added successfully with 5 drawers and 25 boxes (9x9 each)!', 'success')
         return redirect(url_for('cell_storage.locations_overview'))
     return render_template('main/tower_form.html', title='Add Tower', form=form, form_action=url_for('cell_storage.add_tower'))
 
@@ -375,6 +510,32 @@ def edit_tower(tower_id):
         flash(f'Tower "{tower.name}" updated successfully!', 'success')
         return redirect(url_for('cell_storage.locations_overview'))
     return render_template('main/tower_form.html', title='Edit Tower', form=form, tower=tower, form_action=url_for('cell_storage.edit_tower', tower_id=tower.id))
+
+@bp.route('/tower/<int:tower_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_tower(tower_id):
+    tower = Tower.query.get_or_404(tower_id)
+    tower_name = tower.name
+    
+    # Delete all associated drawers, boxes, and vials
+    for drawer in tower.drawers:
+        for box in drawer.boxes:
+            # Delete all vials in this box
+            for vial in box.cryovials:
+                db.session.delete(vial)
+            # Delete the box
+            db.session.delete(box)
+        # Delete the drawer
+        db.session.delete(drawer)
+    
+    # Delete the tower
+    db.session.delete(tower)
+    db.session.commit()
+    
+    log_audit(current_user.id, 'DELETE_TOWER', target_type='Tower', target_id=tower_id, details=f'Tower "{tower_name}" and all contents deleted')
+    flash(f'Tower "{tower_name}" and all its contents have been deleted successfully!', 'success')
+    return redirect(url_for('cell_storage.locations_overview'))
 
 # --- Drawer Routes ---
 @bp.route('/drawer/add', methods=['GET', 'POST'])
@@ -414,6 +575,29 @@ def edit_drawer(drawer_id):
     # Ensure tower_id is set correctly for the form on GET request if not using obj
     # form.tower_id.data = drawer.tower_id # This is handled by obj=drawer
     return render_template('main/drawer_form.html', title='Edit Drawer', form=form, drawer=drawer, form_action=url_for('cell_storage.edit_drawer', drawer_id=drawer.id))
+
+@bp.route('/drawer/<int:drawer_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def delete_drawer(drawer_id):
+    drawer = Drawer.query.get_or_404(drawer_id)
+    drawer_name = drawer.name
+    
+    # Delete all associated boxes and vials
+    for box in drawer.boxes:
+        # Delete all vials in this box
+        for vial in box.cryovials:
+            db.session.delete(vial)
+        # Delete the box
+        db.session.delete(box)
+    
+    # Delete the drawer
+    db.session.delete(drawer)
+    db.session.commit()
+    
+    log_audit(current_user.id, 'DELETE_DRAWER', target_type='Drawer', target_id=drawer_id, details=f'Drawer "{drawer_name}" and all contents deleted')
+    flash(f'Drawer "{drawer_name}" and all its contents have been deleted successfully!', 'success')
+    return redirect(url_for('cell_storage.locations_overview'))
 
 # --- Box Routes ---
 @bp.route('/box/add', methods=['GET', 'POST'])
@@ -469,236 +653,306 @@ def edit_box(box_id):
     # form.drawer_id.data = box.drawer_id # Handled by obj=box
     return render_template('main/box_form.html', title='Edit Box', form=form, box=box, form_action=url_for('cell_storage.edit_box', box_id=box.id))
 
-@bp.route('/inventory', methods=['GET', 'POST'])
+@bp.route('/box/<int:box_id>/delete', methods=['POST'])
 @login_required
-def cryovial_inventory():
-    """Display freezer inventory and provide a search with selectable results."""
-
-    if request.method == 'POST':
-        search_q = request.form.get('q', '').strip()
-        search_creator = request.form.get('creator', '').strip()
-        search_fluorescence = request.form.get('fluorescence', '').strip()
-        search_resistance = request.form.get('resistance', '').strip()
-        view_all = False
-        # 如果用户进行了新的搜索，清除view_all状态
-        if search_q or search_creator or search_fluorescence or search_resistance:
-            session.pop('view_all_active', None)
-        else:
-            # 保持之前的view_all状态
-            view_all = session.get('view_all_active', False)
-    else:
-        search_q = request.args.get('q', '').strip()
-        search_creator = request.args.get('creator', '').strip()
-        search_fluorescence = request.args.get('fluorescence', '').strip()
-        search_resistance = request.args.get('resistance', '').strip()
-        view_all = request.args.get('view_all', '').lower() == 'true'
-        page = request.args.get('page', 1, type=int)
-        
-        # 如果用户点击了View All，保存状态到session
-        if view_all:
-            session['view_all_active'] = True
-        # 如果用户进行了新的搜索，清除view_all状态
-        elif search_q or search_creator or search_fluorescence or search_resistance:
-            session.pop('view_all_active', None)
-        # 否则保持之前的view_all状态
-        else:
-            view_all = session.get('view_all_active', False)
-
-    selected_ids = session.get('pickup_ids', [])
-    if request.method == 'POST':
-        if 'selected_batches' in request.form:
-            batch_ids = request.form.getlist('selected_batches')
-            added = 0
-            for bid in batch_ids:
-                try:
-                    bid_int = int(bid)
-                except ValueError:
-                    continue
-                vials_in_batch = CryoVial.query.filter_by(batch_id=bid_int, status='Available').all()
-                for vial in vials_in_batch:
-                    if vial.id not in selected_ids:
-                        selected_ids.append(vial.id)
-                        added += 1
-            session['pickup_ids'] = selected_ids
-            if added:
-                flash(f'{added} vial(s) added to pick-up list.', 'success')
-            redirect_params = {
-                'q': search_q,
-                'creator': search_creator,
-                'fluorescence': search_fluorescence,
-                'resistance': search_resistance,
-            }
-            # 如果有任何搜索条件或者是查看全部，添加view_all参数
-            if search_q or search_creator or search_fluorescence or search_resistance or view_all:
-                redirect_params['view_all'] = 'true'
-            return redirect(url_for('cell_storage.cryovial_inventory', **redirect_params))
-        elif 'remove_batches' in request.form:
-            remove_ids = request.form.getlist('remove_batches')
-            removed = 0
-            for rid in remove_ids:
-                try:
-                    rid_int = int(rid)
-                except ValueError:
-                    continue
-                remove_vials = CryoVial.query.filter(CryoVial.id.in_(selected_ids), CryoVial.batch_id == rid_int).all()
-                for v in remove_vials:
-                    if v.id in selected_ids:
-                        selected_ids.remove(v.id)
-                        removed += 1
-            if removed:
-                if selected_ids:
-                    session['pickup_ids'] = selected_ids
-                else:
-                    session.pop('pickup_ids', None)
-                flash(f'{removed} vial(s) removed from pick-up list.', 'success')
-            redirect_params = {
-                'q': search_q,
-                'creator': search_creator,
-                'fluorescence': search_fluorescence,
-                'resistance': search_resistance,
-            }
-            # 如果有任何搜索条件或者是查看全部，添加view_all参数
-            if search_q or search_creator or search_fluorescence or search_resistance or view_all:
-                redirect_params['view_all'] = 'true'
-            return redirect(url_for('cell_storage.cryovial_inventory', **redirect_params))
-
-    towers = Tower.query.order_by(Tower.name).all()
-    all_creators = User.query.order_by(User.username).all()
-    inventory = {}
+@admin_required
+def delete_box(box_id):
+    box = Box.query.get_or_404(box_id)
+    box_name = box.name
     
-    # Create a color mapping for batches
-    all_batches = VialBatch.query.all()
-    batch_color_map = {}
-    for i, batch in enumerate(all_batches):
-        batch_color_map[batch.id] = i % 12  # Use 12 different colors
+    # Delete all vials in this box
+    for vial in box.cryovials:
+        db.session.delete(vial)
+    
+    # Delete the box
+    db.session.delete(box)
+    db.session.commit()
+    
+    log_audit(current_user.id, 'DELETE_BOX', target_type='Box', target_id=box_id, details=f'Box "{box_name}" and all contents deleted')
+    flash(f'Box "{box_name}" and all its contents have been deleted successfully!', 'success')
+    return redirect(url_for('cell_storage.locations_overview'))
 
-    for tower in towers:
-        tower_dict = {}
-        for drawer in tower.drawers.order_by(Drawer.name).all():
-            drawer_boxes = []
-            for box in drawer.boxes.order_by(Box.name).all():
-                vials_map = {}
-                for vial in box.cryovials.order_by(CryoVial.unique_vial_id_tag):
-                    if vial.status != 'Available':
-                        continue
-                    key = f"{vial.row_in_box}-{vial.col_in_box}"
-                    vials_map[key] = {
-                        'tag': vial.batch_id,
-                        'status': vial.status,
-                        'id': vial.id,
-                        'batch_id': vial.batch_id,
-                        'batch_color': batch_color_map.get(vial.batch_id, 0)
-                    }
-                drawer_boxes.append({
-                    'id': box.id,
-                    'name': box.name,
-                    'drawer_name': drawer.name,
-                    'tower_name': tower.name,
-                    'rows': box.rows,
-                    'columns': box.columns,
-                    'vials': vials_map
-                })
-            tower_dict[drawer.name] = drawer_boxes
-        inventory[tower.name] = tower_dict
+@bp.route('/cryovial/<int:vial_id>/update_status', methods=['GET', 'POST'])
+@login_required # Normal users can update status (declare usage)
+def update_cryovial_status(vial_id):
+    vial = CryoVial.query.get_or_404(vial_id)
+    form = VialUsageForm(obj=vial) # Pre-populate if form has 'status' or 'notes'
 
-    search_results = None
-    if search_q or search_creator or search_fluorescence or search_resistance or view_all:
-        query = CryoVial.query.join(VialBatch).join(CellLine).join(User, VialBatch.created_by_user_id == User.id)
-        query = query.join(Box).join(Drawer).join(Tower)
-        if search_q:
-            like = f"%{search_q}%"
-            query = query.filter(
-                (CryoVial.unique_vial_id_tag.ilike(like)) |
-                (VialBatch.name.ilike(like)) |
-                (CellLine.name.ilike(like)) |
-                (CryoVial.fluorescence_tag.ilike(like)) |
-                (CryoVial.resistance.ilike(like)) |
-                (CryoVial.parental_cell_line.ilike(like))
+    # If GET request, perhaps just show vial info and form.
+    # If POST, process the form.
+    if form.validate_on_submit():
+        old_status = vial.status
+        vial.status = form.new_status.data
+        if form.notes.data:  # Append usage notes to existing notes or set them
+            vial.notes = (vial.notes + "\n" if vial.notes else "") + f"Usage update ({datetime.utcnow().strftime('%Y-%m-%d')}): {form.notes.data}"
+        vial.last_updated = datetime.utcnow()
+        # Create readable audit log for status update
+        readable_details = create_audit_log(
+            user_id=current_user.id,
+            action='UPDATE_STATUS',
+            target_type='CryoVial',
+            target_id=vial.id,
+            vial_tag=vial.unique_vial_id_tag,
+            batch_id=vial.batch_id,
+            old_status=old_status,
+            new_status=vial.status,
+            notes=form.notes.data
+        )
+        log_audit(
+            current_user.id,
+            'UPDATE_STATUS',
+            target_type='CryoVial',
+            target_id=vial.id,
+            details=readable_details
+        )
+        db.session.commit()
+        flash(f'Status of vial "{vial.unique_vial_id_tag}" updated to {vial.status}.', 'success')
+        return redirect(url_for('cell_storage.cryovial_inventory')) # Or back to where they were (e.g., box view)
+
+    # For GET request, it's better to have a dedicated page to confirm this action.
+    # This simple example directly uses a form, but a confirmation step is good UX.
+    return render_template('main/update_vial_status_form.html', title='Update Vial Status',
+                           form=form, vial=vial,
+                           form_action=url_for('cell_storage.update_cryovial_status', vial_id=vial.id))
+
+# Add Edit/View Detail routes for CryoVials (perhaps admin only for edit, all for view)
+@bp.route('/cryovial/<int:vial_id>/edit', methods=['GET', 'POST'])
+@login_required # Or @admin_required if only admins can edit vial details
+def edit_cryovial(vial_id):
+    vial = CryoVial.query.get_or_404(vial_id)
+    # Permission check: e.g., only admin or the user who froze it can edit.
+    # if not current_user.is_admin and vial.frozen_by_user_id != current_user.id:
+    #     flash('You do not have permission to edit this vial.', 'danger')
+    #     return redirect(url_for('cell_storage.cryovial_inventory'))
+
+    form = CryoVialEditForm(obj=vial)
+    form.cell_line_id.choices = [(cl.id, cl.name) for cl in CellLine.query.order_by(CellLine.name).all()]
+    form.box_id.choices = [
+        (b.id, f"{b.drawer_info.tower_info.name} - {b.drawer_info.name} - {b.name} ({b.rows}x{b.columns})")
+        for b in Box.query.join(Drawer).join(Tower).order_by(Tower.name, Drawer.name, Box.name).all()
+    ]
+
+    # Ensure these fields are correctly populated on GET if obj doesn't do it perfectly for SelectFields after validation fail
+    if request.method == 'GET':
+        form.cell_line_id.data = vial.cell_line_id
+        form.box_id.data = vial.box_id
+        form.resistance.data = vial.resistance.split(',') if vial.resistance else []
+        form.unique_vial_id_tag.data = vial.unique_vial_id_tag
+        form.row_in_box.data = vial.row_in_box
+        form.col_in_box.data = vial.col_in_box
+        form.passage_number.data = vial.passage_number
+        form.date_frozen.data = vial.date_frozen
+        form.number_of_vials_at_creation.data = vial.number_of_vials_at_creation
+        form.volume_ml.data = vial.volume_ml
+        form.concentration.data = vial.concentration
+        form.fluorescence_tag.data = vial.fluorescence_tag
+        form.parental_cell_line.data = vial.parental_cell_line
+        form.status.data = vial.status
+        form.notes.data = vial.notes
+
+    if form.validate_on_submit():
+        # Basic check for position change and occupancy, more complex if vial moves
+        if (form.box_id.data != vial.box_id or \
+            form.row_in_box.data != vial.row_in_box or \
+            form.col_in_box.data != vial.col_in_box):
+            existing_vial_at_new_pos = CryoVial.query.filter(
+                CryoVial.id != vial.id,  # Exclude the current vial
+                CryoVial.box_id == form.box_id.data,
+                CryoVial.row_in_box == form.row_in_box.data,
+                CryoVial.col_in_box == form.col_in_box.data,
+                CryoVial.status == 'Available'
+            ).first()
+            if existing_vial_at_new_pos:
+                flash(f'Error: New position {form.row_in_box.data}-{form.col_in_box.data} in selected box is already occupied by vial {existing_vial_at_new_pos.unique_vial_id_tag}.', 'danger')
+                return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
+
+        selected_box = Box.query.get(form.box_id.data)
+        if not selected_box or not (1 <= form.row_in_box.data <= selected_box.rows and 1 <= form.col_in_box.data <= selected_box.columns):
+            flash(f'Error: Row/Column number is outside the dimensions of the selected box ({selected_box.rows}x{selected_box.columns}).', 'danger')
+            return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
+
+        vial.unique_vial_id_tag = form.unique_vial_id_tag.data
+        vial.cell_line_id = form.cell_line_id.data
+        vial.box_id = form.box_id.data
+        vial.row_in_box = form.row_in_box.data
+        vial.col_in_box = form.col_in_box.data
+        vial.passage_number = form.passage_number.data
+        vial.date_frozen = form.date_frozen.data
+        # frozen_by_user_id should generally not change, or only by admin
+        # 保存旧的 parental_cell_line 值用于检测变化（在更新之前）
+        old_parental_cell_line = vial.parental_cell_line
+
+        vial.number_of_vials_at_creation = form.number_of_vials_at_creation.data
+        vial.volume_ml = form.volume_ml.data
+        vial.concentration = form.concentration.data
+        vial.fluorescence_tag = form.fluorescence_tag.data
+        vial.resistance = ','.join(form.resistance.data) if form.resistance.data else None
+        vial.parental_cell_line = form.parental_cell_line.data
+        vial.status = form.status.data
+        vial.notes = form.notes.data
+        vial.last_updated = datetime.utcnow()
+
+        # 如果 parental_cell_line 被修改，更新 BatchLineage 关系
+        new_parental_cell_line = form.parental_cell_line.data
+        if new_parental_cell_line and new_parental_cell_line.strip():
+            # 只有当值发生变化时才尝试创建新关系
+            if new_parental_cell_line.strip() != (old_parental_cell_line or '').strip():
+                try:
+                    VialBatch.auto_create_lineage_from_parental_name(
+                        child_batch_id=vial.batch_id,
+                        parental_name=new_parental_cell_line,
+                        created_by_user_id=current_user.id
+                    )
+                except Exception as e:
+                    current_app.logger.warning(f'Auto-lineage update failed for batch {vial.batch_id}: {e}')
+
+        current_details_for_edit = {
+            'general_info': 'vial edited',
+            'vial_id': vial.id,  # Storing the single vial_id being edited
+            'batch_id': vial.batch_id  # Storing the associated batch_id
+            # You could add more specific changed fields here if desired
+            # e.g., 'changed_fields': {'status': vial.status, 'notes': vial.notes}
+        }
+        log_audit(
+            current_user.id,
+            'EDIT_CRYOVIAL',
+            target_type='CryoVial',
+            target_id=vial.id,
+            details=current_details_for_edit
+        )
+        db.session.commit()
+        flash(f'CryoVial "{vial.unique_vial_id_tag}" updated successfully!', 'success')
+        return redirect(get_smart_redirect_url('cell_storage.cryovial_inventory'))
+
+    return render_template('main/edit_cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
+
+
+@bp.route('/box/<int:box_id>/add/<int:row>/<int:col>', methods=['GET', 'POST'], endpoint='add_vial_at_position')
+@login_required
+@admin_required
+def add_vial_at_position(box_id, row, col):
+    box = Box.query.get_or_404(box_id)
+    if not (1 <= row <= box.rows and 1 <= col <= box.columns):
+        flash('Invalid position for this box.', 'danger')
+        return redirect(url_for('cell_storage.cryovial_inventory'))
+
+    existing = CryoVial.query.filter_by(
+        box_id=box.id,
+        row_in_box=row,
+        col_in_box=col,
+        status='Available'
+    ).first()
+    if existing:
+        flash('That position is already occupied.', 'danger')
+        return redirect(url_for('cell_storage.cryovial_inventory'))
+
+    form = ManualVialForm()
+    form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
+
+    if form.validate_on_submit():
+        if form.batch_id.data:
+            batch = VialBatch.query.get(form.batch_id.data)
+            if not batch:
+                flash('Batch ID not found.', 'danger')
+                return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('cell_storage.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
+        else:
+            batch = VialBatch(
+                id=get_next_batch_id(),
+                name=form.batch_name.data,
+                created_by_user_id=current_user.id,
             )
-        if search_creator:
-            query = query.filter(User.username == search_creator)
-        if search_fluorescence:
-            query = query.filter(CryoVial.fluorescence_tag.ilike(f"%{search_fluorescence}%"))
-        if search_resistance:
-            query = query.filter(CryoVial.resistance.ilike(f"%{search_resistance}%"))
-        query = query.order_by(VialBatch.id, CryoVial.unique_vial_id_tag)
-        vials = query.all()
-        grouped = {}
-        for v in vials:
-            info = grouped.get(v.batch_id)
-            if not info:
-                grouped[v.batch_id] = {
-                    'batch': v.batch,
-                    'date_frozen': v.date_frozen,
-                    'cell_line': v.cell_line_info.name,
-                    'passage_number': v.passage_number,
-                    'volume_ml': v.volume_ml,
-                    'concentration': v.concentration,
-                    'fluorescence_tag': v.fluorescence_tag,
-                    'resistance': v.resistance,
-                    'parental_cell_line': v.parental_cell_line,
-                    'notes': v.notes,
-                    'available_quantity': 0,
-                }
-                info = grouped[v.batch_id]
-            if v.status == 'Available':
-                info['available_quantity'] += 1
-            if v.date_frozen < info['date_frozen']:
-                info['date_frozen'] = v.date_frozen
-        search_results = [g for g in grouped.values() if g['available_quantity'] > 0]
+            db.session.add(batch)
+            db.session.commit()
 
-    selected_batches = None
-    if selected_ids:
-        selected_vials = CryoVial.query.filter(CryoVial.id.in_(selected_ids)).join(VialBatch).join(CellLine).all()
-        grouped_sel = {}
-        for v in selected_vials:
-            info = grouped_sel.get(v.batch_id)
-            if not info:
-                grouped_sel[v.batch_id] = {
-                    'batch': v.batch,
-                    'date_frozen': v.date_frozen,
-                    'count': 1
-                }
-            else:
-                info['count'] += 1
-                if v.date_frozen < info['date_frozen']:
-                    info['date_frozen'] = v.date_frozen
-        selected_batches = list(grouped_sel.values())
+        # Use vial counter for unique ID generation
+        # 使用正确的批次标签格式
+        base_tag = f"B{batch.id}"
+        count = batch.vials.count()
+        unique_tag = base_tag if count == 0 else f"{base_tag}-{count + 1}"
 
-    # Get distinct values for filter dropdowns
-    all_fluorescence_tags = [
-        item[0]
-        for item in db.session.query(CryoVial.fluorescence_tag)
-        .filter(CryoVial.fluorescence_tag.isnot(None) & (CryoVial.fluorescence_tag != ''))
-        .distinct()
-        .all()
-    ]
-    all_resistances = [
-        item[0]
-        for item in db.session.query(CryoVial.resistance)
-        .filter(CryoVial.resistance.isnot(None) & (CryoVial.resistance != ''))
-        .distinct()
-        .all()
-    ]
-    
-    return render_template(
-        'main/cryovial_inventory.html',
-        title='CryoVial Inventory',
-        inventory=inventory,
-        search_results=search_results,
-        search_q=search_q,
-        search_creator=search_creator,
-        search_fluorescence=search_fluorescence,
-        search_resistance=search_resistance,
-        selected_batches=selected_batches,
-        selected_ids=selected_ids,
-        all_creators=all_creators,
-        all_fluorescence_tags=all_fluorescence_tags,
-        all_resistances=all_resistances,
-        batch_counter=get_batch_counter(),
-        batch_color_map=batch_color_map
-    )
+        vial = CryoVial(
+            unique_vial_id_tag=unique_tag,
+            batch_id=batch.id,
+            cell_line_id=form.cell_line_id.data,
+            box_id=box.id,
+            row_in_box=row,
+            col_in_box=col,
+            passage_number=form.passage_number.data,
+            date_frozen=form.date_frozen.data,
+            frozen_by_user_id=current_user.id,
+            volume_ml=form.volume_ml.data,
+            concentration=form.concentration.data,
+            fluorescence_tag=form.fluorescence_tag.data,
+            resistance=','.join(form.resistance.data) if form.resistance.data else None,
+            parental_cell_line=form.parental_cell_line.data,
+            status='Available',
+            notes=form.notes.data,
+            date_created=datetime.utcnow(),
+        )
+        db.session.add(vial)
+        db.session.flush()  # 确保 batch.id 可用
 
+        # 自动创建 BatchLineage 关系（从 parental_cell_line 字符串）
+        parental_name = form.parental_cell_line.data
+        if parental_name and parental_name.strip():
+            try:
+                VialBatch.auto_create_lineage_from_parental_name(
+                    child_batch_id=batch.id,
+                    parental_name=parental_name,
+                    created_by_user_id=current_user.id
+                )
+            except Exception as e:
+                current_app.logger.warning(f'Auto-lineage creation failed for batch {batch.id}: {e}')
+
+        db.session.commit()
+        log_audit(current_user.id, 'CREATE_CRYOVIAL', target_type='CryoVial', target_id=vial.id, details=f'box {box.id} R{row}C{col}')
+        flash('Vial added.', 'success')
+        return redirect(url_for('cell_storage.cryovial_inventory'))
+
+    return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('cell_storage.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
+
+
+@bp.route('/cryovial/<int:vial_id>/delete')
+@login_required
+@admin_required
+def delete_cryovial(vial_id):
+    vial = CryoVial.query.get_or_404(vial_id)
+    db.session.delete(vial)
+    db.session.commit()
+    log_audit(current_user.id, 'DELETE_CRYOVIAL', target_type='CryoVial', target_id=vial_id)
+    flash('Vial deleted.', 'success')
+    return redirect(url_for('cell_storage.cryovial_inventory'))
+
+@bp.route('/admin/batch_counter', methods=['POST'])
+@login_required
+@admin_required
+def update_batch_counter():
+    value = request.form.get('batch_counter')
+    try:
+        new_val = int(value)
+        if new_val < 1:
+            raise ValueError
+        set_batch_counter(new_val)
+        flash('Batch counter updated.', 'success')
+    except (TypeError, ValueError):
+        flash('Invalid batch counter value.', 'danger')
+    return redirect(url_for('cell_storage.cryovial_inventory'))
+
+
+@bp.route('/admin/vial_counter', methods=['POST'])
+@login_required
+@admin_required
+def update_vial_counter():
+    value = request.form.get('vial_counter')
+    try:
+        new_val = int(value)
+        if new_val < 1:
+            raise ValueError
+        set_vial_counter(new_val)
+        flash('Vial counter updated.', 'success')
+    except (TypeError, ValueError):
+        flash('Invalid vial counter value.', 'danger')
+    return redirect(url_for('cell_storage.cryovial_inventory'))
 
 @bp.route('/inventory/pickup', methods=['GET', 'POST'])
 @login_required
@@ -787,7 +1041,6 @@ def find_available_slots_in_box(box, num_slots_needed):
                 return available_positions[:num_slots_needed]
     return available_positions
 
-
 @bp.route('/cryovial/add', methods=['GET', 'POST'])
 @login_required
 def add_cryovial():
@@ -809,19 +1062,35 @@ def add_cryovial():
             flash('Placement confirmation data lost. Please try again.', 'danger')
             return redirect(url_for('cell_storage.add_cryovial'))
 
-        batch = VialBatch(
-            id=get_next_batch_id(auto_commit=False),
-            name=vial_common_data.get('batch_name'),
-            created_by_user_id=current_user.id,
-        )
-        db.session.add(batch)
-        db.session.flush()  # 确保batch ID可用但不提交
-        base_tag = f"B{batch.id}"
-
+        try:
+            batch_id = get_next_batch_id(auto_commit=False)
+            batch = VialBatch(
+                id=batch_id,
+                name=vial_common_data.get('batch_name'),
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(batch)
+            db.session.flush()  # 确保batch ID可用但不提交
+        except Exception as e:
+            current_app.logger.error(f'Error creating batch: {str(e)}', exc_info=True)
+            # If batch creation fails, clean up session and retry with a simple approach
+            db.session.rollback()
+            # Use simple max+1 approach as fallback
+            max_id = db.session.query(db.func.max(VialBatch.id)).scalar() or 0
+            batch = VialBatch(
+                id=max_id + 1,
+                name=vial_common_data.get('batch_name'),
+                created_by_user_id=current_user.id,
+            )
+            db.session.add(batch)
+            db.session.flush()
         created_vials_info = []
         quantity_being_added = len(placements) # Get the actual number from placements
 
         for i, p in enumerate(placements):
+            # Use vial counter for unique ID generation
+            # 使用正确的批次标签格式
+            base_tag = f"B{batch.id}"
             unique_tag_suffix = f"-{i+1}" if quantity_being_added > 1 else ""
             unique_tag = f"{base_tag}{unique_tag_suffix}"
 
@@ -855,9 +1124,10 @@ def add_cryovial():
             created_vials_info.append(f"Vial {unique_tag} at Box ID {p['box_id']}, R{p['row']}C{p['col']}")
 
         try:
-            db.session.flush() # Ensure vial IDs are available if batch.vials.all() needs them before commit
-            # Get vial IDs for the audit log
-            vial_ids = [v.id for v in batch.vials.all() if v.id is not None]
+            db.session.flush() # Ensure vial IDs are available before commit
+            # Get vial IDs for the audit log - collect them directly from created vials
+            created_vials = db.session.query(CryoVial).filter_by(batch_id=batch.id).all()
+            vial_ids = [v.id for v in created_vials if v.id is not None]
             
             # Create human-readable audit log
             readable_details = create_audit_log(
@@ -878,6 +1148,21 @@ def add_cryovial():
                 target_id=batch.id,
                 details=readable_details
             )
+
+            # 自动创建 BatchLineage 关系（从 parental_cell_line 字符串）
+            parental_name = vial_common_data.get('parental_cell_line')
+            if parental_name and parental_name.strip():
+                try:
+                    VialBatch.auto_create_lineage_from_parental_name(
+                        child_batch_id=batch.id,
+                        parental_name=parental_name,
+                        created_by_user_id=current_user.id
+                    )
+                    # 不需要单独 commit，会在下面的主 commit 中一起提交
+                except Exception as e:
+                    # 记录错误但不影响 vial 创建流程
+                    current_app.logger.warning(f'Auto-lineage creation failed for batch {batch.id}: {e}')
+
             db.session.commit()
             flash(
                 f"Batch #{batch.id} '{batch.name}' added with base ID {base_tag} and {len(placements)} vial(s): "
@@ -887,8 +1172,12 @@ def add_cryovial():
             return redirect(url_for('cell_storage.cryovial_inventory'))
         except Exception as e:
             db.session.rollback()
-            # The error message reported by the user indicates the exception 'e' contains the specific Python error.
-            flash(f'Error saving vial(s): {e}. Please try again.', 'danger')
+            # Log the full error for debugging
+            current_app.logger.error(f'Error in vial placement confirmation: {str(e)}', exc_info=True)
+            flash(f'Error saving vial(s): {str(e)}. Please try again.', 'danger')
+            # Clear session data to prevent stuck state
+            session.pop('proposed_placements', None)
+            session.pop('vial_common_data', None)
             return redirect(url_for('cell_storage.add_cryovial'))
 
     if form.validate_on_submit():
@@ -1013,564 +1302,454 @@ def add_cryovial():
     return render_template('main/cryovial_form.html', title='Add CryoVial(s)', form=form,
                            form_action=url_for('cell_storage.add_cryovial'))
 
-@bp.route('/cryovial/<int:vial_id>/update_status', methods=['GET', 'POST'])
-@login_required # Normal users can update status (declare usage)
-def update_cryovial_status(vial_id):
-    vial = CryoVial.query.get_or_404(vial_id)
-    form = VialUsageForm(obj=vial) # Pre-populate if form has 'status' or 'notes'
+@bp.route('/inventory', methods=['GET', 'POST'])
+@login_required
+def cryovial_inventory():
+    """Display freezer inventory and provide a search with selectable results."""
 
-    # If GET request, perhaps just show vial info and form.
-    # If POST, process the form.
-    if form.validate_on_submit():
-        old_status = vial.status
-        vial.status = form.new_status.data
-        if form.notes.data:  # Append usage notes to existing notes or set them
-            vial.notes = (vial.notes + "\n" if vial.notes else "") + f"Usage update ({datetime.utcnow().strftime('%Y-%m-%d')}): {form.notes.data}"
-        vial.last_updated = datetime.utcnow()
-        # Create readable audit log for status update
-        readable_details = create_audit_log(
-            user_id=current_user.id,
-            action='UPDATE_STATUS',
-            target_type='CryoVial',
-            target_id=vial.id,
-            vial_tag=vial.unique_vial_id_tag,
-            batch_id=vial.batch_id,
-            old_status=old_status,
-            new_status=vial.status,
-            notes=form.notes.data
-        )
-        log_audit(
-            current_user.id,
-            'UPDATE_STATUS',
-            target_type='CryoVial',
-            target_id=vial.id,
-            details=readable_details
-        )
-        db.session.commit()
-        flash(f'Status of vial "{vial.unique_vial_id_tag}" updated to {vial.status}.', 'success')
-        return redirect(url_for('cell_storage.cryovial_inventory')) # Or back to where they were (e.g., box view)
+    allowed_targets = {'batch', 'vial', 'cell_line', 'tag'}
+    data_source = request.form if request.method == 'POST' else request.args
 
-    # For GET request, it's better to have a dedicated page to confirm this action.
-    # This simple example directly uses a form, but a confirmation step is good UX.
-    return render_template('main/update_vial_status_form.html', title='Update Vial Status',
-                           form=form, vial=vial,
-                           form_action=url_for('cell_storage.update_cryovial_status', vial_id=vial.id))
+    def _clean(value):
+        return value.strip() if value else ''
 
-# Add Edit/View Detail routes for CryoVials (perhaps admin only for edit, all for view)
-@bp.route('/cryovial/<int:vial_id>/edit', methods=['GET', 'POST'])
-@login_required # Or @admin_required if only admins can edit vial details
-def edit_cryovial(vial_id):
-    vial = CryoVial.query.get_or_404(vial_id)
-    # Permission check: e.g., only admin or the user who froze it can edit.
-    # if not current_user.is_admin and vial.frozen_by_user_id != current_user.id:
-    #     flash('You do not have permission to edit this vial.', 'danger')
-    #     return redirect(url_for('cell_storage.cryovial_inventory'))
+    search_q = _clean(data_source.get('q'))
+    search_target = (data_source.get('target') or 'batch').lower()
+    if search_target not in allowed_targets:
+        search_target = 'batch'
+    search_creator = _clean(data_source.get('creator'))
+    search_fluorescence = _clean(data_source.get('fluorescence'))
+    search_resistance = _clean(data_source.get('resistance'))
+    search_status = _clean(data_source.get('status'))
+    max_passage = _clean(data_source.get('max_passage'))
+    date_from = _clean(data_source.get('date_from'))
+    search_cell_line_raw = _clean(data_source.get('cell_line_id'))
+    search_cell_line_id = int(search_cell_line_raw) if search_cell_line_raw.isdigit() else None
+    view_all_flag = (data_source.get('view_all') or '').lower() == 'true'
+    match_mode = (data_source.get('match_mode') or 'partial').lower()
+    if match_mode not in {'exact', 'partial'}:
+        match_mode = 'partial'
 
-    form = CryoVialEditForm(obj=vial)
-    form.cell_line_id.choices = [(cl.id, cl.name) for cl in CellLine.query.order_by(CellLine.name).all()]
-    form.box_id.choices = [
-        (b.id, f"{b.drawer_info.tower_info.name} - {b.drawer_info.name} - {b.name} ({b.rows}x{b.columns})")
-        for b in Box.query.join(Drawer).join(Tower).order_by(Tower.name, Drawer.name, Box.name).all()
+    search_fields_used = any([
+        search_q,
+        search_creator,
+        search_fluorescence,
+        search_resistance,
+        search_status,
+        max_passage,
+        date_from,
+        search_cell_line_id,
+    ])
+
+    if view_all_flag:
+        session['view_all_active'] = True
+    elif search_fields_used:
+        session.pop('view_all_active', None)
+    else:
+        view_all_flag = session.get('view_all_active', False)
+
+    selected_ids = session.get('pickup_ids', [])
+    if request.method == 'POST':
+        if 'selected_batches' in request.form:
+            batch_ids = request.form.getlist('selected_batches')
+            added = 0
+            for bid in batch_ids:
+                try:
+                    bid_int = int(bid)
+                except ValueError:
+                    continue
+                vials_in_batch = CryoVial.query.filter_by(batch_id=bid_int, status='Available').all()
+                for vial in vials_in_batch:
+                    if vial.id not in selected_ids:
+                        selected_ids.append(vial.id)
+                        added += 1
+            session['pickup_ids'] = selected_ids
+            if added:
+                flash(f"{added} vial(s) added to pick-up list.", 'success')
+            redirect_params = {
+                'q': search_q,
+                'target': search_target,
+                'creator': search_creator,
+                'fluorescence': search_fluorescence,
+                'resistance': search_resistance,
+                'status': search_status,
+                'max_passage': max_passage,
+                'date_from': date_from,
+                'match_mode': match_mode,
+            }
+            if search_cell_line_id:
+                redirect_params['cell_line_id'] = search_cell_line_id
+            if view_all_flag:
+                redirect_params['view_all'] = 'true'
+            return redirect(url_for('cell_storage.cryovial_inventory', **redirect_params))
+        elif 'remove_batches' in request.form:
+            remove_ids = request.form.getlist('remove_batches')
+            removed = 0
+            for rid in remove_ids:
+                try:
+                    rid_int = int(rid)
+                except ValueError:
+                    continue
+                remove_vials = CryoVial.query.filter(CryoVial.id.in_(selected_ids), CryoVial.batch_id == rid_int).all()
+                for vial in remove_vials:
+                    if vial.id in selected_ids:
+                        selected_ids.remove(vial.id)
+                        removed += 1
+            if removed:
+                if selected_ids:
+                    session['pickup_ids'] = selected_ids
+                else:
+                    session.pop('pickup_ids', None)
+                flash(f"{removed} vial(s) removed from pick-up list.", 'success')
+            redirect_params = {
+                'q': search_q,
+                'target': search_target,
+                'creator': search_creator,
+                'fluorescence': search_fluorescence,
+                'resistance': search_resistance,
+                'status': search_status,
+                'max_passage': max_passage,
+                'date_from': date_from,
+                'match_mode': match_mode,
+            }
+            if search_cell_line_id:
+                redirect_params['cell_line_id'] = search_cell_line_id
+            if view_all_flag:
+                redirect_params['view_all'] = 'true'
+            return redirect(url_for('cell_storage.cryovial_inventory', **redirect_params))
+
+    towers = Tower.query.order_by(Tower.name).all()
+    all_creators = User.query.order_by(User.username).all()
+    all_cell_lines = CellLine.query.order_by(CellLine.name).all()
+    inventory = {}
+
+    all_batches = VialBatch.query.all()
+    batch_color_map = {batch.id: index % 12 for index, batch in enumerate(all_batches)}
+
+    for tower in towers:
+        tower_dict = {}
+        for drawer in tower.drawers.order_by(Drawer.name).all():
+            drawer_boxes = []
+            for box in drawer.boxes.order_by(Box.name).all():
+                vials_map = {}
+                for vial in box.cryovials.order_by(CryoVial.unique_vial_id_tag):
+                    if vial.status != 'Available':
+                        continue
+                    key = f"{vial.row_in_box}-{vial.col_in_box}"
+                    vials_map[key] = {
+                        'tag': vial.batch_id,
+                        'status': vial.status,
+                        'id': vial.id,
+                        'batch_id': vial.batch_id,
+                        'batch_color': batch_color_map.get(vial.batch_id, 0),
+                    }
+                drawer_boxes.append(
+                    {
+                        'id': box.id,
+                        'name': box.name,
+                        'drawer_name': drawer.name,
+                        'tower_name': tower.name,
+                        'rows': box.rows,
+                        'columns': box.columns,
+                        'vials': vials_map,
+                    }
+                )
+            tower_dict[drawer.name] = drawer_boxes
+        inventory[tower.name] = tower_dict
+
+    search_results = None
+    search_feedback = None
+    search_suggestion = None
+    recent_searches = session.get('recent_cryovial_searches', [])
+
+    general_filters = []
+    if search_creator:
+        general_filters.append(User.username == search_creator)
+    if search_fluorescence:
+        general_filters.append(CryoVial.fluorescence_tag.ilike(f"%{search_fluorescence}%"))
+    if search_resistance:
+        general_filters.append(CryoVial.resistance.ilike(f"%{search_resistance}%"))
+    if search_status:
+        general_filters.append(CryoVial.status == search_status)
+    if search_cell_line_id:
+        general_filters.append(CryoVial.cell_line_id == search_cell_line_id)
+    if max_passage:
+        try:
+            general_filters.append(CryoVial.passage <= int(max_passage))
+        except ValueError:
+            pass
+    if date_from:
+        try:
+            from_date = datetime.strptime(date_from, '%Y-%m-%d').date()
+            general_filters.append(CryoVial.date_added >= from_date)
+        except ValueError:
+            pass
+
+    base_query = (
+        CryoVial.query.join(VialBatch)
+        .join(CellLine)
+        .join(User, VialBatch.created_by_user_id == User.id)
+        .join(Box)
+        .join(Drawer)
+        .join(Tower)
+    )
+    if general_filters:
+        for filter_clause in general_filters:
+            base_query = base_query.filter(filter_clause)
+
+    quality_rank = {'filter': 0, 'partial': 1, 'exact': 2}
+    target_exact_labels = {
+        'batch': 'Batch name exact match',
+        'vial': 'Vial ID exact match',
+        'cell_line': 'Cell line exact match',
+        'tag': 'Tag exact match',
+    }
+    target_partial_labels = {
+        'batch': 'Batch name partial match',
+        'vial': 'Vial ID partial match',
+        'cell_line': 'Cell line partial match',
+        'tag': 'Tag partial match',
+    }
+    target_filter_labels = {
+        'batch': 'Filtered results',
+        'vial': 'Filtered results',
+        'cell_line': 'Cell line filter',
+        'tag': 'Filtered results',
+    }
+
+    vials = []
+    match_quality = 'filter'
+
+    if view_all_flag and not search_fields_used:
+        vials = base_query.order_by(VialBatch.id, CryoVial.unique_vial_id_tag).all()
+        match_quality = 'filter'
+    elif search_q or search_fields_used:
+        normalized_q = search_q.lower() if search_q else ''
+        if search_target == 'batch':
+            if search_q:
+                if match_mode == 'exact':
+                    exact_filters = [func.lower(VialBatch.name) == normalized_q]
+                    if search_q.isdigit():
+                        exact_filters.append(VialBatch.id == int(search_q))
+                    vials = base_query.filter(or_(*exact_filters)).all() if exact_filters else []
+                    match_quality = 'exact'
+                    if vials:
+                        search_feedback = f"Exact batch match for '{search_q}'."
+                    else:
+                        search_feedback = f"No exact batch match for '{search_q}'."
+                        search_suggestion = 'Try switching match mode to Partial to broaden the search.'
+                else:
+                    like_pattern = f"%{search_q}%"
+                    partial_filters = [VialBatch.name.ilike(like_pattern)]
+                    if search_q.isdigit():
+                        partial_filters.append(cast(VialBatch.id, String).ilike(like_pattern))
+                    vials = base_query.filter(or_(*partial_filters)).all()
+                    match_quality = 'partial'
+                    if vials:
+                        search_feedback = f"Showing partial batch matches for '{search_q}'."
+                        search_suggestion = 'Found similarly named cell lines. Try switching search target to "Cell Line" if that was your intent.'
+                    else:
+                        search_feedback = f"No batch found for '{search_q}'."
+            else:
+                vials = base_query.all()
+                match_quality = 'filter'
+        elif search_target == 'vial':
+            if search_q:
+                if match_mode == 'exact':
+                    vials = base_query.filter(func.lower(CryoVial.unique_vial_id_tag) == normalized_q).all()
+                    match_quality = 'exact'
+                    if vials:
+                        search_feedback = f"Found vial ID '{search_q}'."
+                    else:
+                        search_feedback = f"No exact vial ID match for '{search_q}'."
+                        search_suggestion = 'Try Partial mode to search within vial IDs.'
+                else:
+                    like_pattern = f"%{search_q}%"
+                    vials = base_query.filter(CryoVial.unique_vial_id_tag.ilike(like_pattern)).all()
+                    match_quality = 'partial'
+                    if vials:
+                        search_feedback = f"Showing vial IDs containing '{search_q}'."
+                    else:
+                        search_feedback = f"No vial found for '{search_q}'."
+            else:
+                vials = base_query.all()
+                match_quality = 'filter'
+        elif search_target == 'cell_line':
+            if search_cell_line_id:
+                vials = base_query.all()
+                match_quality = 'exact'
+                search_feedback = 'Filtered by selected cell line.'
+            elif search_q:
+                if match_mode == 'exact':
+                    vials = base_query.filter(func.lower(CellLine.name) == normalized_q).all()
+                    match_quality = 'exact'
+                    if vials:
+                        search_feedback = f"Exact cell line match for '{search_q}'."
+                    else:
+                        search_feedback = f"No exact cell line match for '{search_q}'."
+                        search_suggestion = 'Switch to Partial to include similar names.'
+                else:
+                    like_pattern = f"%{search_q}%"
+                    vials = base_query.filter(CellLine.name.ilike(like_pattern)).all()
+                    match_quality = 'partial'
+                    if vials:
+                        search_feedback = f"Showing cell lines containing '{search_q}'."
+                    else:
+                        search_feedback = f"No cell line found for '{search_q}'."
+            else:
+                vials = base_query.all()
+                match_quality = 'filter'
+        elif search_target == 'tag':
+            if search_q:
+                if match_mode == 'exact':
+                    exact_match_results = base_query.filter(
+                        or_(
+                            func.lower(CryoVial.fluorescence_tag) == normalized_q,
+                            func.lower(CryoVial.resistance) == normalized_q,
+                        )
+                    ).all()
+                    vials = exact_match_results
+                    match_quality = 'exact'
+                    if vials:
+                        search_feedback = f"Exact tag match for '{search_q}'."
+                    else:
+                        search_feedback = f"No exact tag match for '{search_q}'."
+                        search_suggestion = 'Try Partial mode to search within tag details.'
+                else:
+                    like_pattern = f"%{search_q}%"
+                    vials = base_query.filter(
+                        or_(
+                            CryoVial.fluorescence_tag.ilike(like_pattern),
+                            CryoVial.resistance.ilike(like_pattern),
+                            CryoVial.parental_cell_line.ilike(like_pattern),
+                            CryoVial.notes.ilike(like_pattern),
+                        )
+                    ).all()
+                    match_quality = 'partial'
+                    if vials:
+                        search_feedback = f"Showing tag results containing '{search_q}'."
+                    else:
+                        search_feedback = f"No tags found for '{search_q}'."
+            else:
+                vials = base_query.all()
+                match_quality = 'filter'
+
+    grouped = {}
+    for vial in vials:
+        info = grouped.get(vial.batch_id)
+        if not info:
+            info = {
+                'batch': vial.batch,
+                'date_frozen': vial.date_frozen,
+                'cell_line': vial.cell_line_info.name,
+                'passage_number': vial.passage_number,
+                'volume_ml': vial.volume_ml,
+                'concentration': vial.concentration,
+                'fluorescence_tag': vial.fluorescence_tag,
+                'resistance': vial.resistance,
+                'parental_cell_line': vial.parental_cell_line,
+                'notes': vial.notes,
+                'available_quantity': 0,
+                'match_labels': set(),
+                'match_quality': 'filter',
+            }
+            grouped[vial.batch_id] = info
+        if vial.status == 'Available':
+            info['available_quantity'] += 1
+        if vial.date_frozen and (not info['date_frozen'] or vial.date_frozen < info['date_frozen']):
+            info['date_frozen'] = vial.date_frozen
+
+        if match_quality == 'exact':
+            current_label = target_exact_labels.get(search_target, 'Exact match')
+        elif match_quality == 'partial':
+            current_label = target_partial_labels.get(search_target, 'Partial match')
+        else:
+            current_label = target_filter_labels.get(search_target, 'Filtered results')
+
+        info['match_labels'].add(current_label)
+        if quality_rank[match_quality] > quality_rank.get(info['match_quality'], 0):
+            info['match_quality'] = match_quality
+
+    if grouped:
+        for entry in grouped.values():
+            entry['match_labels'] = sorted(entry['match_labels'])
+        search_results = list(grouped.values())
+    elif search_fields_used or search_q or view_all_flag:
+        search_results = []
+
+    if request.method == 'GET' and search_q:
+        recent_entry = {'q': search_q, 'target': search_target, 'match_mode': match_mode}
+        normalized_history = []
+        for item in recent_searches:
+            item_mode = item.get('match_mode', 'partial')
+            if not (item.get('q') == search_q and item.get('target') == search_target and item_mode == match_mode):
+                normalized_history.append(item)
+        normalized_history.insert(0, recent_entry)
+        session['recent_cryovial_searches'] = normalized_history[:5]
+    recent_searches = session.get('recent_cryovial_searches', [])
+
+    selected_batches = None
+    if selected_ids:
+        selected_vials = CryoVial.query.filter(CryoVial.id.in_(selected_ids)).join(VialBatch).join(CellLine).all()
+        grouped_sel = {}
+        for vial in selected_vials:
+            info = grouped_sel.get(vial.batch_id)
+            if not info:
+                grouped_sel[vial.batch_id] = {
+                    'batch': vial.batch,
+                    'date_frozen': vial.date_frozen,
+                    'count': 1,
+                }
+            else:
+                info['count'] += 1
+                if vial.date_frozen and (not info['date_frozen'] or vial.date_frozen < info['date_frozen']):
+                    info['date_frozen'] = vial.date_frozen
+        selected_batches = list(grouped_sel.values())
+
+    all_fluorescence_tags = [
+        item[0]
+        for item in db.session.query(CryoVial.fluorescence_tag)
+        .filter(CryoVial.fluorescence_tag.isnot(None) & (CryoVial.fluorescence_tag != ''))
+        .distinct()
+        .all()
+    ]
+    all_resistances = [
+        item[0]
+        for item in db.session.query(CryoVial.resistance)
+        .filter(CryoVial.resistance.isnot(None) & (CryoVial.resistance != ''))
+        .distinct()
+        .all()
     ]
 
-    # Ensure these fields are correctly populated on GET if obj doesn't do it perfectly for SelectFields after validation fail
-    if request.method == 'GET':
-        form.cell_line_id.data = vial.cell_line_id
-        form.box_id.data = vial.box_id
-        form.resistance.data = vial.resistance.split(',') if vial.resistance else []
-        form.unique_vial_id_tag.data = vial.unique_vial_id_tag
-        form.row_in_box.data = vial.row_in_box
-        form.col_in_box.data = vial.col_in_box
-        form.passage_number.data = vial.passage_number
-        form.date_frozen.data = vial.date_frozen
-        form.number_of_vials_at_creation.data = vial.number_of_vials_at_creation
-        form.volume_ml.data = vial.volume_ml
-        form.concentration.data = vial.concentration
-        form.fluorescence_tag.data = vial.fluorescence_tag
-        form.parental_cell_line.data = vial.parental_cell_line
-        form.status.data = vial.status
-        form.notes.data = vial.notes
-
-    if form.validate_on_submit():
-        # Basic check for position change and occupancy, more complex if vial moves
-        if (form.box_id.data != vial.box_id or \
-            form.row_in_box.data != vial.row_in_box or \
-            form.col_in_box.data != vial.col_in_box):
-            existing_vial_at_new_pos = CryoVial.query.filter(
-                CryoVial.id != vial.id,  # Exclude the current vial
-                CryoVial.box_id == form.box_id.data,
-                CryoVial.row_in_box == form.row_in_box.data,
-                CryoVial.col_in_box == form.col_in_box.data,
-                CryoVial.status == 'Available'
-            ).first()
-            if existing_vial_at_new_pos:
-                flash(f'Error: New position {form.row_in_box.data}-{form.col_in_box.data} in selected box is already occupied by vial {existing_vial_at_new_pos.unique_vial_id_tag}.', 'danger')
-                return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
-
-        selected_box = Box.query.get(form.box_id.data)
-        if not selected_box or not (1 <= form.row_in_box.data <= selected_box.rows and 1 <= form.col_in_box.data <= selected_box.columns):
-            flash(f'Error: Row/Column number is outside the dimensions of the selected box ({selected_box.rows}x{selected_box.columns}).', 'danger')
-            return render_template('main/cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
-
-        vial.unique_vial_id_tag = form.unique_vial_id_tag.data
-        vial.cell_line_id = form.cell_line_id.data
-        vial.box_id = form.box_id.data
-        vial.row_in_box = form.row_in_box.data
-        vial.col_in_box = form.col_in_box.data
-        vial.passage_number = form.passage_number.data
-        vial.date_frozen = form.date_frozen.data
-        # frozen_by_user_id should generally not change, or only by admin
-        vial.number_of_vials_at_creation = form.number_of_vials_at_creation.data
-        vial.volume_ml = form.volume_ml.data
-        vial.concentration = form.concentration.data
-        vial.fluorescence_tag = form.fluorescence_tag.data
-        vial.resistance = ','.join(form.resistance.data) if form.resistance.data else None
-        vial.parental_cell_line = form.parental_cell_line.data
-        vial.status = form.status.data
-        vial.notes = form.notes.data
-        vial.last_updated = datetime.utcnow()
-
-        current_details_for_edit = {
-            'general_info': 'vial edited',
-            'vial_id': vial.id,  # Storing the single vial_id being edited
-            'batch_id': vial.batch_id  # Storing the associated batch_id
-            # You could add more specific changed fields here if desired
-            # e.g., 'changed_fields': {'status': vial.status, 'notes': vial.notes}
-        }
-        log_audit(
-            current_user.id,
-            'EDIT_CRYOVIAL',
-            target_type='CryoVial',
-            target_id=vial.id,
-            details=current_details_for_edit
-        )
-        db.session.commit()
-        flash(f'CryoVial "{vial.unique_vial_id_tag}" updated successfully!', 'success')
-        return redirect(get_smart_redirect_url('cell_storage.cryovial_inventory'))
-
-    return render_template('main/edit_cryovial_form.html', title='Edit CryoVial', form=form, vial=vial, form_action=url_for('cell_storage.edit_cryovial', vial_id=vial.id))
-
-
-@bp.route('/box/<int:box_id>/add/<int:row>/<int:col>', methods=['GET', 'POST'], endpoint='add_vial_at_position')
-@login_required
-@admin_required
-def add_vial_at_position(box_id, row, col):
-    box = Box.query.get_or_404(box_id)
-    if not (1 <= row <= box.rows and 1 <= col <= box.columns):
-        flash('Invalid position for this box.', 'danger')
-        return redirect(url_for('cell_storage.cryovial_inventory'))
-
-    existing = CryoVial.query.filter_by(
-        box_id=box.id,
-        row_in_box=row,
-        col_in_box=col,
-        status='Available'
-    ).first()
-    if existing:
-        flash('That position is already occupied.', 'danger')
-        return redirect(url_for('cell_storage.cryovial_inventory'))
-
-    form = ManualVialForm()
-    form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
-
-    if form.validate_on_submit():
-        if form.batch_id.data:
-            batch = VialBatch.query.get(form.batch_id.data)
-            if not batch:
-                flash('Batch ID not found.', 'danger')
-                return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('cell_storage.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
-        else:
-            batch = VialBatch(
-                id=get_next_batch_id(),
-                name=form.batch_name.data,
-                created_by_user_id=current_user.id,
-            )
-            db.session.add(batch)
-            db.session.commit()
-
-        base_tag = f"B{batch.id}"
-        count = batch.vials.count()
-        unique_tag = base_tag if count == 0 else f"{base_tag}-{count + 1}"
-
-        vial = CryoVial(
-            unique_vial_id_tag=unique_tag,
-            batch_id=batch.id,
-            cell_line_id=form.cell_line_id.data,
-            box_id=box.id,
-            row_in_box=row,
-            col_in_box=col,
-            passage_number=form.passage_number.data,
-            date_frozen=form.date_frozen.data,
-            frozen_by_user_id=current_user.id,
-            volume_ml=form.volume_ml.data,
-            concentration=form.concentration.data,
-            fluorescence_tag=form.fluorescence_tag.data,
-            resistance=','.join(form.resistance.data) if form.resistance.data else None,
-            parental_cell_line=form.parental_cell_line.data,
-            status='Available',
-            notes=form.notes.data,
-            date_created=datetime.utcnow(),
-        )
-        db.session.add(vial)
-        db.session.commit()
-        log_audit(current_user.id, 'CREATE_CRYOVIAL', target_type='CryoVial', target_id=vial.id, details=f'box {box.id} R{row}C{col}')
-        flash('Vial added.', 'success')
-        return redirect(url_for('cell_storage.cryovial_inventory'))
-
-    return render_template('main/manual_vial_form.html', form=form, box=box, row=row, col=col, form_action=url_for('cell_storage.add_vial_at_position', box_id=box_id, row=row, col=col), title='Add Vial')
-
-
-@bp.route('/cryovial/<int:vial_id>/delete')
-@login_required
-@admin_required
-def delete_cryovial(vial_id):
-    vial = CryoVial.query.get_or_404(vial_id)
-    db.session.delete(vial)
-    db.session.commit()
-    log_audit(current_user.id, 'DELETE_CRYOVIAL', target_type='CryoVial', target_id=vial_id)
-    flash('Vial deleted.', 'success')
-    return redirect(url_for('cell_storage.cryovial_inventory'))
-
-
-@bp.route('/admin/clear_all', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def clear_all():
-    form = ConfirmForm()
-    if form.validate_on_submit():
-        if form.confirm.data.strip() == 'confirm_hayer':
-            clear_database_except_admin()
-            log_audit(current_user.id, 'CLEAR_ALL', target_type='System')
-            flash('All records except admin accounts have been removed.', 'success')
-            return redirect(url_for('cell_storage.index'))
-        flash('Incorrect confirmation phrase.', 'danger')
-    return render_template('main/clear_all.html', form=form, title='Clear Database')
-
-
-@bp.route('/admin/batch_counter', methods=['POST'])
-@login_required
-@admin_required
-def update_batch_counter():
-    value = request.form.get('batch_counter')
-    try:
-        new_val = int(value)
-        if new_val < 1:
-            raise ValueError
-        set_batch_counter(new_val)
-        flash('Batch counter updated.', 'success')
-    except (TypeError, ValueError):
-        flash('Invalid batch counter value.', 'danger')
-    return redirect(url_for('cell_storage.cryovial_inventory'))
-
-
-@bp.route('/admin/backup')
-@login_required
-@admin_required
-def backup_database():
-    db.session.commit()
-    uri = current_app.config['SQLALCHEMY_DATABASE_URI']
-    scheme = urlparse(uri).scheme
-    rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
-
-    if rds_identifier:
-        try:
-            client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
-            snapshot_id = f"{rds_identifier}-snapshot-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
-            client.create_db_snapshot(
-                DBInstanceIdentifier=rds_identifier,
-                DBSnapshotIdentifier=snapshot_id,
-            )
-            log_audit(
-                current_user.id,
-                'BACKUP_EXPORT',
-                target_type='System',
-                details=f'RDS snapshot {snapshot_id}',
-            )
-            flash('RDS snapshot initiated.', 'success')
-        except (BotoCoreError, ClientError) as exc:
-            current_app.logger.error('RDS snapshot failed: %s', exc)
-            flash('RDS backup failed.', 'danger')
-        return redirect(url_for('cell_storage.index'))
-
-    if scheme == 'sqlite':
-        path = uri.replace('sqlite:///', '')
-        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
-        return send_file(path, as_attachment=True, download_name='backup.db')
-
-    if scheme.startswith('postgres'):
-        try:
-            result = subprocess.run(
-                ['pg_dump', '--format', 'custom', '--dbname', uri],
-                check=True,
-                capture_output=True,
-            )
-        except (OSError, subprocess.CalledProcessError) as exc:
-            current_app.logger.error('pg_dump failed: %s', exc)
-            flash('PostgreSQL backup failed.', 'danger')
-            return redirect(url_for('cell_storage.index'))
-
-        buf = BytesIO(result.stdout)
-        buf.seek(0)
-        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
-        return send_file(buf, as_attachment=True, download_name='backup.dump', mimetype='application/octet-stream')
-
-    flash('Unsupported database type.', 'danger')
-    return redirect(url_for('cell_storage.index'))
-
-
-@bp.route('/admin/restore', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def restore_database():
-    form = RestoreForm()
-    rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
-    rds_configured = bool(rds_identifier)
-
-    if form.validate_on_submit():
-        snapshot_id = (form.snapshot_id.data or '').strip()
-        file = form.backup_file.data
-
-        if rds_configured:
-            if not snapshot_id:
-                flash('RDS Snapshot Identifier is required.', 'danger')
-                return redirect(url_for('cell_storage.restore_database'))
-
-            try:
-                client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
-                client.restore_db_instance_from_db_snapshot(
-                    DBInstanceIdentifier=rds_identifier,
-                    DBSnapshotIdentifier=snapshot_id,
-                )
-                log_audit(
-                    current_user.id,
-                    'BACKUP_IMPORT',
-                    target_type='System',
-                    details=f'RDS restore from {snapshot_id}',
-                )
-                flash(
-                    (
-                        'RDS restore initiated. This may take several minutes. '
-                        'The instance will be unavailable during this time.'
-                    ),
-                    'success',
-                )
-            except (BotoCoreError, ClientError) as exc:
-                current_app.logger.error('RDS restore failed: %s', exc)
-                flash(f'RDS restore failed: {exc}', 'danger')
-            return redirect(url_for('cell_storage.index'))
-
-        elif file:
-            uri = current_app.config['SQLALCHEMY_DATABASE_URI']
-            scheme = urlparse(uri).scheme
-
-            if scheme == 'sqlite':
-                path = uri.replace('sqlite:///', '')
-                db.session.remove()
-                file.save(path)
-                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
-                flash('Database restored from backup.', 'success')
-
-            elif scheme.startswith('postgres'):
-                tmp = tempfile.NamedTemporaryFile(delete=False)
-                try:
-                    file.save(tmp.name)
-                    subprocess.run(
-                        ['pg_restore', '--clean', '--if-exists', '--dbname', uri, tmp.name],
-                        check=True,
-                    )
-                except (OSError, subprocess.CalledProcessError) as exc:
-                    current_app.logger.error('pg_restore failed: %s', exc)
-                    flash('PostgreSQL restore failed.', 'danger')
-                    return redirect(url_for('cell_storage.index'))
-                finally:
-                    tmp.close()
-                    os.unlink(tmp.name)
-
-                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
-                flash('Database restored from backup.', 'success')
-
-            else:
-                flash('Unsupported database type.', 'danger')
-            return redirect(url_for('cell_storage.index'))
-
-        else:
-            flash('No snapshot ID or file provided.', 'danger')
-
     return render_template(
-        'main/restore_backup.html',
-        form=form,
-        title='Restore Backup',
-        rds_configured=rds_configured,
+        'main/cryovial_inventory.html',
+        title='CryoVial Inventory',
+        inventory=inventory,
+        search_results=search_results,
+        search_q=search_q,
+        search_target=search_target,
+        search_creator=search_creator,
+        search_fluorescence=search_fluorescence,
+        search_resistance=search_resistance,
+        search_status=search_status,
+        max_passage=max_passage,
+        date_from=date_from,
+        search_cell_line_id=search_cell_line_id,
+        selected_batches=selected_batches,
+        selected_ids=selected_ids,
+        all_creators=all_creators,
+        all_cell_lines=all_cell_lines,
+        all_fluorescence_tags=all_fluorescence_tags,
+        all_resistances=all_resistances,
+        batch_counter=get_batch_counter(),
+        vial_counter=get_vial_counter(),
+        batch_color_map=batch_color_map,
+        view_all=view_all_flag,
+        recent_searches=recent_searches,
+        search_feedback=search_feedback,
+        search_suggestion=search_suggestion,
+        match_mode=match_mode,
     )
-
-
-@bp.route('/admin/batch_edit_vials', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def batch_edit_vials():
-    form = BatchEditVialsForm()
-    if form.validate_on_submit():
-        tags_input = form.vial_tags.data
-        tags = [t.strip() for t in tags_input.replace('\n', ',').split(',') if t.strip()]
-        if not tags:
-            flash('No valid vial tags provided.', 'danger')
-            return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
-
-        vials = CryoVial.query.filter(CryoVial.unique_vial_id_tag.in_(tags)).all()
-        found_tags = {v.unique_vial_id_tag for v in vials}
-        missing = [t for t in tags if t not in found_tags]
-
-        for v in vials:
-            if form.new_status.data:
-                v.status = form.new_status.data
-            if form.notes.data:
-                v.notes = (v.notes + '\n' if v.notes else '') + form.notes.data
-            v.last_updated = datetime.utcnow()
-        db.session.commit()
-        log_audit(
-            current_user.id,
-            'BATCH_EDIT_VIALS',
-            target_type='CryoVial',
-            details={
-                'vial_tags': tags,
-                'updated_status': form.new_status.data or None,
-                'notes_appended': bool(form.notes.data),
-                'missing_tags': missing,
-            },
-        )
-
-        flash(f'Updated {len(vials)} vial(s).', 'success')
-        if missing:
-            flash(f'Missing tags: {", ".join(missing)}', 'warning')
-        return redirect(url_for('cell_storage.batch_edit_vials'))
-
-    return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
-
-
-@bp.route('/batch/<int:batch_id>/edit', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def edit_batch(batch_id):
-    """Edit batch name and common vial attributes for all vials in the batch."""
-    batch = VialBatch.query.get_or_404(batch_id)
-    vials = batch.vials.all()
-    form = EditBatchForm(obj=batch)
-    form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
-
-    if request.method == 'GET' and vials:
-        sample = vials[0]
-        form.cell_line_id.data = sample.cell_line_id
-        form.passage_number.data = sample.passage_number
-        form.date_frozen.data = sample.date_frozen
-        form.volume_ml.data = sample.volume_ml
-        form.concentration.data = sample.concentration
-        form.fluorescence_tag.data = sample.fluorescence_tag
-        form.resistance.data = sample.resistance.split(',') if sample.resistance else []
-        form.parental_cell_line.data = sample.parental_cell_line
-        form.notes.data = sample.notes
-
-    if form.validate_on_submit():
-        batch.name = form.batch_name.data
-        for v in vials:
-            v.cell_line_id = form.cell_line_id.data
-            v.passage_number = form.passage_number.data
-            v.date_frozen = form.date_frozen.data
-            v.volume_ml = form.volume_ml.data
-            v.concentration = form.concentration.data
-            v.fluorescence_tag = form.fluorescence_tag.data
-            v.resistance = ','.join(form.resistance.data) if form.resistance.data else None
-            v.parental_cell_line = form.parental_cell_line.data
-            v.notes = form.notes.data
-            v.last_updated = datetime.utcnow()
-        db.session.commit()
-        log_audit(
-            current_user.id,
-            'EDIT_BATCH_INFO',
-            target_type='VialBatch',
-            target_id=batch.id,
-            details={'vial_count': len(vials)},
-        )
-        flash('Batch updated successfully.', 'success')
-        return redirect(url_for('cell_storage.inventory_summary'))
-
-    return render_template('main/edit_batch_form.html', form=form, batch=batch, title='Edit Batch')
-
-@bp.route('/admin/manage_batch', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def manage_batch_lookup():
-    form = BatchLookupForm()
-    if form.validate_on_submit():
-        return redirect(url_for('cell_storage.manage_batch', batch_id=form.batch_id.data))
-    return render_template('main/manage_batch_lookup.html', form=form, title='Manage Batch')
-
-
-@bp.route('/admin/manage_batch/<int:batch_id>', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def manage_batch(batch_id):
-    batch = VialBatch.query.get_or_404(batch_id)
-    vials = batch.vials.order_by(CryoVial.id).all()
-    boxes = {}
-    for v in vials:
-        box = v.box_location
-        b = boxes.setdefault(
-            box.id,
-            {
-                'box': box,
-                'rows': box.rows,
-                'columns': box.columns,
-                'cells': {},
-            },
-        )
-        b['cells'][(v.row_in_box, v.col_in_box)] = v
-
-    form = EditBatchForm()
-    form.cell_line_id.choices = [(c.id, c.name) for c in CellLine.query.order_by(CellLine.name).all()]
-
-    if request.method == 'GET':
-        form.batch_name.data = batch.name
-        if vials:
-            sample = vials[0]
-            form.cell_line_id.data = sample.cell_line_id
-            form.passage_number.data = sample.passage_number
-            form.date_frozen.data = sample.date_frozen
-            form.volume_ml.data = sample.volume_ml
-            form.concentration.data = sample.concentration
-            form.fluorescence_tag.data = sample.fluorescence_tag
-            form.resistance.data = sample.resistance.split(',') if sample.resistance else []
-            form.parental_cell_line.data = sample.parental_cell_line
-            form.notes.data = sample.notes
-
-    if form.validate_on_submit() and 'submit' in request.form:
-        batch.name = form.batch_name.data
-        for v in vials:
-            v.cell_line_id = form.cell_line_id.data
-            v.passage_number = form.passage_number.data
-            v.date_frozen = form.date_frozen.data
-            v.volume_ml = form.volume_ml.data
-            v.concentration = form.concentration.data
-            v.fluorescence_tag = form.fluorescence_tag.data
-            v.resistance = ','.join(form.resistance.data) if form.resistance.data else None
-            v.parental_cell_line = form.parental_cell_line.data
-            v.notes = form.notes.data
-            v.last_updated = datetime.utcnow()
-        db.session.commit()
-        log_audit(current_user.id, 'EDIT_BATCH_INFO', target_type='VialBatch', target_id=batch.id, details={'vial_count': len(vials)})
-        flash('Batch updated successfully.', 'success')
-        return redirect(get_smart_redirect_url('main.manage_batch', batch_id=batch.id))
-
-    if request.method == 'POST' and 'delete_batch' in request.form:
-        count = len(vials)
-        for v in vials:
-            db.session.delete(v)
-        db.session.delete(batch)
-        db.session.commit()
-        log_audit(current_user.id, 'DELETE_BATCH', target_type='VialBatch', target_id=batch_id, details={'vial_count': count})
-        flash(f'Batch {batch_id} deleted.', 'success')
-        return redirect(url_for('cell_storage.manage_batch_lookup'))
-
-    return render_template('main/manage_batch.html', form=form, batch=batch, boxes=boxes, title='Manage Batch')
 
 # --- Moved Inventory Summary Route ---
 @bp.route('/inventory/summary')
@@ -1775,12 +1954,14 @@ def inventory_summary():
 def import_csv():
     form = CSVUploadForm()
     if form.validate_on_submit():
-        if form.csv_file.data:
+        if form.csv_files.data:
+            # Process first file for now (TODO: enhance to handle multiple files)
+            csv_file = form.csv_files.data[0]
             # 文件大小检查 (最大10MB)
             MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB in bytes
-            form.csv_file.data.seek(0, 2)  # 移动到文件末尾
-            file_size = form.csv_file.data.tell()
-            form.csv_file.data.seek(0)  # 重置到开始
+            csv_file.seek(0, 2)  # 移动到文件末尾
+            file_size = csv_file.tell()
+            csv_file.seek(0)  # 重置到开始
             
             if file_size > MAX_FILE_SIZE:
                 flash(f'File size ({file_size // (1024*1024)}MB) exceeds the maximum allowed size (10MB).', 'danger')
@@ -1795,11 +1976,11 @@ def import_csv():
             skipped_rows = []
             try:
                 # Ensure the file pointer is at the beginning
-                form.csv_file.data.seek(0)
+                csv_file.seek(0)
                 
                 # 尝试检测文件编码
                 try:
-                    raw_data = form.csv_file.data.read()
+                    raw_data = csv_file.read()
                     try:
                         content = raw_data.decode('utf-8')
                     except UnicodeDecodeError:
@@ -1918,10 +2099,14 @@ def import_csv():
                     if has_location:
                         location_str = row_data.get('Location', '').strip()
                         if location_str:
-                            # Parse location string: "Tower1/Drawer1/Box1 R1C1"
+                            # Parse location string: "Tower 1/Drawer 1/Box 1 R1C2" (handles spaces in names)
                             location_match = re.match(r'(.+)/(.+)/(.+)\s+R(\d+)C(\d+)', location_str)
                             if location_match:
                                 tower_name, drawer_name, box_name, row_str, col_str = location_match.groups()
+                                # Strip whitespace from names
+                                tower_name = tower_name.strip()
+                                drawer_name = drawer_name.strip() 
+                                box_name = box_name.strip()
                                 
                                 box = Box.query.join(Drawer).join(Tower).filter(
                                     Tower.name == tower_name,
@@ -1934,7 +2119,7 @@ def import_csv():
                                     row_in_box = int(row_str)
                                     col_in_box = int(col_str)
                                 else:
-                                    skipped_rows.append((i, row, f"Location '{location_str}' not found."))
+                                    skipped_rows.append((i, row, f"Location '{location_str}' not found. Looking for Tower: '{tower_name}', Drawer: '{drawer_name}', Box: '{box_name}'."))
                                     continue
                             else:
                                 skipped_rows.append((i, row, "Invalid Location format."))
@@ -1944,12 +2129,72 @@ def import_csv():
                         # Create new vial record
                         
                         # Find or create batch
-                        batch = VialBatch.query.filter_by(name=batch_name).first()
+                        batch_id_from_csv = row_data.get('Batch ID', '').strip()
+                        batch = None
+                        
+                        # First try to find batch by ID if provided in CSV
+                        if batch_id_from_csv:
+                            try:
+                                batch = VialBatch.query.get(int(batch_id_from_csv))
+                                if batch and batch.name != batch_name:
+                                    # Batch ID exists but name doesn't match
+                                    skipped_rows.append((i, row, f"Batch ID '{batch_id_from_csv}' exists but has different name '{batch.name}' (expected '{batch_name}')."))
+                                    continue
+                            except (ValueError, TypeError):
+                                # Invalid Batch ID format, treat as new batch creation
+                                pass
+                        
+                        # 修复：如果CSV指定了Batch ID但未找到对应记录，不应该通过名称查找
+                        # 这会导致不同Batch ID的记录被错误合并
+                        # if not batch:
+                        #     batch = VialBatch.query.filter_by(name=batch_name).first()
+                        
+                        # 修复：正确的导入逻辑
+                        if not batch:
+                            # 如果CSV指定了Batch ID但数据库中不存在，使用指定的ID创建新batch
+                            if batch_id_from_csv:
+                                try:
+                                    requested_id = int(batch_id_from_csv)
+                                    # 检查ID是否已被其他batch占用
+                                    existing_batch_with_id = VialBatch.query.get(requested_id)
+                                    if existing_batch_with_id:
+                                        # 这种情况在前面已经处理过了，不应该到达这里
+                                        skipped_rows.append((i, row, f"Batch ID '{batch_id_from_csv}' already exists with different name."))
+                                        continue
+                                    
+                                    # 创建具有指定ID的新batch
+                                    batch = VialBatch(
+                                        id=requested_id,
+                                        name=batch_name,
+                                        created_by_user_id=current_user.id
+                                    )
+                                    db.session.add(batch)
+                                    db.session.flush()  # 获取ID但不提交
+                                except ValueError:
+                                    skipped_rows.append((i, row, f"Invalid Batch ID format: '{batch_id_from_csv}'"))
+                                    continue
+                            else:
+                                # CSV没有指定Batch ID，尝试通过名称查找现有batch
+                                batch = VialBatch.query.filter_by(name=batch_name).first()
+                        
+                        # 如果仍然没有找到batch，创建新batch（不指定ID，让数据库自动分配）
                         if not batch:
                             batch = VialBatch(
                                 name=batch_name,
                                 created_by_user_id=current_user.id
                             )
+                            # If CSV specifies a Batch ID, try to use it
+                            if batch_id_from_csv:
+                                try:
+                                    requested_id = int(batch_id_from_csv)
+                                    # Check if this ID is already taken
+                                    existing_batch = VialBatch.query.get(requested_id)
+                                    if not existing_batch:
+                                        batch.id = requested_id
+                                except (ValueError, TypeError):
+                                    # Invalid ID format, let database auto-assign
+                                    pass
+                            
                             db.session.add(batch)
                             db.session.flush()  # Get the ID
                         
@@ -1974,7 +2219,7 @@ def import_csv():
                             col_in_box=col_in_box,
                             date_frozen=date_frozen or datetime.utcnow().date(),
                             frozen_by_user_id=current_user.id,
-                            status=row_data.get('Status', 'Available'),
+                            status=row_data.get('Status', 'Available').strip().capitalize(),
                             passage_number=row_data.get('Passage Number', ''),
                             volume_ml=float(row_data.get('Volume (ml)')) if row_data.get('Volume (ml)') and row_data.get('Volume (ml)').strip() else None,
                             concentration=row_data.get('Concentration', ''),
@@ -1983,6 +2228,18 @@ def import_csv():
                             parental_cell_line=row_data.get('Parental Cell Line', ''),
                             notes=row_data.get('Notes', '')
                         )
+                        
+                        # If CSV specifies a Vial ID, try to use it
+                        if vial_id:
+                            try:
+                                requested_vial_id = int(vial_id)
+                                # Check if this ID is already taken
+                                existing_vial = CryoVial.query.get(requested_vial_id)
+                                if not existing_vial:
+                                    vial.id = requested_vial_id
+                            except (ValueError, TypeError):
+                                # Invalid ID format, let database auto-assign
+                                pass
                         db.session.add(vial)
                         created_count += 1
                         
@@ -1990,7 +2247,7 @@ def import_csv():
                         # Update existing vial
                         
                         # Update status if changed
-                        new_status = row_data.get('Status', '').strip()
+                        new_status = row_data.get('Status', '').strip().capitalize()
                         if new_status and new_status != vial.status:
                             vial.status = new_status
                         
@@ -2053,9 +2310,9 @@ def import_csv():
                     message_parts.append(f"{created_count} new vials created")
                 
                 if message_parts:
-                    flash(f'CSV processed successfully. {", ".join(message_parts)}.', 'success')
+                    flash(f'CSV import completed successfully! {", ".join(message_parts)}. You can now import another file or check the Inventory Summary to view your data.', 'success')
                 else:
-                    flash('CSV processed. No changes were made.', 'info')
+                    flash('CSV processed successfully. No changes were made as all data was already up to date.', 'info')
                     
                 if skipped_rows:
                     # Create a summary of skipped reasons for a cleaner message
@@ -2066,12 +2323,13 @@ def import_csv():
                     summary_messages = [f"{count} rows skipped ({reason})" for reason, count in reasons_summary.items()]
                     flash(f'{len(skipped_rows)} total rows were skipped. Reasons: {"; ".join(summary_messages)}', 'warning')
 
-                return redirect(url_for('cell_storage.inventory_summary'))
+                return redirect(url_for('cell_storage.import_csv'))
 
             except Exception as e:
                 db.session.rollback()
                 current_app.logger.error(f'CSV import error: {e}')
                 flash(f'An unexpected error occurred during import: {e}', 'danger')
+                return redirect(url_for('cell_storage.import_csv'))
 
     return render_template('main/import_csv.html', title='Import CSV', form=form)
 
@@ -2203,8 +2461,55 @@ def delete_vial(vial_id):
         return jsonify({"success": False, "error": "Unable to delete vial. Please try again later."}), 500
 
 
-@bp.route('/vials/batch_delete', methods=['POST'])
-@login_required 
+@bp.route('/admin/batch_edit_vials', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def batch_edit_vials():
+    """批量编辑冷冻管状态和备注"""
+    form = BatchEditVialsForm()
+    if form.validate_on_submit():
+        tags_input = form.vial_tags.data
+        tags = [t.strip() for t in tags_input.replace('\n', ',').split(',') if t.strip()]
+        if not tags:
+            flash('No valid vial tags provided.', 'danger')
+            return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
+
+        vials = CryoVial.query.filter(CryoVial.unique_vial_id_tag.in_(tags)).all()
+        found_tags = {v.unique_vial_id_tag for v in vials}
+        missing = [t for t in tags if t not in found_tags]
+
+        for v in vials:
+            if form.new_status.data:
+                v.status = form.new_status.data
+            if form.notes.data:
+                v.notes = (v.notes + '\n' if v.notes else '') + form.notes.data
+            v.last_updated = datetime.utcnow()
+
+        db.session.commit()
+
+        # 记录审计日志
+        log_audit(
+            current_user.id,
+            'BATCH_EDIT_VIALS',
+            target_type='CryoVial',
+            details={
+                'vial_tags': tags,
+                'updated_status': form.new_status.data or None,
+                'notes_appended': bool(form.notes.data),
+                'missing_tags': missing,
+            },
+        )
+
+        flash(f'Updated {len(vials)} vial(s).', 'success')
+        if missing:
+            flash(f'Missing tags: {", ".join(missing)}', 'warning')
+        return redirect(url_for('cell_storage.batch_edit_vials'))
+
+    return render_template('main/batch_edit_vials.html', form=form, title='Batch Edit Vials')
+
+
+@bp.route('/admin/batch_delete_vials', methods=['POST'])
+@login_required
 @admin_required
 def batch_delete_vials():
     try:
@@ -2846,9 +3151,24 @@ def theme_settings():
 def switch_theme():
     """Switch theme API"""
     try:
-        data = request.get_json()
-        theme_name = data.get('theme_name')
+        # CSRF token validation
+        csrf_token = request.headers.get('X-CSRFToken')
+        if not csrf_token:
+            current_app.logger.error('Theme switch error: Missing CSRF token')
+            return jsonify({'success': False, 'message': 'Missing CSRF token'}), 400
         
+        try:
+            from flask_wtf.csrf import validate_csrf
+            validate_csrf(csrf_token)
+        except Exception as csrf_error:
+            current_app.logger.error(f'Theme switch CSRF validation error: {csrf_error}')
+            return jsonify({'success': False, 'message': 'Invalid CSRF token'}), 400
+        
+        data = request.get_json()
+        if not data:
+            return jsonify({'success': False, 'message': 'No data provided'}), 400
+            
+        theme_name = data.get('theme_name')
         if not theme_name:
             return jsonify({'success': False, 'message': 'Theme name cannot be empty'}), 400
         
@@ -2856,13 +3176,15 @@ def switch_theme():
         success, message = update_user_theme(current_user.id, theme_name)
         
         if success:
+            current_app.logger.info(f'Theme switched successfully for user {current_user.id} to {theme_name}')
             return jsonify({'success': True, 'message': message})
         else:
+            current_app.logger.error(f'Theme switch failed for user {current_user.id}: {message}')
             return jsonify({'success': False, 'message': message}), 400
             
     except Exception as e:
         current_app.logger.error(f'Theme switch error: {e}')
-        return jsonify({'success': False, 'message': 'Theme switch failed'}), 500
+        return jsonify({'success': False, 'message': f'Theme switch failed: {str(e)}'}), 500
 
 @bp.route('/api/theme/current')
 @login_required
@@ -2881,3 +3203,1640 @@ def get_current_theme():
     except Exception as e:
         current_app.logger.error(f'Get theme error: {e}')
         return jsonify({'success': False, 'message': 'Failed to get theme configuration'}), 500
+
+@bp.route('/api/dashboard/stats')
+@login_required
+def get_dashboard_stats():
+    """Get dashboard statistics API"""
+    try:
+        status_counts = dict(
+            db.session.query(
+                CryoVial.status,
+                func.count(CryoVial.id)
+            ).group_by(CryoVial.status).all()
+        )
+
+        all_vials = sum(status_counts.values())
+        available_vials = status_counts.get('Available', 0)
+        used_vials = status_counts.get('Used', 0)
+        depleted_vials = status_counts.get('Depleted', 0)
+        discarded_vials = status_counts.get('Discarded', 0)
+        active_vials = all_vials - discarded_vials
+
+        total_boxes = Box.query.count()
+        box_dimensions = db.session.query(Box.rows, Box.columns).all()
+        actual_total_capacity = sum(rows * columns for rows, columns in box_dimensions)
+        capacity_used_percent = round(
+            (available_vials / actual_total_capacity * 100) if actual_total_capacity else 0,
+            1
+        )
+
+        available_count_expression = func.sum(
+            case((CryoVial.status == 'Available', 1), else_=0)
+        ).label('available_count')
+
+        batch_vial_counts = (
+            db.session.query(
+                VialBatch.id,
+                func.count(CryoVial.id).label('total_count'),
+                available_count_expression
+            )
+            .join(CryoVial, CryoVial.batch_id == VialBatch.id)
+            .group_by(VialBatch.id)
+            .all()
+        )
+
+        low_stock_threshold = 2
+        low_stock_batches = sum(
+            1
+            for _, total_count, available_count in batch_vial_counts
+            if total_count > 0 and (available_count or 0) < low_stock_threshold
+        )
+
+        return jsonify({
+            'success': True,
+            'stats': {
+                'total_vials': all_vials,
+                'active_vials': active_vials,
+                'available_vials': available_vials,
+                'used_vials': used_vials,
+                'depleted_vials': depleted_vials,
+                'discarded_vials': discarded_vials,
+                'capacity_used_percent': capacity_used_percent,
+                'low_stock_batches': low_stock_batches,
+                'actual_total_capacity': actual_total_capacity,
+                'total_boxes': total_boxes
+            }
+        })
+    except Exception as e:
+        current_app.logger.error(f'Dashboard stats error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get dashboard statistics'}), 500
+
+
+# --- Batch Lineage API Endpoints ---
+
+@bp.route('/api/batch/<int:batch_id>/lineage')
+@login_required
+def get_batch_lineage(batch_id):
+    """Get complete batch lineage tree"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        # Check if batch exists first
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({'success': False, 'message': f'Batch {batch_id} not found'}), 404
+        
+        max_depth = request.args.get('max_depth', 5, type=int)
+        lineage = BatchLineageService.get_batch_lineage(batch_id, max_depth)
+        
+        return jsonify({
+            'success': True,
+            'lineage': lineage
+        })
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        current_app.logger.error(f'Batch lineage error for batch {batch_id}: {e}\n{error_details}')
+        return jsonify({
+            'success': False, 
+            'message': f'Failed to get batch lineage: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/batch/<int:batch_id>/lineage/statistics')
+@login_required
+def get_batch_lineage_statistics(batch_id):
+    """获取batch家谱的统计信息"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        stats = BatchLineageService.get_lineage_statistics(batch_id)
+        
+        return jsonify({
+            'success': True,
+            'statistics': stats
+        })
+    except Exception as e:
+        current_app.logger.error(f'Batch lineage statistics error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get lineage statistics'}), 500
+
+
+@bp.route('/api/batch/<int:batch_id>/related')
+@login_required
+def get_related_batches(batch_id):
+    """获取与指定batch相关的batch列表"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        relationship_type = request.args.get('type', 'all')  # parents, children, siblings, all
+        related_batches = BatchLineageService.find_related_batches(batch_id, relationship_type)
+        
+        # 将batch对象转换为JSON格式
+        related_data = []
+        for batch in related_batches:
+            related_data.append({
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'vial_count': batch.vials.count(),
+                'timestamp': batch.timestamp.isoformat() if batch.timestamp else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'related_batches': related_data,
+            'relationship_type': relationship_type,
+            'count': len(related_data)
+        })
+    except Exception as e:
+        current_app.logger.error(f'Related batches error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get related batches'}), 500
+
+
+@bp.route('/api/batch/suggest-parental-lines')
+@login_required
+def suggest_parental_lines():
+    """为新batch建议可能的parental cell line"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        query = request.args.get('q', '')
+        limit = request.args.get('limit', 10, type=int)
+        
+        suggestions = BatchLineageService.suggest_parental_cell_lines(query, limit)
+        
+        return jsonify({
+            'success': True,
+            'suggestions': suggestions
+        })
+    except Exception as e:
+        current_app.logger.error(f'Suggest parental lines error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get suggestions'}), 500
+
+
+@bp.route('/api/batch/<int:batch_id>/lineage/validate')
+@login_required
+def validate_batch_lineage(batch_id):
+    """验证batch家谱的一致性"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        validation_result = BatchLineageService.validate_lineage_consistency(batch_id)
+        
+        return jsonify({
+            'success': True,
+            'validation': validation_result
+        })
+    except Exception as e:
+        current_app.logger.error(f'Batch lineage validation error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to validate lineage'}), 500
+
+
+@bp.route('/api/batch/<int:batch_id>/lineage/paths')
+@login_required
+def get_batch_lineage_paths(batch_id):
+    """获取从根节点到当前batch的所有路径"""
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        paths = BatchLineageService.find_lineage_paths(batch_id)
+        
+        # 转换路径中的batch对象为JSON格式
+        paths_data = []
+        for path in paths:
+            path_data = []
+            for batch in path:
+                path_data.append({
+                    'id': batch.id,
+                    'name': batch.name,
+                    'cell_line': batch.cell_line,
+                    'passage_number': batch.passage_number,
+                    'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                    'parental_cell_line': batch.parental_cell_line
+                })
+            paths_data.append(path_data)
+        
+        return jsonify({
+            'success': True,
+            'paths': paths_data,
+            'path_count': len(paths_data)
+        })
+    except Exception as e:
+        current_app.logger.error(f'Batch lineage paths error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get lineage paths'}), 500
+
+
+# --- History Tree Standalone Page ---
+
+@bp.route('/history-tree')
+@login_required
+def history_tree():
+    """独立的History Tree页面"""
+    return render_template('main/history_tree.html', title='Batch History Tree')
+
+
+@bp.route('/api/batch/search')
+@login_required
+def search_batches():
+    """搜索batch的API端点"""
+    try:
+        query = request.args.get('q', '').strip()
+        limit = request.args.get('limit', 20, type=int)
+        
+        if not query:
+            return jsonify({
+                'success': True,
+                'batches': []
+            })
+        
+        # 搜索batch - 按名称、cell line或parental cell line
+        batches = VialBatch.query.join(CryoVial).join(CellLine).filter(
+            db.or_(
+                VialBatch.name.ilike(f'%{query}%'),
+                CellLine.name.ilike(f'%{query}%'),
+                CryoVial.parental_cell_line.ilike(f'%{query}%')
+            )
+        ).distinct().limit(limit).all()
+        
+        # 转换为JSON格式
+        batch_data = []
+        for batch in batches:
+            batch_data.append({
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'vial_count': batch.vials.count(),
+                'timestamp': batch.timestamp.isoformat() if batch.timestamp else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'batches': batch_data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Batch search error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to search batches'}), 500
+
+
+@bp.route('/api/batch/recent')
+@login_required
+def get_recent_batches():
+    """获取最近的batch列表"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        
+        # 获取最近创建的batch
+        recent_batches = VialBatch.query.order_by(
+            VialBatch.timestamp.desc()
+        ).limit(limit).all()
+        
+        # 转换为JSON格式
+        batch_data = []
+        for batch in recent_batches:
+            batch_data.append({
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'vial_count': batch.vials.count(),
+                'timestamp': batch.timestamp.isoformat() if batch.timestamp else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'batches': batch_data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Recent batches error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get recent batches'}), 500
+
+
+@bp.route('/api/batch/with-lineage')
+@login_required
+def get_batches_with_lineage():
+    """获取有家谱关系的batch列表"""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        
+        # 获取有parental_cell_line的batch，或者被其他batch引用作为parental的batch
+        batches_with_parents = VialBatch.query.join(CryoVial).filter(
+            CryoVial.parental_cell_line.isnot(None),
+            CryoVial.parental_cell_line != ''
+        ).distinct()
+        
+        # 获取被引用作为parent的batch
+        referenced_names = db.session.query(CryoVial.parental_cell_line).filter(
+            CryoVial.parental_cell_line.isnot(None),
+            CryoVial.parental_cell_line != ''
+        ).distinct().all()
+        
+        # 提取实际的名称列表
+        referenced_name_list = [name[0] for name in referenced_names if name[0]]
+        
+        batches_referenced = VialBatch.query.filter(
+            VialBatch.name.in_(referenced_name_list)
+        ) if referenced_name_list else VialBatch.query.filter(False)
+        
+        # 合并结果
+        all_lineage_batches = batches_with_parents.union(batches_referenced).order_by(
+            VialBatch.timestamp.desc()
+        ).limit(limit).all()
+        
+        # 转换为JSON格式
+        batch_data = []
+        for batch in all_lineage_batches:
+            batch_data.append({
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line,
+                'passage_number': batch.passage_number,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'parental_cell_line': batch.parental_cell_line,
+                'vial_count': batch.vials.count(),
+                'timestamp': batch.timestamp.isoformat() if batch.timestamp else None,
+                'has_parents': bool(batch.parental_cell_line),
+                'has_children': len(batch.get_child_batches()) > 0
+            })
+        
+        return jsonify({
+            'success': True,
+            'batches': batch_data
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Batches with lineage error: {e}')
+        return jsonify({'success': False, 'message': 'Failed to get batches with lineage'}), 500
+
+
+# --- Enhanced Lineage API Endpoints (Phase 1 Optimization) ---
+
+@bp.route('/api/v2/batch/<int:batch_id>/lineage/optimized')
+@login_required
+def get_optimized_batch_lineage(batch_id):
+    """
+    Get frontend-optimized batch lineage with lazy loading support
+    NEW ENDPOINT - Does not modify existing /api/batch/<id>/lineage
+    """
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        from app.services.lineage_cache_service import LineageCacheService
+        
+        # Check if batch exists
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({'success': False, 'message': f'Batch {batch_id} not found'}), 404
+        
+        # Get parameters
+        viewport_depth = request.args.get('viewport_depth', 3, type=int)
+        include_details = request.args.get('include_details', 'true').lower() == 'true'
+        use_cache = request.args.get('use_cache', 'true').lower() == 'true'
+        
+        # Try to get from cache first
+        lineage_data = None
+        if use_cache:
+            lineage_data = LineageCacheService.get_cached_lineage(
+                batch_id, viewport_depth, include_details
+            )
+        
+        # If not in cache, compute and cache
+        if lineage_data is None:
+            lineage_data = BatchLineageService.get_optimized_lineage_for_frontend(
+                batch_id, viewport_depth, include_details
+            )
+            
+            if use_cache:
+                LineageCacheService.set_cached_lineage(
+                    batch_id, lineage_data, viewport_depth, include_details
+                )
+        
+        return jsonify({
+            'success': True,
+            'lineage': lineage_data,
+            'cached': lineage_data is not None and use_cache,
+            'api_version': 'v2'
+        })
+        
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        current_app.logger.error(f'Optimized lineage error for batch {batch_id}: {e}\n{error_details}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get optimized lineage: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v2/batch/<int:batch_id>/lineage/summary')
+@login_required
+def get_lineage_summary_stats(batch_id):
+    """
+    Get lightweight summary statistics for quick loading
+    NEW ENDPOINT - Optimized for performance
+    """
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        from app.services.lineage_cache_service import LineageCacheService
+        
+        # Check if batch exists
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({'success': False, 'message': f'Batch {batch_id} not found'}), 404
+        
+        use_cache = request.args.get('use_cache', 'true').lower() == 'true'
+        
+        # Try cache first
+        summary_data = None
+        if use_cache:
+            summary_data = LineageCacheService.get_cached_summary_stats(batch_id)
+        
+        # If not cached, compute and cache
+        if summary_data is None:
+            summary_data = BatchLineageService.get_lineage_summary_stats(batch_id)
+            
+            if use_cache:
+                LineageCacheService.set_cached_summary_stats(batch_id, summary_data)
+        
+        return jsonify({
+            'success': True,
+            'summary': summary_data,
+            'cached': summary_data is not None and use_cache,
+            'api_version': 'v2'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Lineage summary error for batch {batch_id}: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get lineage summary: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v2/batch/<int:batch_id>/lineage/depth/<int:depth_level>')
+@login_required
+def get_lineage_nodes_by_depth(batch_id, depth_level):
+    """
+    Get batch nodes at specific depth level for lazy loading
+    NEW ENDPOINT - Supports pagination for large trees
+    """
+    try:
+        from app.services.batch_lineage_service import BatchLineageService
+        from app.services.lineage_cache_service import LineageCacheService
+        
+        # Check if batch exists
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({'success': False, 'message': f'Batch {batch_id} not found'}), 404
+        
+        # Get parameters
+        node_type = request.args.get('type', 'descendants')  # 'ancestors' or 'descendants'
+        limit = request.args.get('limit', 50, type=int)
+        offset = request.args.get('offset', 0, type=int)
+        use_cache = request.args.get('use_cache', 'true').lower() == 'true'
+        
+        # Validate parameters
+        if node_type not in ['ancestors', 'descendants']:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid node_type. Must be "ancestors" or "descendants"'
+            }), 400
+        
+        if depth_level < 1 or depth_level > 10:
+            return jsonify({
+                'success': False,
+                'message': 'Invalid depth_level. Must be between 1 and 10'
+            }), 400
+        
+        # Try cache first
+        depth_data = None
+        if use_cache:
+            depth_data = LineageCacheService.get_cached_depth_nodes(
+                batch_id, depth_level, node_type, offset, limit
+            )
+        
+        # If not cached, compute and cache
+        if depth_data is None:
+            depth_data = BatchLineageService.get_batch_nodes_by_depth(
+                batch_id, depth_level, node_type, limit, offset
+            )
+            
+            if use_cache:
+                LineageCacheService.set_cached_depth_nodes(
+                    batch_id, depth_data, depth_level, node_type, offset, limit
+                )
+        
+        return jsonify({
+            'success': True,
+            'data': depth_data,
+            'cached': depth_data is not None and use_cache,
+            'api_version': 'v2'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Lineage depth nodes error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get lineage depth nodes: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v2/lineage/cache/stats')
+@login_required
+def get_lineage_cache_stats():
+    """
+    Get cache usage statistics for monitoring
+    NEW ENDPOINT - For debugging and monitoring
+    """
+    try:
+        from app.services.lineage_cache_service import LineageCacheService
+        
+        # Only allow admin users to view cache stats
+        if not current_user.is_admin:
+            return jsonify({'success': False, 'message': 'Admin access required'}), 403
+        
+        cache_stats = LineageCacheService.get_cache_stats()
+        
+        return jsonify({
+            'success': True,
+            'cache_stats': cache_stats,
+            'api_version': 'v2'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Cache stats error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get cache statistics: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v2/lineage/cache/warm/<int:batch_id>', methods=['POST'])
+@login_required
+def warm_lineage_cache(batch_id):
+    """
+    Pre-warm cache for a specific batch
+    NEW ENDPOINT - For performance optimization
+    """
+    try:
+        from app.services.lineage_cache_service import LineageCacheService
+        
+        # Check if batch exists
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({'success': False, 'message': f'Batch {batch_id} not found'}), 404
+        
+        # Warm the cache
+        LineageCacheService.warm_cache_for_batch(batch_id)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cache warmed for batch {batch_id}',
+            'api_version': 'v2'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Cache warming error for batch {batch_id}: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to warm cache: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v2/lineage/cache/invalidate/<int:batch_id>', methods=['POST'])
+@login_required  
+def invalidate_lineage_cache(batch_id):
+    """
+    Invalidate cache for a specific batch
+    NEW ENDPOINT - For data consistency
+    """
+    try:
+        from app.services.lineage_cache_service import LineageCacheService
+        
+        # Check if batch exists
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({'success': False, 'message': f'Batch {batch_id} not found'}), 404
+        
+        # Invalidate the cache
+        LineageCacheService.invalidate_batch_cache(batch_id)
+        
+        return jsonify({
+            'success': True,
+            'message': f'Cache invalidated for batch {batch_id}',
+            'api_version': 'v2'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Cache invalidation error for batch {batch_id}: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to invalidate cache: {str(e)}'
+        }), 500
+
+
+# Phase 4 Analytics and Collaborative Features API Endpoints
+
+@bp.route('/api/v4/analytics/track', methods=['POST'])
+@login_required
+def track_user_interaction():
+    """
+    Track user interactions for analytics
+    Phase 4 - Advanced analytics tracking
+    """
+    try:
+        from app.services.lineage_analytics_service import LineageAnalyticsService
+        
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['batch_id', 'interaction_type']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({
+                    'success': False, 
+                    'message': f'Missing required field: {field}'
+                }), 400
+        
+        # Track the interaction
+        LineageAnalyticsService.track_user_interaction(
+            user_id=current_user.id,
+            batch_id=data['batch_id'],
+            interaction_type=data['interaction_type'],
+            metadata=data.get('metadata', {})
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Interaction tracked successfully',
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Analytics tracking error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to track interaction: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/analytics/performance', methods=['POST'])
+@login_required
+def track_performance_metric():
+    """
+    Track performance metrics for optimization
+    Phase 4 - Performance analytics
+    """
+    try:
+        from app.services.lineage_analytics_service import LineageAnalyticsService
+        
+        data = request.get_json()
+        
+        # Validate required fields
+        if 'metric_type' not in data or 'value' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'Missing required fields: metric_type, value'
+            }), 400
+        
+        # Track the performance metric
+        LineageAnalyticsService.track_performance_metric(
+            metric_type=data['metric_type'],
+            value=data['value'],
+            batch_id=data.get('batch_id'),
+            user_id=current_user.id
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Performance metric tracked successfully',
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Performance tracking error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to track performance: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/analytics/usage-patterns')
+@login_required
+def get_usage_patterns():
+    """
+    Get usage pattern analytics
+    Phase 4 - Advanced analytics insights
+    """
+    try:
+        from app.services.lineage_analytics_service import LineageAnalyticsService
+        
+        # Get query parameters
+        batch_id = request.args.get('batch_id', type=int)
+        time_range_hours = request.args.get('time_range', type=int, default=24)
+        
+        # Limit time range for performance
+        time_range_hours = min(time_range_hours, 168)  # Max 7 days
+        
+        # Get usage patterns
+        patterns = LineageAnalyticsService.get_usage_patterns(
+            batch_id=batch_id,
+            time_range_hours=time_range_hours
+        )
+        
+        return jsonify({
+            'success': True,
+            'usage_patterns': patterns,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Usage patterns error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get usage patterns: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/analytics/performance-insights')
+@login_required
+def get_performance_insights():
+    """
+    Get performance insights and optimization recommendations
+    Phase 4 - Performance analytics
+    """
+    try:
+        from app.services.lineage_analytics_service import LineageAnalyticsService
+        
+        # Get query parameters
+        metric_type = request.args.get('metric_type')
+        time_range_hours = request.args.get('time_range', type=int, default=24)
+        
+        # Limit time range for performance
+        time_range_hours = min(time_range_hours, 168)  # Max 7 days
+        
+        # Get performance insights
+        insights = LineageAnalyticsService.get_performance_insights(
+            metric_type=metric_type,
+            time_range_hours=time_range_hours
+        )
+        
+        return jsonify({
+            'success': True,
+            'performance_insights': insights,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Performance insights error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get performance insights: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/analytics/collaboration')
+@login_required
+def get_collaboration_insights():
+    """
+    Get collaboration insights and opportunities
+    Phase 4 - Collaborative features
+    """
+    try:
+        from app.services.lineage_analytics_service import LineageAnalyticsService
+        
+        # Get query parameters
+        time_range_hours = request.args.get('time_range', type=int, default=24)
+        
+        # Limit time range for performance
+        time_range_hours = min(time_range_hours, 168)  # Max 7 days
+        
+        # Get collaboration insights
+        insights = LineageAnalyticsService.get_collaboration_insights(
+            time_range_hours=time_range_hours
+        )
+        
+        return jsonify({
+            'success': True,
+            'collaboration_insights': insights,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Collaboration insights error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get collaboration insights: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/analytics/recommendations/<int:user_id>')
+@login_required
+def get_batch_recommendations(user_id):
+    """
+    Get ML-based batch recommendations for a user
+    Phase 4 - Machine learning recommendations
+    """
+    try:
+        from app.services.lineage_analytics_service import LineageAnalyticsService
+        
+        # Check if user can access recommendations (own or admin)
+        if current_user.id != user_id and not current_user.is_admin:
+            return jsonify({
+                'success': False,
+                'message': 'Access denied'
+            }), 403
+        
+        # Get query parameters
+        limit = request.args.get('limit', type=int, default=10)
+        limit = min(limit, 50)  # Max 50 recommendations
+        
+        # Get recommendations
+        recommendations = LineageAnalyticsService.predict_batch_interest(
+            user_id=user_id,
+            limit=limit
+        )
+        
+        # Enrich with batch information
+        enriched_recommendations = []
+        for rec in recommendations:
+            batch = VialBatch.query.get(rec['batch_id'])
+            if batch:
+                enriched_recommendations.append({
+                    'batch_id': rec['batch_id'],
+                    'batch_name': batch.name,
+                    'cell_line': batch.cell_line.name if batch.cell_line else None,
+                    'confidence': rec['confidence'],
+                    'reason': rec['reason'],
+                    'created_date': batch.created_date.isoformat() if batch.created_date else None
+                })
+        
+        return jsonify({
+            'success': True,
+            'recommendations': enriched_recommendations,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Batch recommendations error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get recommendations: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/analytics/system-health')
+@login_required
+def get_system_health():
+    """
+    Get system health metrics and recommendations
+    Phase 4 - System monitoring (Admin only)
+    """
+    try:
+        from app.services.lineage_analytics_service import LineageAnalyticsService
+        
+        # Only allow admin users
+        if not current_user.is_admin:
+            return jsonify({
+                'success': False,
+                'message': 'Admin access required'
+            }), 403
+        
+        # Get system health metrics
+        health_metrics = LineageAnalyticsService.get_system_health_metrics()
+        
+        return jsonify({
+            'success': True,
+            'system_health': health_metrics,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'System health error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get system health: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/collaboration/active-users')
+@login_required
+def get_active_users():
+    """
+    Get currently active users in the system
+    Phase 4 - Real-time collaboration awareness
+    """
+    try:
+        from app.services.lineage_analytics_service import LineageAnalyticsService
+        
+        # Get recent user activity (last 30 minutes)
+        cutoff_time = time.time() - (30 * 60)
+        active_users = set()
+        
+        for batch_data in LineageAnalyticsService._usage_analytics.values():
+            for interaction in batch_data:
+                if interaction['timestamp'] > cutoff_time:
+                    active_users.add(interaction['user_id'])
+        
+        # Get user details
+        active_user_details = []
+        for user_id in active_users:
+            user = User.query.get(user_id)
+            if user:
+                active_user_details.append({
+                    'user_id': user.id,
+                    'username': user.username,
+                    'is_current_user': user.id == current_user.id
+                })
+        
+        return jsonify({
+            'success': True,
+            'active_users': active_user_details,
+            'total_active': len(active_user_details),
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Active users error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get active users: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/collaboration/shared-batches')
+@login_required
+def get_shared_batches():
+    """
+    Get batches currently being viewed by multiple users
+    Phase 4 - Collaborative awareness
+    """
+    try:
+        from app.services.lineage_analytics_service import LineageAnalyticsService
+        
+        # Get recent activity (last 15 minutes)
+        cutoff_time = time.time() - (15 * 60)
+        batch_users = defaultdict(set)
+        
+        for batch_id, interactions in LineageAnalyticsService._usage_analytics.items():
+            for interaction in interactions:
+                if interaction['timestamp'] > cutoff_time:
+                    batch_users[batch_id].add(interaction['user_id'])
+        
+        # Find batches with multiple users
+        shared_batches = []
+        for batch_id, users in batch_users.items():
+            if len(users) > 1:
+                batch = VialBatch.query.get(batch_id)
+                if batch:
+                    user_details = []
+                    for user_id in users:
+                        user = User.query.get(user_id)
+                        if user:
+                            user_details.append({
+                                'user_id': user.id,
+                                'username': user.username
+                            })
+                    
+                    shared_batches.append({
+                        'batch_id': batch.id,
+                        'batch_name': batch.name,
+                        'cell_line': batch.cell_line.name if batch.cell_line else None,
+                        'active_users': user_details,
+                        'user_count': len(users)
+                    })
+        
+        return jsonify({
+            'success': True,
+            'shared_batches': shared_batches,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Shared batches error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get shared batches: {str(e)}'
+        }), 500
+
+
+# Phase 4 Advanced Layout API Endpoints
+
+@bp.route('/api/v4/layouts/available')
+@login_required
+def get_available_layouts():
+    """
+    Get list of available layout types
+    Phase 4 - Advanced layout options
+    """
+    try:
+        from app.services.advanced_layouts_service import AdvancedLayoutsService
+        
+        layouts = AdvancedLayoutsService.get_available_layouts()
+        
+        return jsonify({
+            'success': True,
+            'layouts': layouts,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Available layouts error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get available layouts: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/layouts/<layout_type>/generate/<int:batch_id>')
+@login_required
+def generate_advanced_layout(layout_type, batch_id):
+    """
+    Generate advanced layout for a specific batch
+    Phase 4 - Advanced layout generation
+    """
+    try:
+        from app.services.advanced_layouts_service import AdvancedLayoutsService
+        from app.services.batch_lineage_service import BatchLineageService
+        
+        # Validate batch exists
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({
+                'success': False,
+                'message': f'Batch {batch_id} not found'
+            }), 404
+        
+        # Get layout parameters
+        width = request.args.get('width', type=int, default=800)
+        height = request.args.get('height', type=int, default=600)
+        
+        # Validate dimensions
+        width = max(400, min(width, 2000))  # Limit between 400-2000px
+        height = max(300, min(height, 1500))  # Limit between 300-1500px
+        
+        # Get lineage data
+        lineage_data = BatchLineageService.get_batch_lineage(batch_id)
+        
+        # Generate layout based on type
+        layout_data = None
+        if layout_type == 'force_directed':
+            layout_data = AdvancedLayoutsService.generate_force_directed_layout(
+                lineage_data, width, height
+            )
+        elif layout_type == 'timeline':
+            layout_data = AdvancedLayoutsService.generate_timeline_layout(
+                lineage_data, width, height
+            )
+        elif layout_type == 'circular':
+            layout_data = AdvancedLayoutsService.generate_circular_layout(
+                lineage_data, width, height
+            )
+        elif layout_type == 'matrix':
+            layout_data = AdvancedLayoutsService.generate_matrix_layout(
+                lineage_data, width, height
+            )
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Unknown layout type: {layout_type}'
+            }), 400
+        
+        return jsonify({
+            'success': True,
+            'layout_data': layout_data,
+            'batch_id': batch_id,
+            'layout_type': layout_type,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Advanced layout generation error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to generate layout: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/layouts/<layout_type>/config')
+@login_required
+def get_layout_config(layout_type):
+    """
+    Get configuration options for a specific layout type
+    Phase 4 - Layout configuration
+    """
+    try:
+        from app.services.advanced_layouts_service import AdvancedLayoutsService
+        
+        config = AdvancedLayoutsService.get_layout_config(layout_type)
+        
+        return jsonify({
+            'success': True,
+            'layout_type': layout_type,
+            'config': config,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Layout config error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get layout config: {str(e)}'
+        }), 500
+
+
+# Phase 4 Real-time Collaboration API Endpoints
+
+@bp.route('/api/v4/realtime/collaboration-stats')
+@login_required
+def get_realtime_collaboration_stats():
+    """
+    Get real-time collaboration statistics
+    Phase 4 - Real-time collaboration monitoring
+    """
+    try:
+        from app.services.realtime_collaboration_service import RealtimeCollaborationService
+        
+        stats = RealtimeCollaborationService.get_collaboration_stats()
+        
+        return jsonify({
+            'success': True,
+            'stats': stats,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Realtime collaboration stats error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get collaboration stats: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/realtime/batch-viewers/<int:batch_id>')
+@login_required
+def get_batch_active_viewers(batch_id):
+    """
+    Get active viewers for a specific batch
+    Phase 4 - Real-time collaboration awareness
+    """
+    try:
+        from app.services.realtime_collaboration_service import RealtimeCollaborationService
+        
+        # Validate batch exists
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({
+                'success': False,
+                'message': f'Batch {batch_id} not found'
+            }), 404
+        
+        active_users = RealtimeCollaborationService.get_active_users_for_batch(batch_id)
+        
+        return jsonify({
+            'success': True,
+            'batch_id': batch_id,
+            'active_users': active_users,
+            'total_viewers': len(active_users),
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Batch active viewers error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to get active viewers: {str(e)}'
+        }), 500
+
+
+# Phase 4 Workflow Integration API Endpoints
+
+@bp.route('/api/v4/workflow/batch-export', methods=['POST'])
+@login_required
+def export_batch_for_workflow():
+    """
+    Export batch data for external workflow integration
+    Phase 4 - Workflow integration
+    """
+    try:
+        data = request.get_json()
+        
+        if 'batch_id' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'Missing required field: batch_id'
+            }), 400
+        
+        batch_id = data['batch_id']
+        export_format = data.get('format', 'json')
+        include_lineage = data.get('include_lineage', True)
+        
+        # Validate batch exists
+        batch = VialBatch.query.get(batch_id)
+        if not batch:
+            return jsonify({
+                'success': False,
+                'message': f'Batch {batch_id} not found'
+            }), 404
+        
+        # Build export data
+        export_data = {
+            'batch': {
+                'id': batch.id,
+                'name': batch.name,
+                'cell_line': batch.cell_line.name if batch.cell_line else None,
+                'cell_line_id': batch.cell_line_id,
+                'passage_number': batch.passage_number,
+                'frozen_by': batch.frozen_by,
+                'date_frozen': batch.date_frozen.isoformat() if batch.date_frozen else None,
+                'created_date': batch.created_date.isoformat() if batch.created_date else None,
+                'notes': batch.notes,
+                'vial_count': len(batch.vials)
+            },
+            'vials': []
+        }
+        
+        # Include vial information
+        for vial in batch.vials:
+            vial_data = {
+                'id': vial.id,
+                'tag': vial.tag,
+                'status': vial.status,
+                'volume_ml': float(vial.volume_ml) if vial.volume_ml else None,
+                'concentration': vial.concentration,
+                'fluorescence_tag': vial.fluorescence_tag,
+                'resistance': vial.resistance,
+                'location': None
+            }
+            
+            # Include location if vial is stored
+            if vial.box_id:
+                box = vial.box
+                if box:
+                    vial_data['location'] = {
+                        'tower': box.drawer.tower.name if box.drawer and box.drawer.tower else None,
+                        'drawer': box.drawer.name if box.drawer else None,
+                        'box': box.name,
+                        'position': f"R{vial.row_in_box}C{vial.col_in_box}"
+                    }
+            
+            export_data['vials'].append(vial_data)
+        
+        # Include lineage data if requested
+        if include_lineage:
+            from app.services.batch_lineage_service import BatchLineageService
+            lineage_data = BatchLineageService.get_batch_lineage(batch_id)
+            export_data['lineage'] = lineage_data
+        
+        # Add metadata
+        export_data['metadata'] = {
+            'export_timestamp': datetime.now().isoformat(),
+            'exported_by': current_user.username,
+            'format': export_format,
+            'version': '4.0'
+        }
+        
+        return jsonify({
+            'success': True,
+            'export_data': export_data,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Workflow export error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to export batch: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/workflow/batch-import', methods=['POST'])
+@login_required
+def import_batch_from_workflow():
+    """
+    Import batch data from external workflow systems
+    Phase 4 - Workflow integration
+    """
+    try:
+        data = request.get_json()
+        
+        if 'batch_data' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'Missing required field: batch_data'
+            }), 400
+        
+        batch_data = data['batch_data']
+        update_existing = data.get('update_existing', False)
+        
+        # Validate required fields
+        required_fields = ['name', 'cell_line']
+        for field in required_fields:
+            if field not in batch_data:
+                return jsonify({
+                    'success': False,
+                    'message': f'Missing required batch field: {field}'
+                }), 400
+        
+        # Check if batch already exists
+        existing_batch = VialBatch.query.filter_by(name=batch_data['name']).first()
+        if existing_batch and not update_existing:
+            return jsonify({
+                'success': False,
+                'message': f'Batch {batch_data["name"]} already exists'
+            }), 409
+        
+        # Get or create cell line
+        cell_line = CellLine.query.filter_by(name=batch_data['cell_line']).first()
+        if not cell_line:
+            return jsonify({
+                'success': False,
+                'message': f'Cell line {batch_data["cell_line"]} not found'
+            }), 404
+        
+        # Create or update batch
+        if existing_batch and update_existing:
+            batch = existing_batch
+        else:
+            batch = VialBatch()
+            db.session.add(batch)
+        
+        # Update batch fields
+        batch.name = batch_data['name']
+        batch.cell_line_id = cell_line.id
+        batch.passage_number = batch_data.get('passage_number')
+        batch.frozen_by = batch_data.get('frozen_by', current_user.username)
+        batch.notes = batch_data.get('notes')
+        
+        # Parse date_frozen if provided
+        if batch_data.get('date_frozen'):
+            try:
+                batch.date_frozen = datetime.fromisoformat(batch_data['date_frozen'].replace('Z', '+00:00'))
+            except ValueError:
+                pass  # Keep existing date or None
+        
+        try:
+            db.session.commit()
+            
+            # Log the import
+            from app.services.lineage_analytics_service import LineageAnalyticsService
+            LineageAnalyticsService.track_user_interaction(
+                user_id=current_user.id,
+                batch_id=batch.id,
+                interaction_type='workflow_import',
+                metadata={
+                    'source': data.get('source', 'external'),
+                    'update_existing': update_existing
+                }
+            )
+            
+            return jsonify({
+                'success': True,
+                'batch_id': batch.id,
+                'batch_name': batch.name,
+                'operation': 'updated' if existing_batch and update_existing else 'created',
+                'api_version': 'v4'
+            })
+            
+        except Exception as e:
+            db.session.rollback()
+            raise e
+            
+    except Exception as e:
+        current_app.logger.error(f'Workflow import error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to import batch: {str(e)}'
+        }), 500
+
+
+@bp.route('/api/v4/workflow/webhook', methods=['POST'])
+@login_required
+def handle_workflow_webhook():
+    """
+    Handle incoming webhooks from external workflow systems
+    Phase 4 - Webhook integration
+    """
+    try:
+        # Only allow admin users to configure webhooks
+        if not current_user.is_admin:
+            return jsonify({
+                'success': False,
+                'message': 'Admin access required'
+            }), 403
+        
+        data = request.get_json()
+        
+        # Validate webhook data
+        if 'event_type' not in data:
+            return jsonify({
+                'success': False,
+                'message': 'Missing required field: event_type'
+            }), 400
+        
+        event_type = data['event_type']
+        payload = data.get('payload', {})
+        
+        # Process different event types
+        result = None
+        if event_type == 'batch_created':
+            result = cls._handle_batch_created_webhook(payload)
+        elif event_type == 'batch_updated':
+            result = cls._handle_batch_updated_webhook(payload)
+        elif event_type == 'lineage_changed':
+            result = cls._handle_lineage_changed_webhook(payload)
+        else:
+            return jsonify({
+                'success': False,
+                'message': f'Unknown event type: {event_type}'
+            }), 400
+        
+        # Log webhook processing
+        current_app.logger.info(f"Processed webhook: {event_type} from {request.remote_addr}")
+        
+        return jsonify({
+            'success': True,
+            'event_type': event_type,
+            'processed': True,
+            'result': result,
+            'api_version': 'v4'
+        })
+        
+    except Exception as e:
+        current_app.logger.error(f'Webhook processing error: {e}')
+        return jsonify({
+            'success': False,
+            'message': f'Failed to process webhook: {str(e)}'
+        }), 500
+
+
+# Database Backup Endpoint
+@bp.route('/admin/backup')
+@login_required
+@admin_required
+def backup_database():
+    db.session.commit()
+    uri = current_app.config['SQLALCHEMY_DATABASE_URI']
+    scheme = urlparse(uri).scheme
+    rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
+
+    if rds_identifier:
+        try:
+            client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
+            snapshot_id = f"{rds_identifier}-snapshot-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+            client.create_db_snapshot(
+                DBInstanceIdentifier=rds_identifier,
+                DBSnapshotIdentifier=snapshot_id,
+            )
+            log_audit(
+                current_user.id,
+                'BACKUP_EXPORT',
+                target_type='System',
+                details=f'RDS snapshot {snapshot_id}',
+            )
+            flash('RDS snapshot initiated.', 'success')
+        except (BotoCoreError, ClientError) as exc:
+            current_app.logger.error('RDS snapshot failed: %s', exc)
+            flash('RDS backup failed.', 'danger')
+        return redirect(url_for('cell_storage.index'))
+
+    if scheme == 'sqlite':
+        path = uri.replace('sqlite:///', '')
+        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
+        return send_file(path, as_attachment=True, download_name='backup.db')
+
+    if scheme.startswith('postgres'):
+        try:
+            result = subprocess.run(
+                ['pg_dump', '--format', 'custom', '--dbname', uri],
+                check=True,
+                capture_output=True,
+            )
+        except (OSError, subprocess.CalledProcessError) as exc:
+            current_app.logger.error('pg_dump failed: %s', exc)
+            flash('PostgreSQL backup failed.', 'danger')
+            return redirect(url_for('cell_storage.index'))
+
+        buf = BytesIO(result.stdout)
+        buf.seek(0)
+        log_audit(current_user.id, 'BACKUP_EXPORT', target_type='System')
+        return send_file(buf, as_attachment=True, download_name='backup.dump', mimetype='application/octet-stream')
+
+    flash('Unsupported database type.', 'danger')
+    return redirect(url_for('cell_storage.index'))
+
+
+# Database Restore Endpoint
+@bp.route('/admin/restore', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def restore_database():
+    form = RestoreForm()
+    rds_identifier = os.environ.get('AWS_RDS_INSTANCE_IDENTIFIER')
+    rds_configured = bool(rds_identifier)
+
+    if form.validate_on_submit():
+        snapshot_id = (form.snapshot_id.data or '').strip()
+        file = form.backup_file.data
+
+        if rds_configured:
+            if not snapshot_id:
+                flash('RDS Snapshot Identifier is required.', 'danger')
+                return redirect(url_for('cell_storage.restore_database'))
+
+            try:
+                client = boto3.client('rds', region_name=os.environ.get('AWS_REGION'))
+                client.restore_db_instance_from_db_snapshot(
+                    DBInstanceIdentifier=rds_identifier,
+                    DBSnapshotIdentifier=snapshot_id,
+                )
+                log_audit(
+                    current_user.id,
+                    'BACKUP_IMPORT',
+                    target_type='System',
+                    details=f'RDS restore from {snapshot_id}',
+                )
+                flash(
+                    (
+                        'RDS restore initiated. This may take several minutes. '
+                        'The instance will be unavailable during this time.'
+                    ),
+                    'success',
+                )
+            except (BotoCoreError, ClientError) as exc:
+                current_app.logger.error('RDS restore failed: %s', exc)
+                flash(f'RDS restore failed: {exc}', 'danger')
+            return redirect(url_for('cell_storage.index'))
+
+        elif file:
+            uri = current_app.config['SQLALCHEMY_DATABASE_URI']
+            scheme = urlparse(uri).scheme
+
+            if scheme == 'sqlite':
+                path = uri.replace('sqlite:///', '')
+                db.session.remove()
+                file.save(path)
+                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
+                flash('Database restored from backup.', 'success')
+
+            elif scheme.startswith('postgres'):
+                tmp = tempfile.NamedTemporaryFile(delete=False)
+                try:
+                    file.save(tmp.name)
+                    subprocess.run(
+                        ['pg_restore', '--clean', '--if-exists', '--dbname', uri, tmp.name],
+                        check=True,
+                    )
+                except (OSError, subprocess.CalledProcessError) as exc:
+                    current_app.logger.error('pg_restore failed: %s', exc)
+                    flash('PostgreSQL restore failed.', 'danger')
+                    return redirect(url_for('cell_storage.index'))
+                finally:
+                    tmp.close()
+                    os.unlink(tmp.name)
+
+                log_audit(current_user.id, 'BACKUP_IMPORT', target_type='System')
+                flash('Database restored from backup.', 'success')
+
+            else:
+                flash('Unsupported database type.', 'danger')
+            return redirect(url_for('cell_storage.index'))
+
+        else:
+            flash('No snapshot ID or file provided.', 'danger')
+
+    return render_template(
+        'main/restore_backup.html',
+        form=form,
+        title='Restore Backup',
+        rds_configured=rds_configured,
+    )
+
+
+# Clear All Data Endpoint
+@bp.route('/admin/clear_all', methods=['GET', 'POST'])
+@login_required
+@admin_required
+def clear_all():
+    form = ConfirmForm()
+    if form.validate_on_submit():
+        if form.confirm.data.strip() == 'confirm_hayer':
+            # Save user ID before clearing database (session cleanup will detach user object)
+            user_id = current_user.id
+            clear_database_except_admin()
+            log_audit(user_id, 'CLEAR_ALL', target_type='System')
+            flash('All business data has been cleared. All user accounts have been preserved.', 'success')
+            return redirect(url_for('cell_storage.index'))
+        flash('Incorrect confirmation phrase.', 'danger')
+    return render_template('main/clear_all.html', form=form, title='Clear Database')
+
+

@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-12">
+      <h1>{{ title }}</h1>
+      
+      <!-- Success Message -->
+      <div class="alert alert-success alert-dismissible fade show">
+        <h4 class="alert-heading">
+          <i class="bi bi-check-circle"></i> Vials Successfully Saved!
+        </h4>
+        <p class="mb-3">
+          <strong>Batch #{{ batch_id }} "{{ batch_name }}"</strong> has been created with 
+          <strong>{{ vial_count }} vial(s)</strong>.
+        </p>
+        {% if vial_locations %}
+        <hr>
+        <h6>Vial Locations:</h6>
+        <ul class="mb-0">
+          {% for location in vial_locations %}
+          <li>{{ location }}</li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      
+      <!-- Action Cards -->
+      <div class="row">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-body text-center">
+              <h5 class="card-title">
+                <i class="bi bi-printer text-primary"></i> Print Vial Labels
+              </h5>
+              <p class="card-text">
+                Print individual labels for each vial with location and batch information.
+              </p>
+              <button type="button" class="btn btn-primary" onclick="showPrintModal()">
+                <i class="bi bi-printer"></i> Print Labels Now
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-body text-center">
+              <h5 class="card-title">
+                <i class="bi bi-list-ul text-success"></i> View Inventory
+              </h5>
+              <p class="card-text">
+                Return to the main inventory to see your newly created vials.
+              </p>
+              <a href="{{ url_for('cell_storage.cryovial_inventory') }}" class="btn btn-success">
+                <i class="bi bi-list-ul"></i> Go to Inventory
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Add More Vials -->
+      <div class="row mt-4">
+        <div class="col-12">
+          <div class="card border-info">
+            <div class="card-body text-center">
+              <h5 class="card-title">
+                <i class="bi bi-plus-circle text-info"></i> Add More Vials
+              </h5>
+              <p class="card-text">
+                Continue adding more vials to the freezer inventory.
+              </p>
+              <a href="{{ url_for('cell_storage.add_cryovial') }}" class="btn btn-info">
+                <i class="bi bi-plus-circle"></i> Add More Vials
+              </a>
+              {% if cell_line_id %}
+              <a href="{{ url_for('cell_storage.add_cryovial', cell_line_id=cell_line_id) }}" class="btn btn-outline-info ms-2">
+                <i class="bi bi-plus-circle"></i> Add More for {{ cell_line_name }}
+              </a>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Include Print Label Modal -->
+{% include 'modals/print_label_modal.html' %}
+
+<script>
+// Vial data for printing
+const savedVialData = {
+  batchName: "{{ batch_name }}",
+  batchId: {{ batch_id }},
+  vialPositions: {{ vial_positions_json | safe }}
+};
+
+/**
+ * Show the print modal with the saved vial data
+ */
+function showPrintModal() {
+  showPrintLabelModal(
+    savedVialData.batchName,
+    savedVialData.batchId,
+    savedVialData.vialPositions
+  );
+}
+
+// Auto-show print modal if requested
+{% if auto_show_print_modal %}
+document.addEventListener('DOMContentLoaded', function() {
+  setTimeout(() => {
+    showPrintModal();
+  }, 1000); // Delay to allow page to fully load
+});
+{% endif %}
+</script>
+
+{% endblock %}

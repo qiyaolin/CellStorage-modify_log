@@ -34,12 +34,66 @@ def create_app(config_class=Config):
         from app.shared.utils import get_batch_counter
         db.create_all()
         try:
+            # Add password_plain column to users table
             db.session.execute(text(
                 "ALTER TABLE users ADD COLUMN IF NOT EXISTS password_plain VARCHAR(128);"
             ))
+            
+            # Add batch_id column to print_jobs table if it exists
+            db.session.execute(text(
+                "ALTER TABLE print_jobs ADD COLUMN IF NOT EXISTS batch_id INTEGER;"
+            ))
+            
+            # Add foreign key constraint if it doesn't exist
+            db.session.execute(text("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints
+                        WHERE constraint_name = 'fk_print_jobs_batch_id'
+                    ) THEN
+                        ALTER TABLE print_jobs
+                        ADD CONSTRAINT fk_print_jobs_batch_id
+                        FOREIGN KEY (batch_id) REFERENCES vial_batches(id);
+                    END IF;
+                END $$;
+            """))
+
+            # Create batch_lineage table for proper batch relationship tracking
+            # This table replaces the unreliable string-based relationship matching
+            db.session.execute(text("""
+                CREATE TABLE IF NOT EXISTS batch_lineage (
+                    id SERIAL PRIMARY KEY,
+                    parent_batch_id INTEGER NOT NULL REFERENCES vial_batches(id) ON DELETE CASCADE,
+                    child_batch_id INTEGER NOT NULL REFERENCES vial_batches(id) ON DELETE CASCADE,
+                    relationship_type VARCHAR(50) NOT NULL DEFAULT 'passage',
+                    notes TEXT,
+                    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                    created_by_user_id INTEGER REFERENCES users(id),
+                    CHECK (parent_batch_id != child_batch_id),
+                    UNIQUE (parent_batch_id, child_batch_id)
+                );
+            """))
+
+            # Create indexes for batch_lineage table
+            db.session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_batch_lineage_parent
+                ON batch_lineage(parent_batch_id);
+            """))
+            db.session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_batch_lineage_child
+                ON batch_lineage(child_batch_id);
+            """))
+            db.session.execute(text("""
+                CREATE INDEX IF NOT EXISTS idx_batch_lineage_type
+                ON batch_lineage(relationship_type);
+            """))
+
             db.session.commit()
-        except Exception:
+        except Exception as e:
             db.session.rollback()
+            # Log the error but don't stop app startup
+            print(f"Database migration warning: {e}")
 
         # Ensure batch counter config exists
         get_batch_counter()
@@ -57,8 +111,34 @@ def create_app(config_class=Config):
     from .inventory import routes as inventory_routes
     app.register_blueprint(inventory_routes.bp, url_prefix='/inventory')
     
+    # Register mobile blueprint
+    from .mobile_routes import mobile_bp
+    app.register_blueprint(mobile_bp, url_prefix='/mobile')
+    
+    # Initialize mobile middleware
+    from .mobile_middleware import init_mobile_middleware
+    init_mobile_middleware(app)
+    
+    # Exempt specific mobile API endpoints from CSRF protection
+    # Only exempt the API routes, not the entire mobile blueprint
+    from .mobile_routes import update_vial_status, clear_pickup_list
+    csrf.exempt(update_vial_status)
+    csrf.exempt(clear_pickup_list)
+    
+    # Register API blueprints
+    from .api.printing import printing_api
+    app.register_blueprint(printing_api)
+    
+    # Disable CSRF protection for printing API endpoints
+    csrf.exempt(printing_api)
+    
+    # Initialize Flask-Admin first
+    from .admin_interface import init_admin
+    init_admin(app)
+
+    # Register the original admin blueprint with a different prefix
     from .admin import bp as admin_bp
-    app.register_blueprint(admin_bp)
+    app.register_blueprint(admin_bp, url_prefix='/system-admin')
 
     # Import models from both subprojects
     from app.cell_storage import models as cell_models

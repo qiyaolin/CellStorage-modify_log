@@ -1,0 +1,266 @@
+{% extends "base.html" %}
+
+{% block title %}Storage Location Management{% endblock %}
+
+{% block extra_css %}
+<link href="{{ url_for('static', filename='css/locations-simplified.css') }}" rel="stylesheet">
+{% endblock %}
+
+{% block content %}
+<div class="storage-management">
+    <!-- Simplified Header -->
+    <div class="storage-header">
+        <div class="header-content">
+            <div class="header-left">
+                <h1 class="page-title">
+                    <i class="bi bi-building"></i>
+                    Storage Location Management
+                </h1>
+                <nav class="breadcrumb-nav">
+                    <a href="{{ url_for('inventory.index') }}" class="breadcrumb-link">
+                        <i class="bi bi-house"></i> Inventory
+                    </a>
+                    <span class="breadcrumb-separator">/</span>
+                    <span class="breadcrumb-current">Storage Locations</span>
+                </nav>
+            </div>
+            <div class="header-right">
+                <button class="btn-primary" id="addTowerBtn">
+                    <i class="bi bi-plus-lg"></i>
+                    Add Tower
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="storage-content">
+        <!-- Left Panel: Tree Structure -->
+        <div class="tree-panel">
+            <div class="tree-header">
+                <h3>Storage Structure</h3>
+                <div class="tree-legend">
+                    <div class="legend-item">
+                        <i class="bi bi-building text-primary"></i>
+                        <span>Tower</span>
+                    </div>
+                    <div class="legend-item">
+                        <i class="bi bi-inbox text-success"></i>
+                        <span>Drawer</span>
+                    </div>
+                    <div class="legend-item">
+                        <i class="bi bi-box text-warning"></i>
+                        <span>Box</span>
+                    </div>
+                </div>
+            </div>
+            <div class="tree-content">
+                <div class="storage-tree" id="storageTree">
+                    {% for location in root_locations %}
+                        {% include 'inventory/partials/location_node_simplified.html' %}
+                    {% endfor %}
+                </div>
+                <div class="tree-empty-state" id="treeEmptyState" style="display: {% if not root_locations %}block{% else %}none{% endif %};">
+                    <div class="empty-icon">
+                        <i class="bi bi-building"></i>
+                    </div>
+                    <div class="empty-title">No Storage Locations</div>
+                    <div class="empty-description">
+                        Start by adding your first tower to organize your storage structure.
+                    </div>
+                    <button class="btn-primary" onclick="document.getElementById('addTowerBtn').click()">
+                        <i class="bi bi-plus-lg"></i>
+                        Add First Tower
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Location Details & Management -->
+        <div class="details-panel">
+            <div class="details-header">
+                <h3 id="detailsTitle">
+                    <i class="bi bi-pie-chart"></i>
+                    Storage Overview
+                </h3>
+            </div>
+            <div class="details-content">
+                <div class="details-empty-state" id="detailsEmptyState">
+                    <!-- Storage Statistics -->
+                    <div class="storage-stats">
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="bi bi-building"></i>
+                            </div>
+                            <div class="stat-info">
+                                <div class="stat-number" id="towerCount">0</div>
+                                <div class="stat-label">Towers</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="bi bi-inbox"></i>
+                            </div>
+                            <div class="stat-info">
+                                <div class="stat-number" id="drawerCount">0</div>
+                                <div class="stat-label">Drawers</div>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon">
+                                <i class="bi bi-box"></i>
+                            </div>
+                            <div class="stat-info">
+                                <div class="stat-number" id="boxCount">0</div>
+                                <div class="stat-label">Boxes</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Capacity Overview -->
+                    <div class="capacity-overview">
+                        <h4>
+                            <i class="bi bi-speedometer2"></i>
+                            Storage Capacity
+                        </h4>
+                        <div class="overall-capacity">
+                            <div class="capacity-display">
+                                <span class="capacity-current" id="totalUsed">0</span>
+                                <span class="capacity-separator">/</span>
+                                <span class="capacity-total" id="totalCapacity">0</span>
+                                <span class="capacity-unit">positions</span>
+                            </div>
+                            <div class="capacity-bar">
+                                <div class="capacity-fill" id="overallCapacityBar" style="width: 0%"></div>
+                            </div>
+                            <div class="capacity-percentage" id="capacityPercentage">0% full</div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div class="quick-actions">
+                        <h4>
+                            <i class="bi bi-lightning"></i>
+                            Quick Actions
+                        </h4>
+                        <div class="action-grid">
+                            <button class="quick-action-btn" id="quickAddTower">
+                                <i class="bi bi-building-add"></i>
+                                <span>Add Tower</span>
+                            </button>
+                            <button class="quick-action-btn" id="quickViewItems">
+                                <i class="bi bi-list-ul"></i>
+                                <span>View Items</span>
+                            </button>
+                            <button class="quick-action-btn" id="quickExpandAll">
+                                <i class="bi bi-arrows-expand"></i>
+                                <span>Expand All</span>
+                            </button>
+                            <button class="quick-action-btn" id="quickCollapseAll">
+                                <i class="bi bi-arrows-collapse"></i>
+                                <span>Collapse All</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Help Text -->
+                    <div class="help-section">
+                        <h4>
+                            <i class="bi bi-question-circle"></i>
+                            Getting Started
+                        </h4>
+                        <div class="help-content">
+                            <div class="help-item">
+                                <i class="bi bi-1-circle"></i>
+                                <span>Create your first <strong>Tower</strong> to start organizing</span>
+                            </div>
+                            <div class="help-item">
+                                <i class="bi bi-2-circle"></i>
+                                <span>Add <strong>Drawers</strong> to your tower for organization</span>
+                            </div>
+                            <div class="help-item">
+                                <i class="bi bi-3-circle"></i>
+                                <span>Create <strong>Boxes</strong> within drawers to store items</span>
+                            </div>
+                            <div class="help-item">
+                                <i class="bi bi-hand-index"></i>
+                                <span>Click any location in the tree to view details</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="details-form" id="detailsForm" style="display: none;">
+                    <!-- Content will be loaded dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Location Modal -->
+<div class="modal fade" id="locationModal" tabindex="-1" aria-labelledby="locationModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="locationModalLabel">Add Location</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="locationForm">
+                    <input type="hidden" id="locationId" name="id">
+                    <input type="hidden" id="parentId" name="parent_id">
+                    <input type="hidden" id="locationType" name="type">
+                    
+                    <div class="mb-3">
+                        <label for="locationName" class="form-label">Name</label>
+                        <input type="text" class="form-control" id="locationName" name="name" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="locationDescription" class="form-label">Description</label>
+                        <textarea class="form-control" id="locationDescription" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3" id="capacityField">
+                        <label for="locationCapacity" class="form-label">Capacity</label>
+                        <input type="number" class="form-control" id="locationCapacity" name="capacity" min="1">
+                        <div class="form-text">Maximum number of items this location can hold</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveLocationBtn">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Warning:</strong> This action cannot be undone.
+                </div>
+                <p>Are you sure you want to delete <strong id="deleteLocationName"></strong>?</p>
+                <p class="text-muted" id="deleteWarning"></p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteBtn">Delete</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/locations-simplified.js') }}"></script>
+{% endblock %}

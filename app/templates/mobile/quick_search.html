@@ -1,0 +1,253 @@
+{% extends "mobile/base.html" %}
+
+{% block title %}CellStorage Mobile - Quick Search{% endblock %}
+{% block page_title %}Quick Search{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-3">
+    <!-- Search Form -->
+    <div class="card card-mobile mb-3">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('mobile.quick_search') }}" class="search-form">
+                <div class="mobile-search">
+                    <input type="text" name="q" class="form-control form-control-lg" 
+                           placeholder="Search vials, batches, cell lines..." 
+                           value="{{ query }}" autofocus>
+                    <button type="submit" class="mobile-search-btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Quick Search Tips -->
+    {% if not query %}
+    <div class="card card-mobile mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-lightbulb me-2"></i>Search Tips
+            </h6>
+        </div>
+        <div class="card-body">
+            <ul class="list-unstyled mb-0">
+                <li class="mb-2">
+                    <i class="fas fa-search text-primary me-2"></i>
+                    <strong>Vial ID:</strong> Search by unique vial identifier
+                </li>
+                <li class="mb-2">
+                    <i class="fas fa-vials text-success me-2"></i>
+                    <strong>Batch Name:</strong> Find batches by name or ID
+                </li>
+                <li class="mb-2">
+                    <i class="fas fa-dna text-info me-2"></i>
+                    <strong>Cell Line:</strong> Search by cell line name
+                </li>
+                <li>
+                    <i class="fas fa-tag text-warning me-2"></i>
+                    <strong>Tags:</strong> Search by fluorescence or resistance tags
+                </li>
+            </ul>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Search Results -->
+    {% if query %}
+    <div class="card card-mobile mb-3">
+        <div class="card-header">
+            <h6 class="mb-0">
+                Search Results for "{{ query }}"
+                {% if results %}
+                <span class="badge bg-primary ms-2">{{ results|length }}</span>
+                {% endif %}
+            </h6>
+        </div>
+        
+        {% if results %}
+        <div class="card-body p-2">
+            {% for vial in results %}
+            <div class="d-flex justify-content-between align-items-center p-2 border-bottom">
+                <div class="flex-grow-1">
+                    <h6 class="mb-1">{{ vial.tag }}</h6>
+                    <p class="text-muted small mb-1">
+                        <strong>Batch:</strong> {{ vial.batch_name }}<br>
+                        <strong>Cell Line:</strong> {{ vial.cell_line }}<br>
+                        <strong>Location:</strong> {{ vial.location }}
+                        {% if vial.position %}
+                        <br><strong>Position:</strong> {{ vial.position }}
+                        {% endif %}
+                    </p>
+                    {% if vial.date_frozen %}
+                    <small class="text-muted">Frozen: {{ vial.date_frozen }}</small>
+                    {% endif %}
+                </div>
+                <div class="ms-2 text-end">
+                    {% if vial.available %}
+                        <span class="badge bg-success mb-1">Available</span>
+                    {% else %}
+                        <span class="badge bg-secondary mb-1">{{ vial.status }}</span>
+                    {% endif %}
+                    <br>
+                    <button class="btn btn-sm btn-outline-primary" 
+                            onclick="showVialDetails({{ vial.id }})">
+                        <i class="fas fa-info"></i>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="card-body text-center p-4">
+            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+            <h6>No Results Found</h6>
+            <p class="text-muted">No vials found matching "{{ query }}". Try different search terms.</p>
+            <a href="{{ url_for('mobile.cryovial_inventory') }}" class="btn btn-primary btn-mobile">
+                Browse All Vials
+            </a>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Quick Actions -->
+    <div class="card card-mobile">
+        <div class="card-header">
+            <h6 class="mb-0">
+                <i class="fas fa-bolt me-2"></i>Quick Actions
+            </h6>
+        </div>
+        <div class="card-body">
+            <div class="d-grid gap-2">
+                <a href="{{ url_for('mobile.cryovial_inventory') }}" class="btn btn-outline-primary btn-mobile">
+                    <i class="fas fa-vials me-2"></i>Browse Inventory
+                </a>
+                <a href="{{ url_for('mobile.locations_overview') }}" class="btn btn-outline-info btn-mobile">
+                    <i class="fas fa-map-marker-alt me-2"></i>View Locations
+                </a>
+                <a href="{{ url_for('mobile.add_cryovial') }}" class="btn btn-outline-success btn-mobile">
+                    <i class="fas fa-plus me-2"></i>Add New Vial
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vial Details Modal -->
+<div class="modal fade" id="vialDetailsModal" tabindex="-1">
+    <div class="modal-dialog modal-mobile">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Vial Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="vialDetailsContent">
+                <div class="text-center">
+                    <div class="loading-spinner"></div>
+                    <p>Loading vial details...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Auto-submit search form with debounce
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.querySelector('input[name="q"]');
+    let searchTimeout;
+    
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const query = this.value.trim();
+            
+            if (query.length >= 2) {
+                searchTimeout = setTimeout(() => {
+                    this.form.submit();
+                }, 500);
+            }
+        });
+    }
+});
+
+// Show vial details function
+function showVialDetails(vialId) {
+    const modal = new bootstrap.Modal(document.getElementById('vialDetailsModal'));
+    const content = document.getElementById('vialDetailsContent');
+    
+    // Reset content
+    content.innerHTML = `
+        <div class="text-center">
+            <div class="loading-spinner"></div>
+            <p>Loading vial details...</p>
+        </div>
+    `;
+    
+    modal.show();
+    
+    // Fetch vial details
+    fetch(`/mobile/api/vial/${vialId}/details`)
+        .then(response => response.json())
+        .then(data => {
+            content.innerHTML = `
+                <dl class="row">
+                    <dt class="col-sm-4">Vial Tag</dt>
+                    <dd class="col-sm-8">${data.unique_vial_id_tag}</dd>
+                    
+                    <dt class="col-sm-4">Batch Name</dt>
+                    <dd class="col-sm-8">${data.batch_name}</dd>
+                    
+                    <dt class="col-sm-4">Cell Line</dt>
+                    <dd class="col-sm-8">${data.cell_line}</dd>
+                    
+                    <dt class="col-sm-4">Location</dt>
+                    <dd class="col-sm-8">${data.location}</dd>
+                    
+                    ${data.position ? `
+                    <dt class="col-sm-4">Position</dt>
+                    <dd class="col-sm-8">${data.position}</dd>
+                    ` : ''}
+                    
+                    ${data.passage_number ? `
+                    <dt class="col-sm-4">Passage</dt>
+                    <dd class="col-sm-8">${data.passage_number}</dd>
+                    ` : ''}
+                    
+                    <dt class="col-sm-4">Date Frozen</dt>
+                    <dd class="col-sm-8">${data.date_frozen}</dd>
+                    
+                    <dt class="col-sm-4">Frozen By</dt>
+                    <dd class="col-sm-8">${data.frozen_by}</dd>
+                    
+                    <dt class="col-sm-4">Status</dt>
+                    <dd class="col-sm-8">
+                        <span class="badge bg-${data.status === 'Available' ? 'success' : 'secondary'}">
+                            ${data.status}
+                        </span>
+                    </dd>
+                    
+                    ${data.notes ? `
+                    <dt class="col-sm-4">Notes</dt>
+                    <dd class="col-sm-8">${data.notes}</dd>
+                    ` : ''}
+                </dl>
+            `;
+        })
+        .catch(error => {
+            console.error('Error loading vial details:', error);
+            content.innerHTML = `
+                <div class="alert alert-danger">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    Failed to load vial details. Please try again.
+                </div>
+            `;
+        });
+}
+</script>
+{% endblock %}

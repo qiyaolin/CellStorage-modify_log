@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta
 import json
+from sqlalchemy import text
 from .. import db
-from ..cell_storage.models import AuditLog, AppConfig, VialBatch
+from ..cell_storage.models import AuditLog, AppConfig, VialBatch, CryoVial
 
 def log_audit(user_id, action, target_type=None, target_id=None, details=None, **extra):
     """Create an ``AuditLog`` entry.
@@ -32,36 +33,305 @@ def log_audit(user_id, action, target_type=None, target_id=None, details=None, *
 
 
 def clear_database_except_admin():
-    """Delete all records except users with the admin role.
+    """Delete all records except ALL user accounts using robust transaction management.
 
-    The deletion order respects foreign key constraints so we remove
-    dependent records before their parents."""
+    Uses raw SQL with proper foreign key handling and individual transactions
+    to avoid PostgreSQL transaction abort issues.
+    
+    Clears ALL business data but preserves ALL user accounts including:
+    - Cell Storage: CryoVials, Batches, Cell Lines, Storage Locations
+    - Inventory: Items, Orders, Usage Logs, Alerts
+    - Configuration: Themes, App Settings, Alerts
+    - All audit logs and notifications
+    
+    PRESERVES: All user accounts (admin and regular users)
+    """
+    from sqlalchemy import text
+    
+    # Define deletion order - most dependent tables first
+    # Each group will be processed in a separate transaction for reliability
+    deletion_groups = [
+        {
+            'name': 'Usage and Transaction Records',
+            'tables': [
+                'usage_logs',
+                'order_items', 
+                'item_price_history',
+                'supplier_ratings',
+                'audit_logs'
+            ]
+        },
+        {
+            'name': 'Orders and Requests',
+            'tables': [
+                'orders',
+                'purchase_requests',
+                'shopping_cart'
+            ]
+        },
+        {
+            'name': 'Cell Storage Data',
+            'tables': [
+                'cryovials',
+                'alerts'
+            ]
+        },
+        {
+            'name': 'Batch and Items Data',
+            'tables': [
+                'vial_batches',
+                'inventory_items',
+                'stock_alerts',
+                'notifications'
+            ]
+        },
+        {
+            'name': 'Location Hierarchy', 
+            'tables': [
+                'boxes',
+                'drawers',
+                'towers',
+                'locations'  # inventory locations
+            ]
+        },
+        {
+            'name': 'Base Reference Data',
+            'tables': [
+                'cell_lines',
+                'supplier_contacts',
+                'suppliers',
+                'inventory_types'
+            ]
+        },
+        {
+            'name': 'Configuration Data',
+            'tables': [
+                'user_permissions',
+                'theme_config', 
+                'alert_configs',
+                'app_config'
+            ]
+        }
+    ]
+    
+    success_count = 0
+    total_deleted = 0
+    errors = []
+    
+    # Process each group in a separate transaction
+    for group in deletion_groups:
+        group_name = group['name']
+        tables = group['tables']
+        group_deleted = 0
+        
+        try:
+            print(f"🔄 Processing {group_name}...")
+            
+            for table in tables:
+                try:
+                    # Check if table exists before trying to delete
+                    result = db.session.execute(text(
+                        f"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table}')"
+                    ))
+                    table_exists = result.fetchone()[0]
+                    
+                    if table_exists:
+                        # Delete all records from table
+                        result = db.session.execute(text(f"DELETE FROM {table}"))
+                        deleted = result.rowcount
+                        group_deleted += deleted
+                        print(f"  ✅ Cleared {deleted} records from {table}")
+                    else:
+                        print(f"  ⏭️  Table {table} does not exist, skipping")
+                        
+                except Exception as e:
+                    print(f"  ❌ Error clearing {table}: {e}")
+                    errors.append(f"{table}: {str(e)}")
+                    # Continue with next table in group
+            
+            # Commit this group's changes
+            db.session.commit()
+            total_deleted += group_deleted
+            success_count += 1
+            print(f"✅ {group_name} completed - {group_deleted} total records deleted")
+            
+        except Exception as e:
+            # Rollback this group's transaction and clean up session
+            try:
+                db.session.rollback()
+            except Exception:
+                # If rollback fails, remove the session entirely
+                db.session.remove()
+            print(f"❌ {group_name} failed: {e}")
+            errors.append(f"{group_name}: {str(e)}")
+            
+    # PRESERVE ALL USERS - Do not delete any user accounts
+    print("✅ All user accounts preserved (no users deleted)")
+    
+    # Verify key tables are actually empty
+    key_tables_to_verify = ['cryovials', 'vial_batches', 'cell_lines', 'inventory_items']
+    verification_results = {}
+    
+    for table in key_tables_to_verify:
+        try:
+            result = db.session.execute(text(f"SELECT COUNT(*) FROM {table}"))
+            count = result.fetchone()[0]
+            db.session.commit()  # Ensure clean transaction state
+            verification_results[table] = count
+        except Exception as e:
+            verification_results[table] = f"Error: {e}"
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+    
+    # Final summary
+    if success_count == len(deletion_groups):
+        print(f"✅ Database cleared successfully!")
+        print(f"   📊 {success_count}/{len(deletion_groups)} groups processed")
+        print(f"   📊 {total_deleted} total records deleted")
+        print(f"   🛡️  All user accounts preserved")
+    else:
+        print(f"⚠️  Database clearing completed with some errors:")
+        print(f"   📊 {success_count}/{len(deletion_groups)} groups successful")
+        print(f"   📊 {total_deleted} total records deleted")
+        print(f"   🛡️  All user accounts preserved")
+        if errors:
+            print("   ❌ Errors encountered:")
+            for error in errors:
+                print(f"      - {error}")
+    
+    # Print verification results
+    print(f"\n🔍 Table verification (record counts):")
+    for table, count in verification_results.items():
+        if isinstance(count, int):
+            status = "✅ Empty" if count == 0 else f"⚠️  {count} records remaining"
+            print(f"   {table}: {status}")
+        else:
+            print(f"   {table}: {count}")
+    
+    # Reset sequences for key tables to start from 1
+    sequences_to_reset = [
+        ('cryovials', 'cryovials_id_seq'),
+        ('vial_batches', 'vial_batches_id_seq'), 
+        ('cell_lines', 'cell_lines_id_seq'),
+        ('inventory_items', 'inventory_items_id_seq'),
+        ('boxes', 'boxes_id_seq'),
+        ('drawers', 'drawers_id_seq'),
+        ('towers', 'towers_id_seq')
+    ]
+    
+    print(f"\n🔄 Resetting ID sequences...")
+    reset_count = 0
+    for table, sequence in sequences_to_reset:
+        try:
+            # Check if table exists first
+            result = db.session.execute(text(
+                f"SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '{table}')"
+            ))
+            if result.fetchone()[0]:
+                db.session.execute(text(f"ALTER SEQUENCE {sequence} RESTART WITH 1"))
+                db.session.commit()  # Commit each sequence reset individually
+                print(f"   ✅ Reset {sequence} to start from 1")
+                reset_count += 1
+            else:
+                print(f"   ⏭️  Table {table} does not exist, skipping sequence reset")
+        except Exception as e:
+            print(f"   ⚠️  Could not reset {sequence}: {e}")
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+    
+    if reset_count > 0:
+        print(f"✅ {reset_count} sequences reset successfully")
+    else:
+        print("ℹ️  No sequences to reset")
+    
+    # CRITICAL: Clean up the session completely to avoid transaction state issues
+    # This ensures subsequent operations (like user authentication) start fresh
+    try:
+        db.session.remove()
+        print("🧹 Database session cleaned up successfully")
+    except Exception as e:
+        print(f"⚠️  Warning: Could not clean up database session: {e}")
+    
+    return success_count == len(deletion_groups)
 
-    from app.cell_storage.models import (
-        User,
-        CellLine,
-        Tower,
-        Drawer,
-        Box,
-        CryoVial,
-        VialBatch,
-        AuditLog,
-    )
 
-    # Remove dependent records first to avoid foreign key violations
-    for model in (
-        AuditLog,
-        CryoVial,
-        VialBatch,
-        Box,
-        Drawer,
-        Tower,
-        CellLine,
-    ):
-        db.session.query(model).delete()
+def get_vial_counter():
+    """Return current vial counter as int, ensuring sync with PostgreSQL sequence."""
+    try:
+        # 获取 PostgreSQL 序列的当前值
+        result = db.session.execute(text("SELECT last_value FROM cryovials_id_seq")).fetchone()
+        sequence_value = result[0] if result else 0
+        
+        # 获取 AppConfig 中的值
+        setting = AppConfig.query.filter_by(key='vial_counter').first()
+        
+        if not setting:
+            # 初始化：基于当前最大 ID 或序列值
+            max_id = db.session.query(db.func.max(CryoVial.id)).scalar() or 0
+            next_value = max(max_id + 1, sequence_value + 1)
+            setting = AppConfig(key='vial_counter', value=str(next_value))
+            db.session.add(setting)
+            # 同步序列值
+            db.session.execute(text(f"ALTER SEQUENCE cryovials_id_seq RESTART WITH {next_value}"))
+            db.session.commit()
+            return next_value
+        
+        # 检查 AppConfig 和序列是否同步
+        config_value = int(setting.value)
+        if abs(config_value - sequence_value) > 1:  # 允许1的差异（序列可能已经被使用）
+            # 不同步时，以序列值为准，更新 AppConfig
+            next_value = sequence_value + 1
+            setting.value = str(next_value)
+            db.session.commit()
+            return next_value
+        
+        return config_value
+        
+    except (ValueError, TypeError):
+        return 1
+    except Exception as e:
+        # 发生错误时，回退到基于最大 ID 的方式
+        max_id = db.session.query(db.func.max(CryoVial.id)).scalar() or 0
+        return max_id + 1
 
-    db.session.query(User).filter(User.role != 'admin').delete()
-    db.session.commit()
+
+def set_vial_counter(value):
+    """Set vial counter and update PostgreSQL sequence to match"""
+    try:
+        new_value = int(value)
+        if new_value < 1:
+            raise ValueError("Vial counter must be a positive integer")
+        
+        # 更新 AppConfig 中的计数器值
+        setting = AppConfig.query.filter_by(key='vial_counter').first()
+        if not setting:
+            setting = AppConfig(key='vial_counter')
+            db.session.add(setting)
+        setting.value = str(new_value)
+        
+        # 同时更新 PostgreSQL 序列，让下一个 ID 从指定值开始
+        db.session.execute(text(f"ALTER SEQUENCE cryovials_id_seq RESTART WITH {new_value}"))
+        db.session.commit()
+        
+    except (ValueError, TypeError) as e:
+        db.session.rollback()
+        raise ValueError(f"Invalid vial counter value: {e}")
+    except Exception as e:
+        db.session.rollback()
+        raise Exception(f"Failed to update vial counter: {e}")
+
+
+def get_next_vial_id(auto_commit=True):
+    """
+    这个函数已经不再需要，因为 CryoVial 的 id 现在由 PostgreSQL 序列自动管理。
+    保留此函数是为了向后兼容，但实际上 vial 的 ID 将由数据库自动分配。
+    """
+    # 获取当前的 vial_counter 值（这只是为了显示目的）
+    return get_vial_counter()
 
 
 def get_batch_counter():
@@ -89,17 +359,54 @@ def set_batch_counter(value):
 
 
 def get_next_batch_id(auto_commit=True):
-    """Retrieve and increment the batch counter atomically."""
-    setting = AppConfig.query.filter_by(key='batch_counter').with_for_update().first()
-    if not setting:
+    """Retrieve and increment the batch counter atomically using database-level operations."""
+    try:
+        # Use PostgreSQL's built-in atomic operations for ID generation
+        # This prevents race conditions by using database-level locking
+        
+        # Try to get existing counter setting with row-level lock
+        setting = AppConfig.query.filter_by(key='batch_counter').with_for_update().first()
+        
+        if not setting:
+            # Initialize counter based on current max ID
+            max_id = db.session.query(db.func.max(VialBatch.id)).scalar() or 0
+            setting = AppConfig(key='batch_counter', value=str(max_id + 1))
+            db.session.add(setting)
+            # Commit immediately to avoid transaction conflicts
+            db.session.commit()
+            return max_id + 1
+        
+        # Get current value and increment atomically
+        current = int(setting.value)
+        setting.value = str(current + 1)
+        
+        if auto_commit:
+            db.session.commit()
+        else:
+            # For non-auto-commit, we still need to commit the counter update
+            # to avoid conflicts, then start a new transaction for the batch creation
+            db.session.commit()
+            
+        return current
+        
+    except Exception as e:
+        # Fallback: generate ID based on current max + timestamp to ensure uniqueness
+        import time
         max_id = db.session.query(db.func.max(VialBatch.id)).scalar() or 0
-        setting = AppConfig(key='batch_counter', value=str(max_id + 1))
-        db.session.add(setting)
-    current = int(setting.value)
-    setting.value = str(current + 1)
-    if auto_commit:
-        db.session.commit()
-    return current
+        timestamp_suffix = int(time.time() * 1000) % 10000  # Last 4 digits of timestamp
+        fallback_id = max_id + 1 + timestamp_suffix
+        
+        # Update counter to this value to maintain sequence
+        try:
+            setting = AppConfig.query.filter_by(key='batch_counter').first()
+            if setting:
+                setting.value = str(fallback_id + 1)
+                if auto_commit:
+                    db.session.commit()
+        except:
+            pass  # Counter update failed, but we have a valid ID
+            
+        return fallback_id
 
 
 # =============================================================================
@@ -173,7 +480,8 @@ def check_low_stock_alerts():
         CellLine.id,
         CellLine.name,
         db.func.count(CryoVial.id).label('available_count')
-    ).outerjoin(CryoVial, (CryoVial.cell_line_id == CellLine.id) & (CryoVial.status == 'Available'))\
+    ).select_from(CellLine)\
+     .outerjoin(CryoVial, (CryoVial.cell_line_id == CellLine.id) & (CryoVial.status == 'Available'))\
      .group_by(CellLine.id, CellLine.name).all()
     
     for cell_line_id, cell_line_name, available_count in cell_lines_stock:
@@ -222,7 +530,7 @@ def check_box_capacity_alerts():
         Box.rows,
         Box.columns,
         db.func.count(CryoVial.id).label('used_positions')
-    ).outerjoin(CryoVial).group_by(Box.id, Box.name, Box.rows, Box.columns).all()
+    ).outerjoin(CryoVial, CryoVial.box_id == Box.id).group_by(Box.id, Box.name, Box.rows, Box.columns).all()
     
     for box_id, box_name, rows, columns, used_positions in boxes_usage:
         total_positions = rows * columns
@@ -277,7 +585,7 @@ def check_old_samples_alerts():
         CellLine.name.label('cell_line_name'),
         db.func.min(CryoVial.date_frozen).label('oldest_date'),
         db.func.count(CryoVial.id).label('vial_count')
-    ).join(CryoVial).join(CellLine)\
+    ).join(CryoVial, CryoVial.batch_id == VialBatch.id).join(CellLine, CellLine.id == CryoVial.cell_line_id)\
      .filter(CryoVial.date_frozen <= cutoff_date)\
      .filter(CryoVial.status == 'Available')\
      .group_by(VialBatch.id, VialBatch.name, CellLine.name).all()

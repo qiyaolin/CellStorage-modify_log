@@ -1,0 +1,180 @@
+{% extends "mobile/base.html" %}
+
+{% block title %}CellStorage Mobile - Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="container-fluid p-3">
+    <!-- Summary Statistics -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="row g-3">
+                <div class="col-4">
+                    <div class="card card-mobile text-center bg-primary text-white">
+                        <div class="card-body p-3">
+                            <div class="h3 mb-0">{{ total_vials }}</div>
+                            <small>Total Vials</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="card card-mobile text-center bg-success text-white">
+                        <div class="card-body p-3">
+                            <div class="h3 mb-0">{{ available_vials }}</div>
+                            <small>Available</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-4">
+                    <div class="card card-mobile text-center bg-info text-white">
+                        <div class="card-body p-3">
+                            <div class="h3 mb-0">{{ total_batches }}</div>
+                            <small>Batches</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h5 class="mb-3">Quick Actions</h5>
+            <div class="quick-action-grid">
+                <a href="{{ url_for('mobile.quick_search') }}" class="quick-action-btn bg-primary">
+                    <i class="fas fa-search"></i>
+                    <span>Search</span>
+                </a>
+                <a href="{{ url_for('mobile.cryovial_inventory') }}" class="quick-action-btn bg-success">
+                    <i class="fas fa-vials"></i>
+                    <span>Inventory</span>
+                </a>
+                <a href="{{ url_for('mobile.add_cryovial') }}" class="quick-action-btn bg-warning">
+                    <i class="fas fa-plus"></i>
+                    <span>Add Vial</span>
+                </a>
+                <a href="{{ url_for('mobile.locations_overview') }}" class="quick-action-btn bg-info">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>Locations</span>
+                </a>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Frequently Used Cells -->
+    {% if frequent_cells %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card card-mobile">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i class="fas fa-star text-warning me-2"></i>Frequently Used
+                    </h6>
+                    <small class="text-muted">Based on your activity</small>
+                </div>
+                <div class="card-body p-2">
+                    <div class="frequent-cells-grid">
+                        {% for cell in frequent_cells %}
+                        <div class="frequent-cell-item" onclick="searchCellLine('{{ cell.name }}')">
+                            <div class="cell-icon">
+                                <i class="fas fa-vials"></i>
+                            </div>
+                            <div class="cell-info">
+                                <div class="cell-name">{{ cell.name }}</div>
+                                <small class="cell-count">{{ cell.available_count }} available</small>
+                                <div class="usage-indicator">
+                                    <div class="usage-bar" style="width: {{ (cell.usage_frequency / 10 * 100)|round }}%"></div>
+                                </div>
+                            </div>
+                            <div class="add-btn">
+                                <i class="fas fa-plus"></i>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Quick Search -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card card-mobile">
+                <div class="card-header">
+                    <h6 class="mb-0">
+                        <i class="fas fa-search me-2"></i>Quick Search
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('mobile.quick_search') }}" method="GET">
+                        <div class="mobile-search">
+                            <input type="text" name="q" class="form-control" 
+                                   placeholder="Search vials, batches, cell lines..." 
+                                   value="{{ request.args.get('q', '') }}">
+                            <button type="submit" class="mobile-search-btn">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add touch feedback for quick action buttons
+    document.querySelectorAll('.quick-action-btn').forEach(function(btn) {
+        btn.addEventListener('touchstart', function() {
+            this.style.transform = 'translateY(0)';
+            this.style.opacity = '0.8';
+        });
+        
+        btn.addEventListener('touchend', function() {
+            this.style.transform = 'translateY(-2px)';
+            this.style.opacity = '1';
+        });
+    });
+    
+    // Auto-submit search form on Enter
+    const searchInput = document.querySelector('input[name="q"]');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.form.submit();
+            }
+        });
+    }
+    
+    // Touch feedback for frequent cell items
+    document.querySelectorAll('.frequent-cell-item').forEach(function(item) {
+        item.addEventListener('touchstart', function() {
+            this.style.transform = 'scale(0.98)';
+            this.style.opacity = '0.8';
+        });
+        
+        item.addEventListener('touchend', function() {
+            this.style.transform = 'scale(1)';
+            this.style.opacity = '1';
+        });
+    });
+});
+
+// Function to search for a specific cell line
+function searchCellLine(cellLineName) {
+    const searchForm = document.querySelector('form[action*="quick_search"]');
+    const searchInput = searchForm.querySelector('input[name="q"]');
+    searchInput.value = cellLineName;
+    searchForm.submit();
+}
+</script>
+{% endblock %}

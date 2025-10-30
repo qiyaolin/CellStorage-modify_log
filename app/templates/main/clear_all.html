@@ -6,20 +6,59 @@
     </div>
     <div class="card-body">
       <div class="alert alert-danger" role="alert">
-        <h4 class="alert-heading">Warning! This is a destructive action.</h4>
+        <h4 class="alert-heading">⚠️ Warning! This is a destructive action.</h4>
         <p>
-          You are about to permanently delete all data from the database, including:
-          <ul>
-            <li>All CryoVials</li>
-            <li>All Vial Batches</li>
-            <li>All Cell Lines</li>
-            <li>All Location information (Towers, Drawers, Boxes)</li>
-            <li>All Audit Logs</li>
-          </ul>
+          You are about to permanently delete <strong>ALL DATA</strong> from the database, including:
         </p>
+        
+        <div class="row">
+          <div class="col-md-6">
+            <h6><strong>Cell Storage System:</strong></h6>
+            <ul class="mb-2">
+              <li>All CryoVials and Batches</li>
+              <li>All Cell Lines</li>
+              <li>All Storage Locations (Towers, Drawers, Boxes)</li>
+              <li>All Alerts and Alert Configurations</li>
+            </ul>
+          </div>
+          <div class="col-md-6">
+            <h6><strong>Inventory System:</strong></h6>
+            <ul class="mb-2">
+              <li>All Inventory Items and Usage Logs</li>
+              <li>All Orders and Purchase Requests</li>
+              <li>All Suppliers and Locations</li>
+              <li>All Stock Alerts and Notifications</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="row mt-2">
+          <div class="col-12">
+            <h6><strong>System Data:</strong></h6>
+            <ul class="mb-2">
+              <li>All Audit Logs and Activity History</li>
+              <li>All Theme Configurations</li>
+              <li>All Application Settings</li>
+              <li>All User Permissions and Ratings</li>
+            </ul>
+          </div>
+        </div>
+        
+        <div class="alert alert-success mt-3" role="alert">
+          <h6><strong>✅ Will Be Preserved:</strong></h6>
+          <ul class="mb-0">
+            <li><strong>All User Accounts</strong> (Administrators and Regular Users)</li>
+            <li>User login credentials and basic profile information</li>
+          </ul>
+        </div>
+        
         <hr>
         <p class="mb-0">
-          <strong>Only administrator accounts will be preserved.</strong> This action cannot be undone.
+          <strong class="text-danger">⚠️ All business data will be permanently deleted.</strong> 
+          <br>
+          <strong class="text-success">✅ All user accounts will be preserved.</strong>
+          <br>
+          <strong>This action cannot be undone and will reset all business data to a clean state.</strong>
         </p>
       </div>
 

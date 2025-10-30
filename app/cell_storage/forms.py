@@ -23,7 +23,7 @@ from wtforms.validators import (
 )
 from flask_wtf import FlaskForm
 from .models import User, CellLine, Box
-from flask_wtf.file import FileField, FileAllowed
+from flask_wtf.file import FileField, FileAllowed, MultipleFileField
 
 
 class MultiCheckboxField(SelectMultipleField):
@@ -319,17 +319,17 @@ class BatchLookupForm(FlaskForm):
     submit = SubmitField('Manage Batch')
 
 class CSVUploadForm(FlaskForm):
-    """Form for uploading CSV files with enhanced validation."""
-    csv_file = FileField(
-        'CSV File', 
+    """Form for uploading multiple CSV files with enhanced validation."""
+    csv_files = MultipleFileField(
+        'CSV Files (Select multiple files)', 
         validators=[
             DataRequired(),
             FileAllowed(['csv'], 'Only CSV files are allowed!')
         ]
     )
-    submit = SubmitField('Upload and Import')
+    submit = SubmitField('Upload and Import All Files')
     
-    def validate_csv_file(self, field):
+    def validate_csv_files(self, field):
         if field.data:
             # 检查文件大小（客户端检查，服务器端会再次检查）
             # 注意：这个检查在某些情况下可能不准确，主要检查在服务器端

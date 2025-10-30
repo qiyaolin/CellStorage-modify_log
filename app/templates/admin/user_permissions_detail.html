@@ -302,8 +302,8 @@
     <!-- Navigation -->
     <nav aria-label="breadcrumb" class="mb-4">
         <ol class="breadcrumb">
-            <li class="breadcrumb-item"><a href="{{ url_for('admin.admin_dashboard') }}">Admin</a></li>
-            <li class="breadcrumb-item"><a href="{{ url_for('admin.permissions') }}">Permissions</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('admin.index') }}">Admin</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('system_admin.permissions') }}">Permissions</a></li>
             <li class="breadcrumb-item active">{{ user.username }}</li>
         </ol>
     </nav>

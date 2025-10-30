@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Debug Label Preview - Job #1</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .debug-header {
+            background: #ff9800;
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .label-preview {
+            border: 2px solid #333;
+            border-radius: 8px;
+            width: 324px;
+            height: 180px;
+            margin: 20px auto;
+            padding: 10px;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+        .label-text {
+            text-align: center;
+            font-family: Arial, sans-serif;
+            font-size: 8pt;
+            font-weight: normal;
+            word-wrap: break-word;
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .label-barcode {
+            text-align: center;
+            font-family: monospace;
+            font-size: 10px;
+            border: 1px solid #ccc;
+            padding: 5px;
+            background: #f9f9f9;
+            margin-top: 10px;
+        }
+        .info-section {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .info-section h3 {
+            margin-top: 0;
+            color: #1976d2;
+        }
+        .xml-section {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .xml-content {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 10px;
+            white-space: pre-wrap;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="debug-header">
+            🐛 DEBUG MODE - LABEL PREVIEW (NO ACTUAL PRINTING)
+        </div>
+        
+        <h1>Label Preview - Job #1</h1>
+        
+        <div class="info-section">
+            <h3>Print Job Information</h3>
+            <p><strong>Item Name:</strong> Unknown Item</p>
+            <p><strong>Custom Text:</strong> </p>
+            <p><strong>Final Display Text:</strong> Unknown Item</p>
+            <p><strong>Barcode:</strong> NO_BARCODE</p>
+            <p><strong>Font Size:</strong> 8pt</p>
+            <p><strong>Bold:</strong> No</p>
+            <p><strong>Template Mode:</strong> Dynamic (.label file)</p>
+            <p><strong>Timestamp:</strong> 2025-08-01 21:21:59</p>
+        </div>
+        
+        <div class="label-preview">
+            <div class="label-text">Unknown Item</div>
+            <div class="label-barcode">||||| NO_BARCODE |||||</div>
+        </div>
+        
+        <div class="xml-section">
+            <h3>Generated Label XML</h3>
+            <div class="xml-content"><DieCutLabel Version="8.0" Units="twips">
+	<PaperOrientation>Portrait</PaperOrientation>
+	<Id>Address</Id>
+	<IsOutlined>false</IsOutlined>
+	<PaperName>30252 Address</PaperName>
+	<DrawCommands>
+		<RoundRectangle X="5000" Y="5000" Width="10" Height="10" Rx="270" Ry="270" />
+		<RoundRectangle X="550" Y="1100" Width="720" Height="1500" Rx="180" Ry="180" />
+		<RoundRectangle X="650" Y="2700" Width="500" Height="500" Rx="270" Ry="270" />
+	</DrawCommands>
+	<ObjectInfo>
+		<TextObject>
+			<Name>textbox</Name>
+			<ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
+			<BackColor Alpha="0" Red="255" Green="255" Blue="255" />
+			<LinkedObjectName />
+			<Rotation>Rotation270</Rotation>
+			<IsMirrored>False</IsMirrored>
+			<IsVariable>False</IsVariable>
+			<GroupID>-1</GroupID>
+			<IsOutlined>False</IsOutlined>
+			<HorizontalAlignment>Left</HorizontalAlignment>
+			<VerticalAlignment>Top</VerticalAlignment>
+			<TextFitMode>AlwaysFit</TextFitMode>
+			<UseFullFontHeight>True</UseFullFontHeight>
+			<Verticalized>False</Verticalized>
+			<StyledText>
+				<Element>
+					<String xml:space="preserve">Unknown Item</String>
+					<Attributes>
+						<Font Family="Segoe UI" Size="14" Bold="False" Italic="False" Underline="False" Strikeout="False" />
+						<ForeColor Alpha="255" Red="0" Green="0" Blue="0" HueScale="100" />
+					</Attributes>
+				</Element>
+			</StyledText>
+		</TextObject>
+		<Bounds X="537.084337349398" Y="1180.48192771084" Width="561.746987951807" Height="945.542168674699" />
+	</ObjectInfo>
+	<ObjectInfo>
+		<TextObject>
+			<Name>labelbox</Name>
+			<ForeColor Alpha="255" Red="0" Green="0" Blue="0" />
+			<BackColor Alpha="0" Red="255" Green="255" Blue="255" />
+			<LinkedObjectName />
+			<Rotation>Rotation270</Rotation>
+			<IsMirrored>False</IsMirrored>
+			<IsVariable>False</IsVariable>
+			<GroupID>-1</GroupID>
+			<IsOutlined>False</IsOutlined>
+			<HorizontalAlignment>Center</HorizontalAlignment>
+			<VerticalAlignment>Middle</VerticalAlignment>
+			<TextFitMode>ShrinkToFit</TextFitMode>
+			<UseFullFontHeight>True</UseFullFontHeight>
+			<Verticalized>False</Verticalized>
+			<StyledText>
+				<Element>
+					<String xml:space="preserve">Unknown Item</String>
+					<Attributes>
+						<Font Family="Arial" Size="12" Bold="False" Italic="False" Underline="False" Strikeout="False" />
+						<ForeColor Alpha="255" Red="0" Green="0" Blue="0" HueScale="100" />
+					</Attributes>
+				</Element>
+			</StyledText>
+		</TextObject>
+		<Bounds X="739.493975903615" Y="2713.01204819277" Width="295.722891566265" Height="471.32530120482" />
+	</ObjectInfo>
+</DieCutLabel></div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px; color: #666;">
+            <p>✅ In debug mode, this preview simulates successful printing.</p>
+            <p>Set "debug_mode": false in print_agent_config.json to enable real printing.</p>
+        </div>
+    </div>
+</body>
+</html>

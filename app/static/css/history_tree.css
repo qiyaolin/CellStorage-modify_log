@@ -1,0 +1,152 @@
+.history-tree-page {
+    min-height: 100vh;
+}
+
+.history-tree-quick-list {
+    max-height: 240px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.history-tree-quick-item {
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.5rem;
+    padding: 0.65rem 0.75rem;
+    background-color: var(--bs-body-bg, #ffffff);
+    transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+    text-align: left;
+}
+
+.history-tree-quick-item:hover {
+    background-color: var(--bs-light, #f8f9fa);
+    border-color: var(--bs-primary, #0d6efd);
+    transform: translateY(-1px);
+}
+
+.history-tree-quick-item .history-tree-quick-name {
+    font-weight: 600;
+    display: block;
+    color: var(--bs-body-color, #212529);
+}
+
+.history-tree-quick-item .history-tree-quick-meta {
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.history-tree-stat {
+    border: 1px solid var(--bs-border-color, #dee2e6);
+    border-radius: 0.5rem;
+    padding: 0.7rem 0.75rem;
+    background-color: var(--bs-body-bg, #ffffff);
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.history-tree-stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--bs-secondary-color, #6c757d);
+}
+
+.history-tree-stat-value {
+    font-size: 1.35rem;
+    font-weight: 600;
+    color: var(--bs-body-color, #212529);
+}
+
+.history-tree-canvas {
+    position: relative;
+    min-height: 420px;
+    border: 1px dashed var(--bs-border-color, #dee2e6);
+    border-radius: 0.75rem;
+    background-color: var(--bs-body-bg, #ffffff);
+    overflow: hidden;
+}
+
+.history-tree-canvas svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+.history-tree-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    pointer-events: none;
+}
+
+.history-tree-node circle {
+    fill: #ffffff;
+    stroke-width: 2px;
+}
+
+.history-tree-node text {
+    font-size: 0.75rem;
+    font-weight: 500;
+    pointer-events: none;
+    fill: var(--bs-body-color, #212529);
+}
+
+.history-tree-node--current circle {
+    fill: var(--bs-primary, #0d6efd);
+    stroke: var(--bs-primary, #0d6efd);
+}
+
+.history-tree-node--ancestor circle {
+    stroke: var(--bs-warning, #ffc107);
+}
+
+.history-tree-node--descendant circle {
+    stroke: var(--bs-success, #198754);
+}
+
+.history-tree-node:hover circle {
+    fill: var(--bs-light, #f8f9fa);
+}
+
+.history-tree-link {
+    fill: none;
+    stroke: var(--bs-border-color, #ced4da);
+    stroke-width: 1.6px;
+}
+
+.history-tree-link--ancestor {
+    stroke: var(--bs-warning, #ffc107);
+}
+
+.history-tree-link--descendant {
+    stroke: var(--bs-success, #198754);
+}
+
+.history-tree-tooltip {
+    position: absolute;
+    padding: 0.35rem 0.5rem;
+    background-color: rgba(33, 37, 41, 0.85);
+    color: #f8f9fa;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    pointer-events: none;
+    transform: translate(-50%, -110%);
+    white-space: nowrap;
+    z-index: 10;
+}
+
+@media (max-width: 991.98px) {
+    .history-tree-quick-list {
+        max-height: 180px;
+    }
+
+    .history-tree-canvas {
+        min-height: 320px;
+    }
+}

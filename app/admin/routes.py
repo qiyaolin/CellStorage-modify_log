@@ -342,3 +342,221 @@ def admin_dashboard():
                          active_permissions=active_permissions,
                          recent_permissions=recent_permissions,
                          permission_stats=permission_stats)
+
+
+# Batch Lineage Backfill Routes
+@bp.route('/backfill-lineage')
+@login_required
+@admin_required
+def backfill_lineage_page():
+    """
+    Batch lineage backfill interface page
+
+    This page allows admins to backfill BatchLineage relationships
+    from existing CryoVial.parental_cell_line string data.
+    """
+    from ..cell_storage.models import VialBatch, CryoVial, BatchLineage
+
+    # Get statistics about current state
+    total_batches = VialBatch.query.count()
+
+    # Count batches with parental_cell_line data
+    batches_with_parental = db.session.query(VialBatch.id).join(
+        CryoVial, VialBatch.id == CryoVial.batch_id
+    ).filter(
+        CryoVial.parental_cell_line.isnot(None),
+        CryoVial.parental_cell_line != ''
+    ).distinct().count()
+
+    # Count existing lineage records
+    existing_lineage_count = BatchLineage.query.count()
+
+    # Get sample of batches that would be affected
+    sample_batches = db.session.query(
+        VialBatch.id,
+        VialBatch.name,
+        CryoVial.parental_cell_line
+    ).join(
+        CryoVial, VialBatch.id == CryoVial.batch_id
+    ).filter(
+        CryoVial.parental_cell_line.isnot(None),
+        CryoVial.parental_cell_line != ''
+    ).distinct().limit(10).all()
+
+    return render_template('admin/backfill_lineage.html',
+                         total_batches=total_batches,
+                         batches_with_parental=batches_with_parental,
+                         existing_lineage_count=existing_lineage_count,
+                         sample_batches=sample_batches)
+
+
+@bp.route('/api/backfill-lineage', methods=['POST'])
+@login_required
+@admin_required
+def api_backfill_lineage():
+    """
+    Execute batch lineage backfill operation
+
+    This endpoint backfills BatchLineage relationships from existing
+    CryoVial.parental_cell_line string data.
+
+    Request JSON:
+        {
+            "dry_run": true/false,  // Preview mode (default: true)
+            "force": true/false     // Force overwrite existing relationships (default: false)
+        }
+
+    Returns:
+        {
+            "success": true,
+            "created_count": 50,
+            "skipped_count": 10,
+            "error_count": 0,
+            "details": [...],
+            "dry_run": false
+        }
+    """
+    from ..cell_storage.models import VialBatch, CryoVial, BatchLineage
+
+    data = request.get_json() or {}
+    dry_run = data.get('dry_run', True)
+    force = data.get('force', False)
+
+    try:
+        # Get all batches with parental_cell_line data
+        batches_with_parents = db.session.query(
+            VialBatch.id,
+            VialBatch.name,
+            CryoVial.parental_cell_line
+        ).join(
+            CryoVial, VialBatch.id == CryoVial.batch_id
+        ).filter(
+            CryoVial.parental_cell_line.isnot(None),
+            CryoVial.parental_cell_line != ''
+        ).distinct().all()
+
+        created_count = 0
+        skipped_count = 0
+        error_count = 0
+        details = []
+
+        for batch_id, batch_name, parental_name in batches_with_parents:
+            if not parental_name or not parental_name.strip():
+                skipped_count += 1
+                continue
+
+            parental_name = parental_name.strip()
+
+            # Find parent batch
+            parent_batch = VialBatch.query.filter_by(name=parental_name).first()
+
+            if not parent_batch:
+                skipped_count += 1
+                details.append({
+                    'type': 'skip',
+                    'batch_name': batch_name,
+                    'parental_name': parental_name,
+                    'reason': 'Parent batch not found'
+                })
+                continue
+
+            # Prevent self-reference
+            if parent_batch.id == batch_id:
+                skipped_count += 1
+                details.append({
+                    'type': 'skip',
+                    'batch_name': batch_name,
+                    'parental_name': parental_name,
+                    'reason': 'Self-reference detected'
+                })
+                continue
+
+            # Check if relationship already exists
+            existing = BatchLineage.query.filter_by(
+                parent_batch_id=parent_batch.id,
+                child_batch_id=batch_id
+            ).first()
+
+            if existing and not force:
+                skipped_count += 1
+                details.append({
+                    'type': 'skip',
+                    'batch_name': batch_name,
+                    'parental_name': parental_name,
+                    'reason': 'Relationship already exists'
+                })
+                continue
+
+            # Create or update relationship
+            if not dry_run:
+                try:
+                    if existing and force:
+                        # Update existing relationship
+                        existing.notes = f'Backfilled from parental_cell_line: {parental_name} (forced update)'
+                        existing.created_by_user_id = current_user.id
+                        details.append({
+                            'type': 'update',
+                            'batch_name': batch_name,
+                            'parental_name': parent_batch.name,
+                            'message': f'Updated: {parent_batch.name} -> {batch_name}'
+                        })
+                    else:
+                        # Create new relationship
+                        lineage = BatchLineage(
+                            parent_batch_id=parent_batch.id,
+                            child_batch_id=batch_id,
+                            relationship_type='passage',
+                            notes=f'Backfilled from parental_cell_line: {parental_name}',
+                            created_by_user_id=current_user.id
+                        )
+                        db.session.add(lineage)
+                        details.append({
+                            'type': 'create',
+                            'batch_name': batch_name,
+                            'parental_name': parent_batch.name,
+                            'message': f'Created: {parent_batch.name} -> {batch_name}'
+                        })
+
+                    db.session.flush()
+                    created_count += 1
+
+                except Exception as e:
+                    error_count += 1
+                    details.append({
+                        'type': 'error',
+                        'batch_name': batch_name,
+                        'parental_name': parental_name,
+                        'error': str(e)
+                    })
+                    db.session.rollback()
+            else:
+                # Dry run mode - just count and report
+                created_count += 1
+                details.append({
+                    'type': 'preview',
+                    'batch_name': batch_name,
+                    'parental_name': parent_batch.name,
+                    'message': f'Would create: {parent_batch.name} -> {batch_name}'
+                })
+
+        if not dry_run:
+            db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'created_count': created_count,
+            'skipped_count': skipped_count,
+            'error_count': error_count,
+            'total_processed': len(batches_with_parents),
+            'details': details,
+            'dry_run': dry_run,
+            'message': f'Backfill {"preview" if dry_run else "completed"}: {created_count} relationships {"would be created" if dry_run else "created"}, {skipped_count} skipped, {error_count} errors'
+        })
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'message': f'Backfill operation failed: {str(e)}'
+        }), 500

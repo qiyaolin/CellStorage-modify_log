@@ -1,0 +1,63 @@
+<div class="tree-node" data-location-id="{{ location.id }}" data-location-type="{{ location.type }}">
+    <div class="node-content">
+        <div class="node-toggle" data-action="toggle">
+            {% if location.children %}
+                <i class="bi bi-chevron-down"></i>
+            {% else %}
+                <i class="bi bi-dot"></i>
+            {% endif %}
+        </div>
+        
+        <div class="node-icon">
+            {% if location.type == 'tower' %}
+                <i class="bi bi-building text-primary"></i>
+            {% elif location.type == 'drawer' %}
+                <i class="bi bi-inbox text-success"></i>
+            {% elif location.type == 'box' %}
+                <i class="bi bi-box text-warning"></i>
+            {% endif %}
+        </div>
+        
+        <div class="node-info" data-action="select" data-location-id="{{ location.id }}">
+            <div class="node-name">{{ location.name }}</div>
+            {% if location.capacity %}
+                <div class="node-capacity">
+                    <span class="capacity-text">{{ location.current_items or 0 }}/{{ location.capacity }}</span>
+                    <div class="capacity-bar">
+                        <div class="capacity-fill" style="width: {{ ((location.current_items or 0) / location.capacity * 100) if location.capacity else 0 }}%"></div>
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+        
+        <div class="node-actions">
+            {% if location.type == 'tower' %}
+                <button class="action-btn add-btn" data-action="add-drawer" data-location-id="{{ location.id }}" title="Add Drawer">
+                    <i class="bi bi-plus"></i>
+                </button>
+            {% elif location.type == 'drawer' %}
+                <button class="action-btn add-btn" data-action="add-box" data-location-id="{{ location.id }}" title="Add Box">
+                    <i class="bi bi-plus"></i>
+                </button>
+            {% endif %}
+            
+            <button class="action-btn edit-btn" data-action="edit" data-location-id="{{ location.id }}" data-location-type="{{ location.type }}" title="Edit">
+                <i class="bi bi-pencil"></i>
+            </button>
+            
+            <button class="action-btn delete-btn" data-action="delete" data-location-id="{{ location.id }}" data-location-name="{{ location.name }}" data-location-type="{{ location.type }}" title="Delete">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    </div>
+    
+    {% if location.children %}
+        <div class="node-children">
+            {% for child in location.children %}
+                {% with location=child %}
+                    {% include 'inventory/partials/location_node_simplified.html' %}
+                {% endwith %}
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>

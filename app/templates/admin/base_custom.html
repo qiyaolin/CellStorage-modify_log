@@ -1,0 +1,52 @@
+{% extends 'admin/base.html' %}
+
+{% block head_meta %}
+    {{ super() }}
+    <meta name="description" content="Cell Storage System - Admin Interface">
+{% endblock %}
+
+{% block brand %}
+<a class="navbar-brand" href="{{ admin_view.admin.url }}">
+    <i class="fas fa-flask"></i> Cell Storage Admin
+</a>
+{% endblock %}
+
+{% block nav_bar %}
+{{ super() }}
+<style>
+    .navbar-brand {
+        font-weight: bold;
+        color: #007bff !important;
+    }
+    .admin-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        border-radius: 0.25rem;
+    }
+    .stat-card {
+        background: white;
+        border-radius: 0.25rem;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        border-left: 4px solid #007bff;
+    }
+    .stat-number {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #007bff;
+    }
+    .stat-label {
+        color: #6c757d;
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block body %}
+<div class="container-fluid">
+    {{ super() }}
+</div>
+{% endblock %}

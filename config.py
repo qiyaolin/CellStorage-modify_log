@@ -50,4 +50,9 @@ class Config:
     WTF_CSRF_TIME_LIMIT = 3600  # CSRF token 有效期 1 小时
     WTF_CSRF_HEADERS = ['X-CSRFToken', 'X-CSRF-Token']
 
+    # Centralized Printing Configuration
+    CENTRALIZED_PRINTING_ENABLED = os.environ.get('CENTRALIZED_PRINTING_ENABLED', 'False').lower() == 'true'
+    PRINT_SERVER_URL = os.environ.get('PRINT_SERVER_URL', 'http://localhost:5001')
+    PRINT_API_TOKEN = os.environ.get('PRINT_API_TOKEN', '')
+    
     # 可以在这里添加其他应用配置...

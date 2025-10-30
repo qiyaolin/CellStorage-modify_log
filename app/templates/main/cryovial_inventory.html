@@ -9,15 +9,52 @@
 {% if current_user.is_admin %}
 <div class="card bg-light border-secondary mb-4">
     <div class="card-body">
-        <form method="post" action="{{ url_for('cell_storage.update_batch_counter') }}" class="d-flex align-items-center">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
-            <label for="batch_counter_input" class="form-label me-2 mb-0">Next Batch ID:</label>
-            <input type="number" id="batch_counter_input" name="batch_counter" value="{{ batch_counter }}" class="form-control me-2" style="width: 120px;">
-            <button type="submit" class="btn btn-sm btn-outline-primary">Set</button>
-        </form>
+        <div class="row">
+            <div class="col-md-6">
+                <form method="post" action="{{ url_for('cell_storage.update_batch_counter') }}" class="d-flex align-items-center">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <label for="batch_counter_input" class="form-label me-2 mb-0">Next Batch ID:</label>
+                    <input type="number" id="batch_counter_input" name="batch_counter" value="{{ batch_counter }}" class="form-control me-2" style="width: 120px;">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Set</button>
+                </form>
+            </div>
+            <div class="col-md-6">
+                <form method="post" action="{{ url_for('cell_storage.update_vial_counter') }}" class="d-flex align-items-center">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
+                    <label for="vial_counter_input" class="form-label me-2 mb-0">Next Vial ID:</label>
+                    <input type="number" id="vial_counter_input" name="vial_counter" value="{{ vial_counter }}" class="form-control me-2" style="width: 120px;">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">Set</button>
+                </form>
+            </div>
+        </div>
     </div>
 </div>
 {% endif %}
+
+<style>
+    .search-target-group .btn { min-width: 88px; }
+    .recent-searches .badge { font-size: 0.75rem; font-weight: 500; }
+    .match-badge { font-size: 0.75rem; font-weight: 600; margin-right: 0.25rem; }
+    .match-exact { background-color: #d1e7dd; color: #0f5132; }
+    .match-partial { background-color: #fff3cd; color: #664d03; }
+    .match-filter { background-color: #e2e3e5; color: #41464b; }
+    .match-mode-group .btn { min-width: 80px; }
+
+    /* Fix blue-on-blue text contrast issue for checked buttons */
+    .search-target-group .btn-check:checked + .btn-outline-primary,
+    .match-mode-group .btn-check:checked + .btn-outline-primary {
+        background-color: #1976D2 !important;
+        border-color: #1976D2 !important;
+        color: #ffffff !important; /* Force white text on blue background */
+    }
+
+    .search-target-group .btn-check:checked + .btn-outline-primary:hover,
+    .match-mode-group .btn-check:checked + .btn-outline-primary:hover {
+        background-color: #1565C0 !important;
+        border-color: #1565C0 !important;
+        color: #ffffff !important; /* Ensure white text remains on hover */
+    }
+</style>
 
 <!-- Nav tabs -->
 <ul class="nav nav-tabs" id="inventoryTab" role="tablist">
@@ -34,12 +71,58 @@
     <div class="tab-pane fade show active" id="search" role="tabpanel" aria-labelledby="search-tab">
         <div class="card border-top-0 rounded-0 rounded-bottom">
             <div class="card-body">
-                <form method="get" action="{{ url_for('cell_storage.cryovial_inventory') }}" class="row g-3 align-items-center">
-                    <div class="row g-2">
+                <form method="get" action="{{ url_for('cell_storage.cryovial_inventory') }}" class="cryovial-search-form" id="cryovial-search-form">
+                    <div class="row g-2 mb-2">
+                      <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+                        <span class="text-muted small">Search target</span>
+                        <div class="btn-group btn-group-sm search-target-group" role="group" aria-label="Search target options">
+                          <input type="radio" class="btn-check" name="target" id="target-batch" value="batch" {% if search_target == 'batch' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="target-batch">Batch</label>
+                          <input type="radio" class="btn-check" name="target" id="target-vial" value="vial" {% if search_target == 'vial' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="target-vial">Vial</label>
+                          <input type="radio" class="btn-check" name="target" id="target-cell-line" value="cell_line" {% if search_target == 'cell_line' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="target-cell-line">Cell Line</label>
+                          <input type="radio" class="btn-check" name="target" id="target-tag" value="tag" {% if search_target == 'tag' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="target-tag">Tag</label>
+                        </div>
+                      </div>
+                      <div class="col-12 d-flex flex-wrap align-items-center gap-2">
+                        <span class="text-muted small">Match mode</span>
+                        <div class="btn-group btn-group-sm match-mode-group" role="group" aria-label="Match mode options">
+                          <input type="radio" class="btn-check" name="match_mode" id="match-mode-partial" value="partial" {% if match_mode != 'exact' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="match-mode-partial">Partial</label>
+                          <input type="radio" class="btn-check" name="match_mode" id="match-mode-exact" value="exact" {% if match_mode == 'exact' %}checked{% endif %}>
+                          <label class="btn btn-outline-primary" for="match-mode-exact">Exact</label>
+                        </div>
+                        <span class="text-muted small d-none d-lg-inline">Partial finds similar matches; Exact requires full field match.</span>
+                      </div>
+                      {% if recent_searches %}
+                      <div class="col-12">
+                        <div class="d-flex flex-wrap align-items-center gap-2 recent-searches">
+                          <span class="text-muted small">Recent:</span>
+                          {% for item in recent_searches %}
+                            <a class="badge bg-light text-primary border" href="{{ url_for('cell_storage.cryovial_inventory', q=item.q, target=item.target, match_mode=item.match_mode or 'partial') }}">{{ item.target|capitalize }}: {{ item.q }} <span class='ms-1 text-muted'>{{ (item.match_mode or 'partial')|capitalize }}</span></a>
+                          {% endfor %}
+                        </div>
+                      </div>
+                      {% endif %}
+                    </div>
+                    <div class="row g-2 align-items-end">
                       <div class="col-md">
                         <div class="form-floating">
-                          <input type="text" class="form-control" id="q" name="q" placeholder="Search..." value="{{ search_q or '' }}">
-                          <label for="q">Vial/Batch/Cell Line/Tag...</label>
+                          <input type="text" class="form-control" id="q" name="q" placeholder="Keyword" value="{{ search_q or '' }}">
+                          <label for="q">Search keyword</label>
+                        </div>
+                      </div>
+                      <div class="col-md">
+                        <div class="form-floating">
+                          <select class="form-select" id="cell_line_id" name="cell_line_id">
+                            <option value="">Any Cell Line</option>
+                            {% for cl in all_cell_lines %}
+                              <option value="{{ cl.id }}" {% if search_cell_line_id == cl.id %}selected{% endif %}>{{ cl.name }}</option>
+                            {% endfor %}
+                          </select>
+                          <label for="cell_line_id">Cell Line</label>
                         </div>
                       </div>
                       <div class="col-md">
@@ -76,11 +159,32 @@
                         </div>
                       </div>
                       <div class="col-auto d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary me-2">Search</button>
-                        <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}" class="btn btn-primary">View All</a>
+                        <div class="d-flex gap-2">
+                          <button type="submit" class="btn btn-primary">Search</button>
+                          <a href="{{ url_for('cell_storage.cryovial_inventory') }}" class="btn btn-outline-secondary">Reset</a>
+                          <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}" class="btn btn-outline-primary">View All</a>
+                        </div>
                       </div>
                     </div>
                 </form>
+                <div id="search-loading" class="d-none align-items-center gap-2 mt-3">
+                  <div class="spinner-border text-primary" role="status"></div>
+                  <span class="text-muted small">Searching...</span>
+                </div>
+                {% if search_feedback %}
+                <div class="alert alert-info d-flex align-items-center gap-2 mt-3">
+                  <i class="bi bi-info-circle"></i>
+                  <span>{{ search_feedback }}</span>
+                </div>
+                {% endif %}
+                {% if search_suggestion %}
+                <div class="alert alert-warning d-flex align-items-center gap-2 mt-2">
+                  <i class="bi bi-lightbulb"></i>
+                  <span>{{ search_suggestion }}</span>
+                </div>
+                {% endif %}
+
+
             </div>
         </div>
 
@@ -94,13 +198,25 @@
                         {% endif %}
                     </div>
                 </div>
+                {% if match_mode == 'exact' %}
+                <div class="small text-muted mt-2">Exact match mode: only exact field matches are returned.</div>
+                {% else %}
+                <div class="small text-muted mt-2">Partial match mode: includes close matches across fields.</div>
+                {% endif %}
                 <div class="card-body">
                     <form method="post" class="mb-3">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <input type="hidden" name="q" value="{{ search_q }}">
+                        <input type="hidden" name="target" value="{{ search_target }}">
+                        <input type="hidden" name="match_mode" value="{{ match_mode }}">
                         <input type="hidden" name="creator" value="{{ search_creator }}">
+                        <input type="hidden" name="cell_line_id" value="{{ search_cell_line_id }}">
                         <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
                         <input type="hidden" name="resistance" value="{{ search_resistance }}">
+                        <input type="hidden" name="status" value="{{ search_status }}">
+                        <input type="hidden" name="max_passage" value="{{ max_passage }}">
+                        <input type="hidden" name="date_from" value="{{ date_from }}">
+                        <input type="hidden" name="view_all" value="{{ 'true' if view_all else '' }}">
                         <div class="search-results-table-container">
                             <table class="table table-striped table-hover table-sm inventory-table">
                                 <thead>
@@ -109,6 +225,7 @@
                                     <th>Batch ID</th>
                                     <th>Batch Name</th>
                                     <th>Cell Line</th>
+                                    <th class="d-none-mobile">Match</th>
                                     <th class="d-none-mobile">Passage #</th>
                                     <th class="d-none-mobile">Date Frozen</th>
                                     <th>Available</th>
@@ -128,6 +245,7 @@
                                       <td>{{ res.batch.id }}</td>
                                       <td><span class="text-truncate-mobile" title="{{ res.batch.name }}">{{ res.batch.name }}</span></td>
                                       <td><span class="text-truncate-mobile" title="{{ res.cell_line }}">{{ res.cell_line }}</span></td>
+                                      <td class="d-none-mobile">{% if res.match_labels %}{% for label in res.match_labels %}<span class="badge match-badge match-{{ res.match_quality }}">{{ label }}</span>{% endfor %}{% else %}<span class="text-muted small">N/A</span>{% endif %}</td>
                                       <td class="d-none-mobile">{{ res.passage_number }}</td>
                                       <td class="d-none-mobile">{{ res.date_frozen }}</td>
                                       <td>{{ res.available_quantity }}</td>
@@ -141,8 +259,8 @@
                                     {% endfor %}
                                   {% else %}
                                     <tr>
-                                      <td colspan="13" class="text-center text-muted p-4">
-                                        {% if search_q or search_creator or search_fluorescence or search_resistance %}
+                                      <td colspan="14" class="text-center text-muted p-4">
+                                        {% if search_q or search_creator or search_fluorescence or search_resistance or search_cell_line_id or search_status or max_passage or date_from %}
                                           No matching vials found. Try adjusting your search criteria or <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}">view all vials</a>.
                                         {% else %}
                                           Click "Search CryoVials" to find specific vials or <a href="{{ url_for('cell_storage.cryovial_inventory', view_all='true') }}">view all vials</a>.
@@ -168,9 +286,16 @@
                     <form method="post" class="mb-3">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                         <input type="hidden" name="q" value="{{ search_q }}">
+                        <input type="hidden" name="target" value="{{ search_target }}">
+                        <input type="hidden" name="match_mode" value="{{ match_mode }}">
                         <input type="hidden" name="creator" value="{{ search_creator }}">
+                        <input type="hidden" name="cell_line_id" value="{{ search_cell_line_id }}">
                         <input type="hidden" name="fluorescence" value="{{ search_fluorescence }}">
                         <input type="hidden" name="resistance" value="{{ search_resistance }}">
+                        <input type="hidden" name="status" value="{{ search_status }}">
+                        <input type="hidden" name="max_passage" value="{{ max_passage }}">
+                        <input type="hidden" name="date_from" value="{{ date_from }}">
+                        <input type="hidden" name="view_all" value="{{ 'true' if view_all else '' }}">
                         <div class="table-responsive selected-items-table-container">
                             <table class="table table-striped table-hover table-sm">
                                 <thead>
@@ -371,9 +496,17 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+  var searchForm = document.getElementById('cryovial-search-form');
+  var searchLoading = document.getElementById('search-loading');
+  if (searchForm && searchLoading) {
+    searchForm.addEventListener('submit', function () {
+      searchLoading.classList.remove('d-none');
+      searchLoading.classList.add('d-flex');
+    });
+  }
   var vialDetailsModal = document.getElementById('vialDetailsModal');
   vialDetailsModal.addEventListener('show.bs.modal', function (event) {
     var button = event.relatedTarget;
@@ -559,156 +692,183 @@ document.addEventListener('DOMContentLoaded', function () {
   });
 
   // Batch deletion functionality (admin only)
-  var batchDeleteToggleBtn = document.getElementById('batch-delete-toggle');
-  if (batchDeleteToggleBtn) {
-    var batchDeleteMode = false;
-    var selectedVials = new Set();
-    var confirmBtn = document.getElementById('batch-delete-confirm');
-    var cancelBtn = document.getElementById('batch-delete-cancel');
-    var batchDeleteInfo = document.getElementById('batch-delete-info');
-  
-    batchDeleteToggleBtn.addEventListener('click', function() {
-      console.log('🗑️ Entering batch deletion mode');
-      batchDeleteMode = true;
-      this.style.display = 'none';
-      confirmBtn.style.display = 'inline-block';
-      cancelBtn.style.display = 'inline-block';
-      batchDeleteInfo.style.display = 'block';
-      
-      var checkboxes = document.querySelectorAll('.batch-delete-checkbox');
-      console.log('📦 Found', checkboxes.length, 'checkboxes');
-      // Don't display checkbox, only use red box highlighting
-      // checkboxes remain hidden but still used for internal data tracking
-      
-      var vialCells = document.querySelectorAll('.vial-cell');
-      console.log('🔲 Found', vialCells.length, 'vial cells');
-      vialCells.forEach(cell => {
-        cell.removeAttribute('data-bs-toggle');
-        cell.style.cursor = 'default';
-        cell.classList.add('batch-delete-mode');
-        cell.addEventListener('click', handleCellClickInDeleteMode);
-      });
-      
-      // Add checkbox event listeners
-      addCheckboxListeners();
-      updateDeleteButtonState();
-      
-      // Show success prompt
-      alert('✅ Entered batch deletion mode!\n\n💡 You can now click cells to select vials for deletion\n📦 Found ' + checkboxes.length + ' selectable vials');
-    });
-  
-    cancelBtn.addEventListener('click', exitBatchDeleteMode);
-  
-    confirmBtn.addEventListener('click', function() {
-      if (selectedVials.size === 0) {
-        alert('Please select cryovials to delete');
+  function initializeBatchDelete() {
+    const batchDeleteToggleBtn = document.getElementById('batch-delete-toggle');
+    if (!batchDeleteToggleBtn) {
+        console.log('🔍 Batch delete toggle button not found, skipping initialization.');
         return;
-      }
-      
-      if (confirm('Are you sure you want to delete the selected ' + selectedVials.size + ' cryovials? This action cannot be undone.')) {
-        fetch('/vials/batch_delete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRFToken': document.querySelector('meta[name=csrf-token]') ? document.querySelector('meta[name=csrf-token]').getAttribute('content') : ''
-          },
-          body: JSON.stringify({ vial_ids: Array.from(selectedVials) })
-        })
-        .then(response => response.json())
-        .then(data => {
-          if (data.success) {
-            alert('Successfully deleted ' + data.deleted_count + ' cryovials');
-            location.reload();
-          } else {
-            alert('Deletion failed: ' + (data.error || 'Unknown error'));
-          }
-        })
-        .catch(error => {
-          console.error('Error deleting vials:', error);
-          alert('An error occurred during deletion, please try again later.');
-        });
-      }
+    }
+
+    // Prevent re-initialization
+    if (batchDeleteToggleBtn.hasAttribute('data-initialized')) {
+        console.log('📝 Batch delete already initialized, skipping.');
+        return;
+    }
+    batchDeleteToggleBtn.setAttribute('data-initialized', 'true');
+
+    const confirmBtn = document.getElementById('batch-delete-confirm');
+    const cancelBtn = document.getElementById('batch-delete-cancel');
+    const batchDeleteInfo = document.getElementById('batch-delete-info');
+    const selectedVials = new Set();
+    let batchDeleteMode = false;
+
+    console.log('🔍 Initializing batch delete. Elements found:', {
+        toggle: !!batchDeleteToggleBtn,
+        confirm: !!confirmBtn,
+        cancel: !!cancelBtn,
+        info: !!batchDeleteInfo
     });
 
-    function handleCellClickInDeleteMode(event) {
-        event.preventDefault(); // Prevent triggering other events
-        var checkbox = this.querySelector('.batch-delete-checkbox');
-        if (checkbox && event.target !== checkbox) {
-            checkbox.checked = !checkbox.checked;
-        }
-        
-        var vialId = parseInt(checkbox.value);
-        if (checkbox.checked) {
-            selectedVials.add(vialId);
-            this.classList.add('selected-for-delete');
+    function updateDeleteButtonState() {
+        if (!confirmBtn) return;
+        if (selectedVials.size > 0) {
+            confirmBtn.innerHTML = `<i class="bi bi-check-circle"></i> Delete Selected (${selectedVials.size})`;
+            confirmBtn.disabled = false;
         } else {
-            selectedVials.delete(vialId);
-            this.classList.remove('selected-for-delete');
+            confirmBtn.innerHTML = '<i class="bi bi-check-circle"></i> Delete Selected (0)';
+            confirmBtn.disabled = true;
         }
+    }
+
+    function handleCellClickInDeleteMode(event) {
+        event.stopPropagation(); // Prevent modal from opening
+        event.preventDefault();
+        
+        const checkbox = this.querySelector('.batch-delete-checkbox');
+        if (checkbox) {
+            checkbox.checked = !checkbox.checked;
+            const vialId = parseInt(checkbox.value, 10);
+            if (checkbox.checked) {
+                selectedVials.add(vialId);
+                this.classList.add('selected-for-delete');
+            } else {
+                selectedVials.delete(vialId);
+                this.classList.remove('selected-for-delete');
+            }
+            updateDeleteButtonState();
+        }
+    }
+
+    function enterBatchDeleteMode() {
+        console.log('🗑️ Entering batch deletion mode');
+        batchDeleteMode = true;
+        
+        batchDeleteToggleBtn.style.display = 'none';
+        if(confirmBtn) confirmBtn.style.display = 'inline-block';
+        if(cancelBtn) cancelBtn.style.display = 'inline-block';
+        if(batchDeleteInfo) batchDeleteInfo.style.display = 'block';
+
+        document.querySelectorAll('.vial-cell').forEach(cell => {
+            cell.style.cursor = 'crosshair';
+            cell.classList.add('batch-delete-mode');
+            // Remove modal trigger and add our custom click listener
+            cell.removeAttribute('data-bs-toggle');
+            cell.addEventListener('click', handleCellClickInDeleteMode);
+        });
+        
+        updateDeleteButtonState();
+        alert('✅ Batch deletion mode is now active.\nClick on vials to select them for deletion.');
+    }
+
+    function exitBatchDeleteMode() {
+        console.log('❌ Exiting batch deletion mode');
+        batchDeleteMode = false;
+
+        batchDeleteToggleBtn.style.display = 'inline-block';
+        if(confirmBtn) confirmBtn.style.display = 'none';
+        if(cancelBtn) cancelBtn.style.display = 'none';
+        if(batchDeleteInfo) batchDeleteInfo.style.display = 'none';
+
+        document.querySelectorAll('.vial-cell').forEach(cell => {
+            cell.style.cursor = 'pointer';
+            cell.classList.remove('batch-delete-mode', 'selected-for-delete');
+            // Restore modal trigger and remove our listener
+            cell.setAttribute('data-bs-toggle', 'modal');
+            cell.removeEventListener('click', handleCellClickInDeleteMode);
+            
+            const checkbox = cell.querySelector('.batch-delete-checkbox');
+            if(checkbox) checkbox.checked = false;
+        });
+        
+        selectedVials.clear();
         updateDeleteButtonState();
     }
 
-    // Add direct event listeners for checkboxes
-    function addCheckboxListeners() {
-        var checkboxes = document.querySelectorAll('.batch-delete-checkbox');
-        checkboxes.forEach(checkbox => {
-            checkbox.addEventListener('change', function() {
-                var vialId = parseInt(this.value);
-                var cell = this.closest('.vial-cell');
-                
-                if (this.checked) {
-                    selectedVials.add(vialId);
-                    cell.classList.add('selected-for-delete');
-                } else {
-                    selectedVials.delete(vialId);
-                    cell.classList.remove('selected-for-delete');
-                }
-                updateDeleteButtonState();
-            });
+    batchDeleteToggleBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        enterBatchDeleteMode();
+    });
+
+    if (cancelBtn) {
+        cancelBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            exitBatchDeleteMode();
         });
     }
-  
-    function exitBatchDeleteMode() {
-      console.log('❌ Exiting batch deletion mode');
-      batchDeleteMode = false;
-      selectedVials.clear();
-      
-      batchDeleteToggleBtn.style.display = 'inline-block';
-      confirmBtn.style.display = 'none';
-      cancelBtn.style.display = 'none';
-      batchDeleteInfo.style.display = 'none';
-      
-      var checkboxes = document.querySelectorAll('.batch-delete-checkbox');
-      checkboxes.forEach(checkbox => {
-          checkbox.style.display = 'none';
-          checkbox.checked = false;
-      });
-      
-      var vialCells = document.querySelectorAll('.vial-cell');
-      vialCells.forEach(cell => {
-        cell.setAttribute('data-bs-toggle', 'modal');
-        cell.setAttribute('data-bs-target', '#vialDetailsModal');
-        cell.style.cursor = 'pointer';
-        cell.classList.remove('batch-delete-mode');
-        cell.classList.remove('selected-for-delete');
-        cell.removeEventListener('click', handleCellClickInDeleteMode);
-      });
-    }
-  
-    function updateDeleteButtonState() {
-      if (selectedVials.size > 0) {
-        confirmBtn.innerHTML = '<i class="bi bi-check-circle"></i> Delete Selected (' + selectedVials.size + ')';
-        confirmBtn.disabled = false;
-        confirmBtn.classList.remove('btn-outline-danger');
-        confirmBtn.classList.add('btn-danger');
-      } else {
-        confirmBtn.innerHTML = '<i class="bi bi-check-circle"></i> Delete Selected (0)';
-        confirmBtn.disabled = true;
-        confirmBtn.classList.remove('btn-danger');
-        confirmBtn.classList.add('btn-outline-danger');
-      }
+
+    if (confirmBtn) {
+        confirmBtn.addEventListener('click', function() {
+            if (selectedVials.size === 0) {
+                alert('Please select at least one cryovial to delete.');
+                return;
+            }
+            
+            if (confirm(`Are you sure you want to permanently delete the ${selectedVials.size} selected cryovials? This action cannot be undone.`)) {
+                const csrfToken = document.querySelector('meta[name=csrf-token]')?.getAttribute('content');
+                fetch('{{ url_for("cell_storage.batch_delete_vials") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': csrfToken || ''
+                    },
+                    body: JSON.stringify({ vial_ids: Array.from(selectedVials) })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`Successfully deleted ${data.deleted_count} cryovials.`);
+                        location.reload();
+                    } else {
+                        alert('Deletion failed: ' + (data.error || 'An unknown error occurred.'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error during batch deletion:', error);
+                    alert('An error occurred during deletion. Please check the console and try again.');
+                });
+            }
+        });
     }
   }
+  
+  // Initialize batch delete functionality when page loads
+  console.log('🚀 Page loaded, initializing batch delete');
+  initializeBatchDelete();
+  
+  // Also initialize when tabs are switched
+  var browseTab = document.getElementById('browse-tab');
+  
+  if (browseTab) {
+    browseTab.addEventListener('click', function() {
+      // Wait for tab content to be shown
+      setTimeout(function() {
+        console.log('🔄 Re-initializing batch delete after tab switch');
+        initializeBatchDelete();
+      }, 100);
+    });
+  }
+  
+  // Add a test function to verify the button is clickable
+  setTimeout(function() {
+    var testBtn = document.getElementById('batch-delete-toggle');
+    if (testBtn && testBtn.style.display !== 'none') {
+      console.log('✅ Batch Delete button is visible and ready');
+      console.log('📍 Button position:', testBtn.getBoundingClientRect());
+      console.log('🎯 Button initialized:', testBtn.hasAttribute('data-initialized'));
+    } else {
+      console.log('⚠️ Batch Delete button not found or hidden');
+    }
+  }, 500);
 });
 </script>
 {% endblock %}

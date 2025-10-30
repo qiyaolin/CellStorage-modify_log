@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+
+{% block title %}Alerts Management - Cell Storage{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="mb-0">
+                    <i class="bi bi-exclamation-triangle text-warning me-2"></i>
+                    Alerts Management
+                </h2>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{{ url_for('cell_storage.index') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item active">Alerts Management</li>
+                    </ol>
+                </nav>
+            </div>
+
+            <div class="row">
+                <div class="col-12">
+                    <div class="card shadow-sm">
+                        <div class="card-header bg-light">
+                            <h5 class="card-title mb-0">
+                                <i class="bi bi-bell me-2"></i>
+                                System Alerts
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle me-2"></i>
+                                Alerts management system is under development. This page will allow you to:
+                                <ul class="mt-2">
+                                    <li>Configure low inventory alerts</li>
+                                    <li>Set temperature monitoring alerts</li>
+                                    <li>Manage expiration date notifications</li>
+                                    <li>Configure email/SMS alert recipients</li>
+                                </ul>
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Low Inventory Alerts</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="text-muted">Configure alerts for when inventory levels are low.</p>
+                                            <button class="btn btn-outline-primary btn-sm" disabled>
+                                                <i class="bi bi-gear me-1"></i>Configure
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Temperature Monitoring</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="text-muted">Set up temperature monitoring alerts for storage units.</p>
+                                            <button class="btn btn-outline-primary btn-sm" disabled>
+                                                <i class="bi bi-thermometer me-1"></i>Configure
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Expiration Alerts</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="text-muted">Get notified when samples are approaching expiration.</p>
+                                            <button class="btn btn-outline-primary btn-sm" disabled>
+                                                <i class="bi bi-calendar-event me-1"></i>Configure
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="card">
+                                        <div class="card-header">
+                                            <h6 class="mb-0">Notification Settings</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <p class="text-muted">Configure email and SMS notification recipients.</p>
+                                            <button class="btn btn-outline-primary btn-sm" disabled>
+                                                <i class="bi bi-envelope me-1"></i>Configure
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4">
+                                <a href="{{ url_for('cell_storage.index') }}" class="btn btn-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i>Back to Dashboard
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

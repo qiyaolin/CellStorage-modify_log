@@ -1,0 +1,252 @@
+diff --git a/app/cell_storage/main/routes.py b/app/cell_storage/main/routes.py
+index da2aab51..d293505d 100644
+--- a/app/cell_storage/main/routes.py
++++ b/app/cell_storage/main/routes.py
+@@ -49,7 +49,7 @@ import subprocess
+ import tempfile
+ from urllib.parse import urlparse
+ from sqlalchemy.exc import IntegrityError
+-from sqlalchemy import func, or_, cast, String
++from sqlalchemy import case, func, or_, cast, String
+ from datetime import datetime
+ import json
+ import boto3
+@@ -105,6 +105,52 @@ def validate_csrf_token(token):
+     except Exception:
+         return False
+ 
++ACTIVITY_ICON_MAP = {
++    'CREATE_CRYOVIAL': ('bi-plus-circle', 'text-success', 'Created cryovials'),
++    'DELETE': ('bi-trash', 'text-danger', 'Deleted record'),
++    'BATCH_DELETE': ('bi-trash-fill', 'text-danger', 'Deleted batch'),
++    'UPDATE': ('bi-pencil', 'text-warning', 'Updated record'),
++    'UPDATE_STATUS': ('bi-pencil', 'text-warning', 'Updated status'),
++    'LOGIN': ('bi-box-arrow-in-right', 'text-primary', 'Signed in'),
++    'PICKUP_VIALS': ('bi-box-arrow-up', 'text-info', 'Retrieved cryovials'),
++    'CREATE_CELL_LINE': ('bi-diagram-3', 'text-success', 'Created cell line'),
++    'EXPORT': ('bi-download', 'text-info', 'Exported data'),
++}
++
++
++def _resolve_activity_display(action):
++    icon, color, label = ACTIVITY_ICON_MAP.get(
++        action,
++        ('bi-circle', 'text-secondary', action.replace('_', ' ').title())
++    )
++    return icon, color, label
++
++
++def _humanize_activity_time(timestamp):
++    if not timestamp:
++        return ''
++    try:
++        delta = datetime.utcnow() - timestamp
++    except TypeError:
++        return timestamp.strftime('%Y-%m-%d %H:%M') if hasattr(timestamp, 'strftime') else ''
++
++    seconds = int(delta.total_seconds()) if delta else 0
++    if seconds < 0:
++        seconds = 0
++
++    if seconds < 60:
++        return 'Just now'
++    if seconds < 3600:
++        minutes = seconds // 60
++        return f'{minutes} min ago'
++    if seconds < 86400:
++        hours = seconds // 3600
++        return f'{hours} hr ago'
++    if seconds < 604800:
++        days = seconds // 86400
++        return f'{days} d ago'
++    return timestamp.strftime('%Y-%m-%d') if hasattr(timestamp, 'strftime') else ''
++
+ 
+ @bp.route('/') # Defines the root URL for the main blueprint
+ @bp.route('/index') # Also accessible via /index
+@@ -131,15 +177,45 @@ def index():
+     
+     # 获取最近活动记录
+     from app.cell_storage.models import AuditLog
+-    recent_activities_raw = AuditLog.query.order_by(AuditLog.timestamp.desc()).limit(5).all()
+-    
+-    # Format the audit details for better readability
++    recent_activities_raw = (
++        AuditLog.query.options(joinedload(AuditLog.user_performing_action))
++        .order_by(AuditLog.timestamp.desc())
++        .limit(5)
++        .all()
++    )
++
+     recent_activities = []
+     for activity in recent_activities_raw:
+-        # Add formatted details to each activity
+-        activity.formatted_details = format_audit_details(activity.action, activity.details or "", db_session=db.session)
+-        recent_activities.append(activity)
+-    
++        icon_class, icon_color, action_label = _resolve_activity_display(activity.action)
++        raw_details = activity.details or ''
++        if not isinstance(raw_details, str):
++            raw_details = str(raw_details)
++        formatted_details = format_audit_details(
++            activity.action,
++            raw_details,
++            db_session=db.session
++        )
++        description = ''
++        if isinstance(formatted_details, str):
++            description = formatted_details.strip()
++        if not description:
++            description = raw_details.strip() or action_label
++        target_label = ''
++        if activity.target_type:
++            target_label = activity.target_type.replace('_', ' ').title()
++        recent_activities.append({
++            'id': activity.id,
++            'user_name': activity.user_performing_action.username if activity.user_performing_action else 'System',
++            'action': activity.action,
++            'action_label': action_label,
++            'description': description,
++            'icon_class': icon_class,
++            'icon_color': icon_color,
++            'time_full': activity.timestamp.strftime('%Y-%m-%d %H:%M') if activity.timestamp else '',
++            'time_relative': _humanize_activity_time(activity.timestamp),
++            'target_label': target_label,
++        })
++
+     return render_template(
+         'main/index.html', 
+         title='Dashboard', 
+@@ -1168,6 +1244,9 @@ def cryovial_inventory():
+     date_from = _clean(data_source.get('date_from'))
+     search_cell_line_raw = _clean(data_source.get('cell_line_id'))
+     search_cell_line_id = int(search_cell_line_raw) if search_cell_line_raw.isdigit() else None
++    match_mode = (data_source.get('match_mode') or 'partial').lower()
++    if match_mode not in {'exact', 'partial'}:
++        match_mode = 'partial'
+     view_all_flag = (data_source.get('view_all') or '').lower() == 'true'
+ 
+[... omitted 677 of 933 lines ...]
+
+nst availableElement = document.getElementById('available-vials-count');
+             if (availableElement) {
+-                availableElement.textContent = stats.available_vials || 0;
++                availableElement.textContent = formatCount(available);
+             }
+-            
+-            // Update low stock count
++
+             const lowStockElement = document.getElementById('low-stock-count');
+             if (lowStockElement) {
+-                lowStockElement.textContent = stats.low_stock_batches || 0;
++                lowStockElement.textContent = formatCount(lowStock);
+             }
+-            
+-            // Update capacity percentage
++
++            const inUseElement = document.getElementById('in-use-vials-count');
++            if (inUseElement) {
++                inUseElement.textContent = formatCount(inUse);
++            }
++
++            const discardedElement = document.getElementById('discarded-vials-count');
++            if (discardedElement) {
++                discardedElement.textContent = formatCount(discarded);
++            }
++
+             const capacityElement = document.getElementById('capacity-percent');
+             if (capacityElement) {
+-                capacityElement.textContent = stats.capacity_used_percent + '%';
++                capacityElement.textContent = `${capacityPercentValue.toFixed(1)}%`;
+             }
+-            
+-            // Update total vials (make sure it's current)
+-            const totalVialsElement = document.getElementById('total-vials-count');
+-            if (totalVialsElement) {
+-                totalVialsElement.textContent = stats.total_vials || 0;
++
++            const totalCapacityElement = document.getElementById('total-capacity-count');
++            if (totalCapacityElement) {
++                totalCapacityElement.textContent = formatCount(totalCapacity);
+             }
+         } else {
+             console.error('Failed to load dashboard stats:', data.message);
+-            // Fallback to static values
+             loadStaticStats();
+         }
+     } catch (error) {
+         console.error('Error loading dashboard stats:', error);
+-        // Fallback to static values
+         loadStaticStats();
+     }
+ }
+@@ -782,28 +690,59 @@ async function loadDashboardStats() {
+ // Fallback function for static stats
+ function loadStaticStats() {
+     const totalVials = {{ vial_count or 0 }};
+-    
++    const toLocale = (value) => Number(value || 0).toLocaleString();
++
++    const totalVialsElement = document.getElementById('total-vials-count');
++    if (totalVialsElement) {
++        totalVialsElement.textContent = toLocale(totalVials);
++    }
++
++    const allVialsElement = document.getElementById('all-vials-count');
++    if (allVialsElement) {
++        allVialsElement.textContent = toLocale(totalVials);
++    }
++
++    const archivedElement = document.getElementById('archived-vials-count');
++    if (archivedElement) {
++        archivedElement.classList.add('d-none');
++    }
++
++    const estimatedAvailable = Math.floor(totalVials * 0.7);
+     const availableElement = document.getElementById('available-vials-count');
+     if (availableElement) {
+-        const estimatedAvailable = Math.floor(totalVials * 0.7);
+-        availableElement.textContent = estimatedAvailable;
++        availableElement.textContent = toLocale(estimatedAvailable);
+     }
+-    
++
+     const lowStockElement = document.getElementById('low-stock-count');
+     if (lowStockElement) {
+-        const estimatedLowStock = Math.max(0, Math.floor(totalVials / 20)); // 估算低库存batch数量
+-        lowStockElement.textContent = estimatedLowStock;
++        const estimatedLowStock = Math.max(0, Math.floor(totalVials / 20));
++        lowStockElement.textContent = toLocale(estimatedLowStock);
+     }
+-    
++
++    const estimatedInUse = Math.max(0, Math.floor(totalVials * 0.2));
++    const inUseElement = document.getElementById('in-use-vials-count');
++    if (inUseElement) {
++        inUseElement.textContent = toLocale(estimatedInUse);
++    }
++
++    const discardedElement = document.getElementById('discarded-vials-count');
++    if (discardedElement) {
++        const estimatedDiscarded = Math.max(totalVials - estimatedAvailable - estimatedInUse, 0);
++        discardedElement.textContent = toLocale(estimatedDiscarded);
++    }
++
+     const capacityElement = document.getElementById('capacity-percent');
+     if (capacityElement) {
+-        // 假设有约12个box，每个box 81个位置，总共约972个位置
+         const estimatedCapacity = Math.min(95, Math.floor((totalVials / 972) * 100));
+-        capacityElement.textContent = estimatedCapacity + '%';
++        capacityElement.textContent = `${estimatedCapacity}%`;
++    }
++
++    const totalCapacityElement = document.getElementById('total-capacity-count');
++    if (totalCapacityElement) {
++        totalCapacityElement.textContent = toLocale(972);
+     }
+ }
+ 
+-// Initialize compact activity list
+ function initializeCompactActivity() {
+     // Add subtle hover effects for compact activity items
+     const activityItems = document.querySelectorAll('.compact-activity-item');

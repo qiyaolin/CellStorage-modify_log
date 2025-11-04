@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Hero Section with Modern Design -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card border-0 position-relative overflow-hidden" style="background: linear-gradient(135deg, #e9ecef 0%, #c3cfe2 100%); min-height: 200px; color: #212529;">
+                <div class="position-absolute" style="top: -50%; right: -20%; width: 400px; height: 400px; background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%); border-radius: 50%;"></div>
+                <div class="position-absolute" style="bottom: -30%; left: -10%; width: 300px; height: 300px; background: radial-gradient(circle, rgba(255,255,255,0.05) 0%, transparent 70%); border-radius: 50%;"></div>
+                <div class="card-body p-5 position-relative">
+                    <div class="d-flex align-items-center mb-3">
+                        <i class="bi bi-snow2 fs-1 me-3" style="color: #667eea;"></i>
+                        <h1 class="display-4 fw-bold mb-0" style="color: #212529;">Welcome, {{ current_user.username or 'admin' }}!</h1>
+                    </div>
+                    <p class="lead mb-4" style="color: #343a40;">Your central command center for managing cell storage inventory with precision and efficiency.</p>
+                    <div class="d-flex gap-3 flex-wrap">
+                        {% if current_user.is_admin %}
+                        <a href="{{ url_for('cell_storage.inventory_summary') }}" class="btn btn-outline-primary btn-lg shadow-sm">
+                            <i class="bi bi-graph-up me-2"></i>Analytics Dashboard
+                        </a>
+                        {% endif %}
+                        <a href="{{ url_for('cell_storage.cryovial_inventory') }}" class="btn btn-outline-primary btn-lg shadow-sm">
+                            <i class="bi bi-list-ul me-2"></i>Inventory List
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if vial_count == 0 %}
+    <!-- New System Guide - Modern Design -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-0 shadow-sm fade-in-up">
+                <div class="card-body p-4">
+                    <div class="row align-items-center">
+                        <div class="col-lg-2 text-center">
+                            <div class="rounded-circle p-3 d-inline-flex" style="width: 80px; height: 80px; align-items: center; justify-content: center; background-color: #f0f7ff;">
+                                <i class="bi bi-rocket-takeoff fs-1 text-primary"></i>
+                            </div>
+                        </div>
+                        <div class="col-lg-10">
+                            <h4 class="text-primary fw-bold mb-3">?? Welcome to your Cell Storage System!</h4>
+                            <p class="text-muted mb-4">It looks like this is a fresh installation. Here's how to get started:</p>
+                            <div class="row g-3">
+                                {% if current_user.is_admin %}
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-start">
+                                        <div class="badge bg-primary rounded-circle me-3 mt-1" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">1</div>
+                                        <div>
+                                            <h6 class="fw-semibold mb-1">Set up Storage</h6>
+                                            <small class="text-muted">
+                                                <a href="{{ url_for('cell_storage.locations_overview') }}" class="text-decoration-none">Define freezer towers, drawers, and boxes</a>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-start">
+                                        <div class="badge bg-success rounded-circle me-3 mt-1" style="width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">2</div>
+                                        <div>
+                                            <h6 class="fw-semibold mb-1">Add Cell Lines</h6>
+                                            <small class="text-muted">
+                                                <a href="{{ url_for('cell_storage.list_cell_lines') }}" class="text-decoration-none">Create your cell line database</a>
+                                            </small>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="d-flex align-items-start">
+                                        <div clas
+[... omitted 627 of 883 lines ...]
+
+                lowStockElement.textContent = stats.low_stock_batches || 0;
+            }
+            
+            // Update capacity percentage
+            const capacityElement = document.getElementById('capacity-percent');
+            if (capacityElement) {
+                capacityElement.textContent = stats.capacity_used_percent + '%';
+            }
+            
+            // Update total vials (make sure it's current)
+            const totalVialsElement = document.getElementById('total-vials-count');
+            if (totalVialsElement) {
+                totalVialsElement.textContent = stats.total_vials || 0;
+            }
+        } else {
+            console.error('Failed to load dashboard stats:', data.message);
+            // Fallback to static values
+            loadStaticStats();
+        }
+    } catch (error) {
+        console.error('Error loading dashboard stats:', error);
+        // Fallback to static values
+        loadStaticStats();
+    }
+}
+
+// Fallback function for static stats
+function loadStaticStats() {
+    const totalVials = {{ vial_count or 0 }};
+    
+    const availableElement = document.getElementById('available-vials-count');
+    if (availableElement) {
+        const estimatedAvailable = Math.floor(totalVials * 0.7);
+        availableElement.textContent = estimatedAvailable;
+    }
+    
+    const lowStockElement = document.getElementById('low-stock-count');
+    if (lowStockElement) {
+        const estimatedLowStock = Math.max(0, Math.floor(totalVials / 20)); // ����Ϳ��batch����
+        lowStockElement.textContent = estimatedLowStock;
+    }
+    
+    const capacityElement = document.getElementById('capacity-percent');
+    if (capacityElement) {
+        // ������Լ12��box��ÿ��box 81��λ�ã��ܹ�Լ972��λ��
+        const estimatedCapacity = Math.min(95, Math.floor((totalVials / 972) * 100));
+        capacityElement.textContent = estimatedCapacity + '%';
+    }
+}
+
+// Initialize compact activity list
+function initializeCompactActivity() {
+    // Add subtle hover effects for compact activity items
+    const activityItems = document.querySelectorAll('.compact-activity-item');
+    activityItems.forEach(item => {
+        item.addEventListener('mouseenter', function() {
+            const icon = this.querySelector('.activity-icon');
+            if (icon) {
+                icon.style.transform = 'scale(1.05)';
+                icon.style.transition = 'transform 0.2s ease';
+            }
+        });
+        
+        item.addEventListener('mouseleave', function() {
+            const icon = this.querySelector('.activity-icon');
+            if (icon) {
+                icon.style.transform = 'scale(1)';
+            }
+        });
+    });
+    
+    // Add click functionality for better accessibility
+    activityItems.forEach(item => {
+        item.style.cursor = 'pointer';
+        item.addEventListener('click', function() {
+            // Optional: Could expand to show more details or navigate somewhere
+            const userName = this.querySelector('.user-name')?.textContent;
+            const description = this.querySelector('.action-description')?.textContent;
+            if (userName && description) {
+                console.log(`Activity: ${userName} ${description}`);
+            }
+        });
+    });
+}
+
+// Toast notification function
+function showToast(type, message) {
+    // Create toast container (if not exists)
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '9999';
+        document.body.appendChild(toastContainer);
+    }
+    
+    // Create toast element
+    const toastId = 'toast-' + Date.now();
+    const toastHtml = `
+        <div id="${toastId}" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+            <div class="toast-header">
+                <i class="bi bi-${type === 'success' ? 'check-circle-fill text-success' : 'exclamation-triangle-fill text-danger'} me-2"></i>
+                <strong class="me-auto">${type === 'success' ? 'Success' : 'Error'}</strong>
+                <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+            </div>
+            <div class="toast-body">
+                ${message}
+            </div>
+        </div>
+    `;
+    
+    toastContainer.insertAdjacentHTML('beforeend', toastHtml);
+    
+    // Show toast
+    const toastElement = document.getElementById(toastId);
+    const toast = new bootstrap.Toast(toastElement, {
+        autohide: true,
+        delay: 3000
+    });
+    toast.show();
+    
+    // Auto cleanup
+    toastElement.addEventListener('hidden.bs.toast', function() {
+        this.remove();
+    });
+}
+</script>
+{% endblock %}
